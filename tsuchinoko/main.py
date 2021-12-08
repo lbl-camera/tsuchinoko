@@ -10,18 +10,18 @@ from qtpy.QtWidgets import QApplication, QSlider, QWidget, QHBoxLayout
 from bluesky.preprocessors import run_decorator
 from gpcam.autonomous_experimenter import AutonomousExperimenterGP
 # from caproto.sync.client import write, read
-from bluesky.plan_stubs import mov, read, checkpoint, create, stage
+from bluesky.plan_stubs import mov, read, checkpoint, create, stage, sleep
 from bluesky.plans import scan, tune_centroid
-from ophyd import Device, Component, SignalRO, EpicsSignalRO, EpicsMotor
+from ophyd import Device, Component, EpicsSignalRO, EpicsMotor
 from ophyd.sim import SynAxis, SynGauss, DirectImage, SynSignalRO, SynSignal
 from scipy.stats import multivariate_normal, norm
 
-from tsuchinoko.plan_stubs import tune_centroid_and_fit
+from tsuchinoko.plan_stubs import tune_max_and_fit
 from tsuchinoko.utils.threads import QThreadFuture, invoke_in_main_thread
 from tsuchinoko.utils import runengine
 
 
-# TODO: goal values: FWHM 5 microns
+# TODO: goal values: FWHM 5 microns, 50 nA
 # TODO: backlash: none
 # TODO: positioner precision:
 # TODO: photodiode accuracy: .0005 nA
@@ -48,6 +48,11 @@ logging.basicConfig(
 )
 
 
+PINHOLE_TRACK_FACTOR_X = 199/.05 /.9  # micron per mRad
+PINHOLE_TRACK_FACTOR_Y = 132  # micron per mRad
+DARK_CURRENT = .035
+
+
 def acq_func(x, gp):
     m = gp.posterior_mean(x)["f(x)"]
     v = gp.posterior_covariance(x)["v(x)"]
@@ -55,44 +60,63 @@ def acq_func(x, gp):
     return m + (posterior_weight_factor.value()) * np.sqrt(v)
 
 
-def measure_quality(data, monitor, motor1, motor2, pinhole1, pinhole1min, pinhole1max, pinhole2, pinhole2min, pinhole2max,
+def measure_quality(data, monitor, motor1, motor2, pinhole1, pinhole1_scan_range, pinhole2, pinhole2_scan_range,
                     pinhole_min_step):
     for entry in data:
         cycle_start = time.time()
-        position = entry['position']
+        last_motor_position = motor1.user_readback.get(), motor2.user_readback.get()
+        last_pinhole_position = pinhole1.user_readback.get(), pinhole2.user_readback.get()
+        next_motor_position = entry['position']
+        pinhole_relative_position = (next_motor_position[0] - last_motor_position[0])*PINHOLE_TRACK_FACTOR_X, (next_motor_position[1] - last_motor_position[1])*PINHOLE_TRACK_FACTOR_Y
+        next_pinhole_position = pinhole_relative_position[0]+last_pinhole_position[0], pinhole_relative_position[1]+last_pinhole_position[1]
         # move to position
-        logging.info(msg=f'Moving to position: {position}')
-        yield from mov(motor1, position[0])
-        yield from mov(motor2, position[1])
+        logging.info(msg=f'Moving to position: {next_motor_position}')
+        logging.info(msg=f'Moving pinhole to track beam: {next_pinhole_position}')
+        yield from mov(motor1, next_motor_position[0], motor2, next_motor_position[1], pinhole1, next_pinhole_position[0], pinhole2, next_pinhole_position[1])
+        yield from sleep(.5)
 
         # move pinhole to centroid and fit along the way
         logging.info(msg=f'Looking for centroid with pinhole...')
-        x_fit = (yield from tune_centroid_and_fit([monitor], 'monitor', pinhole1, pinhole1min, pinhole1max, pinhole_min_step, snake=True, name='x_fit', expected_spot_size=1))
-        y_fit = (yield from tune_centroid_and_fit([monitor], 'monitor', pinhole2, pinhole2min, pinhole2max, pinhole_min_step, snake=True, name='y_fit', expected_spot_size=1, debug=debug_fit.isChecked()))
-        x_fit = (yield from tune_centroid_and_fit([monitor], 'monitor', pinhole1, pinhole1min, pinhole1max, pinhole_min_step, snake=True, name='x_fit', expected_spot_size=1, debug=debug_fit.isChecked()))
-        logging.info(msg=f'Centroid estimated at: {pinhole1.readback.get()}, {pinhole2.readback.get()}')
-        logging.info(msg=f'X fit:\n    amplitude: {x_fit.amplitude.value:.3f}\n    stddev: {x_fit.stddev.value:.3f}')
-        logging.info(msg=f'Y fit:\n    amplitude: {y_fit.amplitude.value:.3f}\n    stddev: {y_fit.stddev.value:.3f}')
+        # x_fit = (yield from tune_centroid_and_fit([monitor], 'monitor', pinhole1, pinhole1min, pinhole1max, pinhole_min_step, snake=True, name='x_fit', expected_spot_size=1))
+        x_fit = (yield from tune_max_and_fit([monitor], 'monitor', pinhole1, next_pinhole_position[0] - pinhole1_scan_range / 2, next_pinhole_position[0] + pinhole1_scan_range / 2, pinhole_min_step, snake=True, name='x_fit', expected_spot_size=40, debug=debug_fit.isChecked(), sleep=.5, dark_value=DARK_CURRENT))
+        y_fit = (yield from tune_max_and_fit([monitor], 'monitor', pinhole2, next_pinhole_position[1] - pinhole2_scan_range / 2, next_pinhole_position[1] + pinhole2_scan_range / 2, pinhole_min_step, snake=True, name='y_fit', expected_spot_size=40, debug=debug_fit.isChecked(), sleep=.5, dark_value=DARK_CURRENT))
+        if x_fit and y_fit:
 
-        # TODO: check error between x_amp, y_amp, and measured amp
 
-        # move to max
+            logging.info(msg=f'Max estimated at: {x_fit.mean_0.value}, {y_fit.mean_0.value}')
+            logging.info(msg=f'X fit:\n    amplitude: {x_fit.amplitude_0.value:.3f}\n    stddev: {x_fit.stddev_0.value:.3f}')
+            logging.info(msg=f'Y fit:\n    amplitude: {y_fit.amplitude_0.value:.3f}\n    stddev: {y_fit.stddev_0.value:.3f}')
 
-        # measure
+            # TODO: check error between x_amp, y_amp, and measured amp
 
-        # get value
-        metric_factors = [mean_weight.value(), stddev_x_weight.value(), stddev_y_weight.value()]
-        metric_vec = np.asarray([y_fit.amplitude.value, 1/x_fit.stddev.value, 1/y_fit.stddev.value]) * np.asarray(metric_factors)
-        print('metrics:', *metric_vec)
-        entry['value'] = np.linalg.norm(metric_vec)
-        entry['variance'] = measure_variance
+            # check divergence from tracking; ideally this would be 1, 1 if the TRACK_FACTORs are correct
+            tracking_factor_error_x = pinhole_relative_position[0]/(x_fit.mean_0.value-last_pinhole_position[0])
+            tracking_factor_error_y = pinhole_relative_position[1] / (y_fit.mean_0.value - last_pinhole_position[1])
+
+            logging.info(msg=f'Tracking factor error: {tracking_factor_error_x}, {tracking_factor_error_y}')
+            if abs(tracking_factor_error_x-1)>.1:
+                logging.warning(f'{motor1.name} is not tracking well; moved by {pinhole_relative_position[0]} when should have moved by {x_fit.mean_0.value-last_pinhole_position[0]}')
+            if abs(tracking_factor_error_y - 1) > .1:
+                logging.warning(f'{motor2.name} is not tracking well; moved by {pinhole_relative_position[1]} when should have moved by {y_fit.mean_0.value - last_pinhole_position[1]}')
+
+
+            # measure
+
+            # get value
+            metric_factors = [mean_weight.value(), stddev_x_weight.value(), stddev_y_weight.value()]
+            metric_vec = np.asarray([y_fit.amplitude_0.value, 1/x_fit.stddev_0.value, 1/y_fit.stddev_0.value]) * np.asarray(metric_factors)
+            logging.info(msg=f'metrics: {metric_vec}')
+            entry['value'] = np.linalg.norm(metric_vec)
+            entry['variance'] = measure_variance
+        else:
+            entry['value'] = 0
         measurement_time.setText(f'{time.time()-cycle_start:.1f} s')
     return data
 
 
 @run_decorator(md={})
-def alignment_plan(monitor, motor1, min1, max1, motor2, min2, max2, pinhole1, pinhole1min, pinhole1max, pinhole2, pinhole2min,
-                   pinhole2max, pinhole_min_step, N, **kwargs):
+def alignment_plan(monitor, motor1, min1, max1, motor2, min2, max2, pinhole1, pinhole1_scan_range, pinhole2,
+                   pinhole2_scan_range, pinhole_min_step, N, **kwargs):
     # set up parameter space
     parameters = np.array([[min1, max1],
                            [min2, max2],
@@ -127,11 +151,9 @@ def alignment_plan(monitor, motor1, min1, max1, motor2, min2, max2, pinhole1, pi
                                          motor1=motor1,
                                          motor2=motor2,
                                          pinhole1=pinhole1,
-                                         pinhole1min=pinhole1min,
-                                         pinhole1max=pinhole1max,
+                                         pinhole1_scan_range=pinhole1_scan_range,
                                          pinhole2=pinhole2,
-                                         pinhole2min=pinhole2min,
-                                         pinhole2max=pinhole2max,
+                                         pinhole2_scan_range = pinhole2_scan_range,
                                          pinhole_min_step=pinhole_min_step)
     devices = [monitor, motor1, motor2, pinhole1, pinhole2]
     for device in devices:
@@ -194,54 +216,37 @@ def show_result(experiment):
 if __name__ == '__main__':
     import pyqtgraph as pg
 
-    min1 = -3
-    max1 = 3
-    min2 = -3
-    max2 = 3
-    pinhole1min = -3
-    pinhole1max = 3
-    pinhole2min = -3
-    pinhole2max = 3
-    pinhole_min_step = .01
+    # min1 = -3
+    # max1 = 3
+    # min2 = -3
+    # max2 = 3
+    # pinhole1min = -3
+    # pinhole1max = 3
+    # pinhole2min = -3
+    # pinhole2max = 3
+    # pinhole_min_step = .01
 
-    # min1 = -9.5 # hard limit -13.9
-    # max1 = -6.5 # hard limit 1.9
-    # min2 = -3 # hard limit -17.4
-    # max2 = 3 # hard limit 2.2
-    # pinhole1min = -6000
-    # pinhole1max = 6000
-    # pinhole2min = -14500
-    # pinhole2max = 14500
-    # pinhole_min_step = .5  # 10% of reasonable FWHM
-    mean_weight_default, stddev_x_weight_default, stddev_y_weight_default = [1e2, 1e-1, 1e-1]
+    min1 = -8 -.3  # hard limit -13.9
+    max1 = -8 +.4  # hard limit 1.9
+    min2 = -9.5-.3  # hard limit -17.4
+    max2 = -9.5+.3  # hard limit 2.2
+    # pinhole1min = -1600
+    # pinhole1max = 1600
+    # pinhole2min = 1850+200
+    # pinhole2max = 1850-200
+    pinhole1_scan_range = 500
+    pinhole2_scan_range = 500
+    pinhole_min_step = 5  # 10% of reasonable FWHM
+    mean_weight_default, stddev_x_weight_default, stddev_y_weight_default = [1e0, 1e2, 1e2]
     posterior_weight_factor_default = 3
     measure_variance = 0.0005**2  # TODO: Is this a unitless or unit-full value? a percentage?
 
-    motor1 = SynAxis(name='motor1', labels={'motors'})
-    motor2 = SynAxis(name='motor2', labels={'motors'})
-    pinhole1 = SynAxis(name='pinhole1', labels={'motors'})
-    pinhole2 = SynAxis(name='pinhole2', labels={'motors'})
+    motor1 = EpicsMotor(prefix='BCS701:M112HorizAngle', name='motor1')  # initial -7.99216
+    motor2 = EpicsMotor(prefix='BCS701:M112VertAngle', name='motor2')  # initial -5.49572
+    pinhole1 = EpicsMotor(prefix='BCS701:PinholeX', name='pinhole1')
+    pinhole2 = EpicsMotor(prefix='BCS701:PinholeY', name='pinhole2')
 
-    # motor1 = EpicsMotor(prefix='BCS701:M112HorizAngle', name='motor1')
-    # motor2 = EpicsMotor(prefix='BCS701:M112VertAngle', name='motor2')
-    # pinhole1 = EpicsMotor(prefix='BCS701:PinholeX', name='pinhole1')
-    # pinhole1 = EpicsMotor(prefix='BCS701:PinholeY', name='pinhole1')
-
-    def measure_monitor():
-        beam_center = motor1.readback.get(), motor2.readback.get()
-        beam_stddev = motor1.readback.get() ** 2 + .5, motor2.readback.get() ** 2 + .5
-        pinhole = pinhole1.readback.get(), pinhole2.readback.get()
-        # print(beam_center, beam_stddev, pinhole)
-
-        return multivariate_normal.pdf(pinhole,
-                                       beam_center,
-                                       np.diag(np.asarray(beam_stddev) ** 2))# * np.random.rand()*1e-1
-
-    monitor = SynSignal(name='monitor',
-                        labels={'monitor'},
-                        func=measure_monitor)
-
-    # monitor = EpicsSignalRO(name='monitor', prefix='BCS701:DetectorDiodeCurrent:ai-AI')
+    monitor = EpicsSignalRO(name='monitor', read_pv='BCS701:DetectorDiodeCurrent:ai-AI')
 
     qapp = QApplication([])
     dark_stylesheet = qdarkstyle.load_stylesheet()
@@ -275,7 +280,7 @@ if __name__ == '__main__':
     w.layout().addWidget(iv)
     form_layout = QFormLayout()
     form_layout.addRow('Post. Mean/Covariance Weighting', posterior_weight_factor)
-    form_layout.addRow('Mean weight', mean_weight)
+    form_layout.addRow('Amplitude weight', mean_weight)
     form_layout.addRow('Std. Dev. X weight', stddev_x_weight)
     form_layout.addRow('Std. Dev. Y weight', stddev_y_weight)
     form_layout.addRow('Debug centroid/tune/fit', debug_fit)
@@ -295,8 +300,8 @@ if __name__ == '__main__':
 
     RE = runengine.get_run_engine()
 
-    plan = alignment_plan(monitor, motor1, min1, max1, motor2, min2, max2, pinhole1, pinhole1min, pinhole1max, pinhole2,
-                          pinhole2min, pinhole2max, pinhole_min_step, 10000)
+    plan = alignment_plan(monitor, motor1, min1, max1, motor2, min2, max2, pinhole1, pinhole1_scan_range, pinhole2,
+                          pinhole2_scan_range, pinhole_min_step, 10000)
 
     def start_plan():
         RE(plan)
