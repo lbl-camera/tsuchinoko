@@ -1,3 +1,4 @@
+from PySide2.QtCore import Qt
 from astropy import modeling
 from bluesky import preprocessors as bpp, Msg
 from bluesky import plan_stubs as bps
@@ -7,7 +8,7 @@ from scipy import stats
 from tsuchinoko.utils.threads import invoke_in_main_thread
 
 
-def tune_centroid_and_fit(
+def tune_max_and_fit(
         detectors, signal, motor,
         start, stop, min_step,
         num=10,
@@ -16,6 +17,8 @@ def tune_centroid_and_fit(
         name='primary',
         expected_spot_size=1,
         debug=False,
+        sleep=0,
+        dark_value = 0,
         *, md=None):
     r"""
     plan: tune a motor to the centroid of signal(motor)
@@ -105,6 +108,8 @@ def tune_centroid_and_fit(
     low_limit = min(start, stop)
     high_limit = max(start, stop)
 
+    initial_pos = motor.user_readback.get()
+
     # @bpp.stage_decorator(list(detectors) + [motor])
     def _tune_core(start, stop, num, signal):
 
@@ -118,43 +123,31 @@ def tune_centroid_and_fit(
         xs = []
         ys = []
 
-        while abs(step) >= min_step and low_limit <= next_pos <= high_limit:
+        next_points = list(np.arange(low_limit, high_limit, step))
+
+        while abs(step) >= min_step:
             yield Msg('checkpoint')
+            next_pos = next_points.pop()
             yield from bps.mv(motor, next_pos)
+            yield from bps.sleep(sleep)
             ret = (yield from bps.trigger_and_read(detectors + [motor], name=name))
             cur_I = ret[signal]['value']
             xs.append(next_pos)
             ys.append(cur_I)
-            sum_I += cur_I
-            position = ret[motor_name]['value']
-            sum_xI += position * cur_I
+            # sum_I += cur_I
+            # position = ret[motor_name]['value']
+            # sum_xI += position * cur_I
 
-            next_pos += step
-            in_range = min(start, stop) <= next_pos <= max(start, stop)
+            if not next_points:
 
-            if not in_range:
-                if sum_I == 0:
-                    return
-                peak_position = sum_xI / sum_I  # centroid
-                sum_I, sum_xI = 0, 0    # reset for next pass
-                new_scan_range = (stop - start) / step_factor
-                start = np.clip(peak_position - new_scan_range/2,
-                                low_limit, high_limit)
-                stop = np.clip(peak_position + new_scan_range/2,
-                               low_limit, high_limit)
-                if snake:
-                    start, stop = stop, start
-                step = (stop - start) / (num - 1)
-                next_pos = start
-                # print("peak position = {}".format(peak_position))
-                # print("start = {}".format(start))
-                # print("stop = {}".format(stop))
-
-        # finally, move to peak position
-        if peak_position is not None:
-            # improvement: report final peak_position
-            # print("final position = {}".format(peak_position))
-            yield from bps.mv(motor, peak_position)
+                arg_max = np.argmax(ys)
+                if xs[arg_max] == min(xs):
+                    next_points = [xs[arg_max] - step]
+                elif xs[arg_max] == max(xs):
+                    next_points = [xs[arg_max] + step]
+                else:
+                    step /= 2
+                    next_points = [xs[arg_max]-step, xs[arg_max]+step]
 
         return xs, ys
 
@@ -162,18 +155,28 @@ def tune_centroid_and_fit(
 
     # fit gaussian to measured points
 
-    model = modeling.models.Gaussian1D(amplitude=ys.max(), mean=xs[np.argmax(ys)], stddev=expected_spot_size)
+    model = modeling.models.Gaussian1D(amplitude=ys.max(), mean=xs[np.argmax(ys)], stddev=expected_spot_size) + modeling.models.Const1D(dark_value)
     fitter = modeling.fitting.SLSQPLSQFitter()
     fitted_model = fitter(model, xs, ys)
-    if debug and (fitted_model.stddev.value < .1 or fitted_model.stddev.value > 100):  # disabled; for debugging purposes
+    if debug: # and (fitted_model.stddev.value <= .1 or fitted_model.stddev.value >= 100):  # disabled; for debugging purposes
         import pyqtgraph as pg
         def plot_poor_fit(xs, ys):
-            w = pg.plot()
+            w = pg.plot(title=f'Scan of {motor_name}')
             w.addLegend()
-            w.plot(xs, ys, pen='w', name='measurement')
-            w.plot(xs, fitted_model(xs),pen='r', name='fit')
-            w.plot(xs, model(xs),pen='g', name='initial model')
+            sorted_xs = sorted(xs)
+            w.plot(sorted_xs, model(sorted_xs),pen='g', name='initial model')
+            w.plot(xs, ys, pen=pg.mkPen(color='w', style=Qt.DashLine))
+            w.plot(sorted_xs, fitted_model(sorted_xs), pen='r', name='fit')
+            w.addItem(pg.ScatterPlotItem(x=xs, y=ys, size=10, pen=pg.mkPen(None), brush=pg.mkBrush('w')), name='measurement')
             w.show()
         invoke_in_main_thread(plot_poor_fit, xs=xs, ys=ys)
 
-    return fitted_model
+    if start<fitted_model.mean_0.value<stop and fitted_model.amplitude_0>dark_value and fitted_model.stddev_0<10*expected_spot_size:
+        yield from bps.mov(motor, fitted_model.mean_0.value)
+
+        return fitted_model
+
+    else:
+        # on failed fit, move back where we started
+        yield from bps.mov(motor, initial_pos)
+        return None
