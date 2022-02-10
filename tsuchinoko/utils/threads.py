@@ -1,5 +1,6 @@
 import time
 import sys
+import traceback
 from functools import partial, wraps
 import logging
 from qtpy.QtCore import QTimer, Qt, Signal, QThread, QObject, QEvent, QCoreApplication
@@ -7,8 +8,31 @@ from qtpy.QtWidgets import QApplication
 from qtpy.QtGui import QStandardItemModel, QColor, QStandardItem
 import threading
 
+
 log = logging.log
-log_error = lambda *_: None
+def log_error(exception: Exception, value=None, tb=None, **kwargs):
+    """
+    Logs an exception with traceback. All uncaught exceptions get hooked here
+
+    """
+
+    if not value:
+        value = exception
+    if not tb:
+        tb = exception.__traceback__
+
+    if "caller_name" not in kwargs:
+        frame = sys._getframe()
+        frame = getattr(frame, "f_back", frame) or frame
+        kwargs["caller_name"] = frame.f_code.co_name
+
+    caller_name = kwargs.pop('caller_name', '')
+
+    logging.log(logging.ERROR, "\n The following error was handled safely. It is displayed here for debugging.")
+    try:
+        logging.log(logging.ERROR, "\n" + ' '.join(traceback.format_exception(exception, value, tb)), extra={"caller_name": caller_name}, **kwargs)
+    except AttributeError:
+        logging.log(logging.ERROR, "\n" + ' '.join(traceback.format_exception_only(exception, value)), extra={"caller_name": caller_name}, **kwargs)
 show_busy = lambda *_: None
 show_ready = lambda *_: None
 #
@@ -179,7 +203,7 @@ class QThreadFuture(QThread):
                 try:
                     QApplication.instance().aboutToQuit.disconnect(self.quit)
                 # Somehow the application never had its aboutToQuit connected to quit...
-                except TypeError as e:
+                except (TypeError, RuntimeError) as e:
                     #msg.logError(e)
                     ...
 
@@ -235,7 +259,7 @@ class Invoker(QObject):
                 event.fn(*event.args, **event.kwargs)
             return True
         except Exception as ex:
-            log("QThreadFuture callback could not be invoked.", level=logging.ERROR)
+            log(logging.ERROR, "QThreadFuture callback could not be invoked.")
             log_error(ex)
         return False
 

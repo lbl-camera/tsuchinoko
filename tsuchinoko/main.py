@@ -16,6 +16,7 @@ from ophyd import Device, Component, EpicsSignalRO, EpicsMotor
 from ophyd.sim import SynAxis, SynGauss, DirectImage, SynSignalRO, SynSignal
 from scipy.stats import multivariate_normal, norm
 
+
 from tsuchinoko.plan_stubs import tune_max_and_fit
 from tsuchinoko.utils.threads import QThreadFuture, invoke_in_main_thread
 from tsuchinoko.utils import runengine
@@ -37,6 +38,7 @@ from tsuchinoko.utils import runengine
 # BCS701:PinholeY
 # BCS701:M112HorizAngle
 # BCS701:M112VertAngle
+from tsuchinoko.widgets.displays import RunEngineControls
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,8 +80,8 @@ def measure_quality(data, monitor, motor1, motor2, pinhole1, pinhole1_scan_range
         # move pinhole to centroid and fit along the way
         logging.info(msg=f'Looking for centroid with pinhole...')
         # x_fit = (yield from tune_centroid_and_fit([monitor], 'monitor', pinhole1, pinhole1min, pinhole1max, pinhole_min_step, snake=True, name='x_fit', expected_spot_size=1))
-        x_fit = (yield from tune_max_and_fit([monitor], 'monitor', pinhole1, next_pinhole_position[0] - pinhole1_scan_range / 2, next_pinhole_position[0] + pinhole1_scan_range / 2, pinhole_min_step, snake=True, name='x_fit', expected_spot_size=40, debug=debug_fit.isChecked(), sleep=.5, dark_value=DARK_CURRENT))
-        y_fit = (yield from tune_max_and_fit([monitor], 'monitor', pinhole2, next_pinhole_position[1] - pinhole2_scan_range / 2, next_pinhole_position[1] + pinhole2_scan_range / 2, pinhole_min_step, snake=True, name='y_fit', expected_spot_size=40, debug=debug_fit.isChecked(), sleep=.5, dark_value=DARK_CURRENT))
+        x_fit = (yield from tune_max_and_fit([monitor], 'monitor', pinhole1, next_pinhole_position[0] - pinhole1_scan_range / 2, next_pinhole_position[0] + pinhole1_scan_range / 2, pinhole_min_step, snake=True, name='x_fit', expected_spot_size=40, debug=configuration.debug_fit.isChecked(), sleep=.5, dark_value=DARK_CURRENT))
+        y_fit = (yield from tune_max_and_fit([monitor], 'monitor', pinhole2, next_pinhole_position[1] - pinhole2_scan_range / 2, next_pinhole_position[1] + pinhole2_scan_range / 2, pinhole_min_step, snake=True, name='y_fit', expected_spot_size=40, debug=configuration.debug_fit.isChecked(), sleep=.5, dark_value=DARK_CURRENT))
         if x_fit and y_fit:
 
 
@@ -103,14 +105,14 @@ def measure_quality(data, monitor, motor1, motor2, pinhole1, pinhole1_scan_range
             # measure
 
             # get value
-            metric_factors = [mean_weight.value(), stddev_x_weight.value(), stddev_y_weight.value()]
+            metric_factors = [configuration.mean_weight.value(), configuration.stddev_x_weight.value(), configuration.stddev_y_weight.value()]
             metric_vec = np.asarray([y_fit.amplitude_0.value, 1/x_fit.stddev_0.value, 1/y_fit.stddev_0.value]) * np.asarray(metric_factors)
             logging.info(msg=f'metrics: {metric_vec}')
             entry['value'] = np.linalg.norm(metric_vec)
             entry['variance'] = measure_variance
         else:
             entry['value'] = 0
-        measurement_time.setText(f'{time.time()-cycle_start:.1f} s')
+        RunEngineControls().measurement_time.setText(f'{time.time()-cycle_start:.1f} s')
     return data
 
 
@@ -189,7 +191,7 @@ def alignment_plan(monitor, motor1, min1, max1, motor2, min2, max2, pinhole1, pi
         invoke_in_main_thread(show_result, experiment)
         # show_result(experiment)
         yield from checkpoint()
-        cycle_time.setText(f'{time.time()-cycle_start:.1f} s')
+        RunEngineControls().cycle_time.setText(f'{time.time()-cycle_start:.1f} s')
 
         n += 1
 
@@ -260,15 +262,7 @@ if __name__ == '__main__':
     scatter = pg.ScatterPlotItem(x=[0], y=[0], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
     arrow = pg.CurveArrow(scatter)
     text = pg.TextItem()
-    posterior_weight_factor = QDoubleSpinBox()
-    posterior_weight_factor.setValue(posterior_weight_factor_default)
-    mean_weight = QDoubleSpinBox()
-    mean_weight.setValue(mean_weight_default)
-    stddev_x_weight = QDoubleSpinBox()
-    stddev_x_weight.setValue(stddev_y_weight_default)
-    stddev_y_weight = QDoubleSpinBox()
-    stddev_y_weight.setValue(stddev_y_weight_default)
-    debug_fit = QCheckBox()
+
     start = QPushButton('Start')
     pause = QPushButton('Pause')
     resume = QPushButton('Resume')
