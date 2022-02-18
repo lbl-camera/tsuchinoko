@@ -21,6 +21,16 @@ class Display(Dock):
     ...
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        # logging.FileHandler("debug.log"),
+        logging.StreamHandler()
+    ]
+)
+
+
 class LogHandler(logging.Handler):
     colors = {logging.DEBUG: Qt.gray, logging.ERROR: Qt.darkRed, logging.CRITICAL: Qt.red,
               logging.INFO: Qt.white, logging.WARNING: Qt.yellow}
