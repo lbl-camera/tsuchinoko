@@ -111,8 +111,7 @@ if __name__ == '__main__':
 
     main_window = MainWindow()
 
-    experiment = AlignmentExperiment(main_window.graph_manager_widget)
-    RE(experiment.plan)
+    main_window.experiment = AlignmentExperiment(main_window.graph_manager_widget)
 
     main_window.show()
 

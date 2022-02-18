@@ -8,6 +8,8 @@ from proxy_tools import module_property
 from qtpy.QtWidgets import QDockWidget, QDoubleSpinBox, QCheckBox, QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy
 from pyqtgraph.dockarea import Dock, DockArea
 
+from tsuchinoko import RE
+
 
 class Singleton(type(QObject)):
     _instances = {}
@@ -85,25 +87,48 @@ class RunEngineControls(Display, metaclass=Singleton):
     def __init__(self):
         super(RunEngineControls, self).__init__('Controls')
 
+        self.experiment = None
+
         container_widget = QWidget()
-        start = QPushButton('Start')
-        pause = QPushButton('Pause')
-        resume = QPushButton('Resume')
-        pause.hide()
-        resume.hide()
+        self.start = QPushButton('Start')
+        self.pause = QPushButton('Pause')
+        self.resume = QPushButton('Resume')
+        self.pause.hide()
+        self.resume.hide()
         self.measurement_time = QLabel('...')
         self.cycle_time = QLabel('...')
 
         form_layout = QFormLayout()
-        form_layout.addWidget(start)
-        form_layout.addWidget(pause)
-        form_layout.addWidget(resume)
+        form_layout.addWidget(self.start)
+        form_layout.addWidget(self.pause)
+        form_layout.addWidget(self.resume)
         form_layout.addItem(QSpacerItem(1, 1, vData=QSizePolicy.Expanding))
         form_layout.addRow('Measurement Time:', self.measurement_time)
         form_layout.addRow('Cycle Time:', self.cycle_time)
 
         container_widget.setLayout(form_layout)
         self.addWidget(container_widget)
+
+        self.start.clicked.connect(self.start_plan)
+        self.pause.clicked.connect(self.pause_plan)
+        self.resume.clicked.connect(self.resume_plan)
+
+    def start_plan(self):
+        RE(self.experiment.plan)
+        self.start.hide()
+        self.pause.show()
+
+    def pause_plan(self):
+        RE.pause()
+        self.resume.show()
+        self.pause.hide()
+
+    def resume_plan(self):
+        RE.resume()
+        self.resume.hide()
+        self.pause.show()
+
+
 
 
 class GraphManager(Display, metaclass=Singleton):
