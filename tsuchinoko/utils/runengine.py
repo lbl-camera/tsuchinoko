@@ -1,22 +1,16 @@
+import asyncio
 import logging
 import time
-from queue import PriorityQueue, Empty
 from dataclasses import dataclass, field
+from functools import wraps
+from queue import PriorityQueue, Empty
 from typing import Any
 
+from bluesky import RunEngine
 from bluesky.utils import DuringTask, RunEngineInterrupted
-from functools import wraps, partial
-from bluesky import RunEngine, Msg
-import asyncio
-from qtpy import QtCore
 from qtpy.QtCore import QObject, Signal
-from bluesky.preprocessors import subs_wrapper
-import traceback
-import os
 
-# from xicam.Acquire.widgets.dialogs import MetadataDialog
 from tsuchinoko.utils import threads
-from tsuchinoko.utils.threads import invoke_in_main_thread
 
 
 def _get_asyncio_queue(loop):
@@ -127,7 +121,6 @@ class QRunEngine(QObject):
                     self.queue.task_done()
                     self.sigFinish.emit()
                 # msg.showReady()
-
 
     @wraps(RunEngine.__call__)
     def __call__(self, *args, **kwargs):

@@ -3,8 +3,8 @@ from functools import partial
 import numpy as np
 from PySide2.QtCore import QTimer, Qt
 from PySide2.QtWidgets import QApplication, QSlider, QWidget, QHBoxLayout
-from gpcam.autonomous_experimenter import AutonomousExperimenterGP
 from caproto.sync.client import write, read
+from gpcam.autonomous_experimenter import AutonomousExperimenterGP
 
 
 def simple(N):
@@ -12,7 +12,7 @@ def simple(N):
         m = gp.posterior_mean(x)["f(x)"]
         v = gp.posterior_covariance(x)["v(x)"]
         print('val:', m, v)
-        return m + 3*np.sqrt(v)
+        return m + 3 * np.sqrt(v)
 
     def instrument(data):
         for entry in data:
@@ -25,7 +25,7 @@ def simple(N):
             value = read('test:scalar_sensor').data[0]
 
             # circularity = ...
-            entry['value'] = value #+ circularity
+            entry['value'] = value  # + circularity
             entry['variance'] = 1e-1
         return data
 
@@ -76,7 +76,7 @@ def run(experiment: AutonomousExperimenterGP):
     experiment.x, experiment.y, experiment.v, experiment.t, experiment.c, vp = experiment.extract_data()
     experiment.tell(experiment.x, experiment.y, experiment.v, vp)
     if len(experiment.data.dataset) % 10:
-        experiment.train(pop_size = 10,tol = 1e-6,max_iter = 20, method = "global")
+        experiment.train(pop_size=10, tol=1e-6, max_iter=20, method="global")
     show_result(experiment)
 
 
@@ -90,8 +90,8 @@ def show_result(experiment):
     scatter.setData(
         [{'pos': (xi, yi),
           'size': vi / max(v) * 20 + 5,
-          'brush': pg.mkBrush(color=pg.mkColor(255, 255, 255)) if i==len(x)-1 else pg.mkBrush(color=pg.mkColor(255-c, c, 0)),
-          'symbol': '+' if i==len(x)-1 else 'o'}
+          'brush': pg.mkBrush(color=pg.mkColor(255, 255, 255)) if i == len(x) - 1 else pg.mkBrush(color=pg.mkColor(255 - c, c, 0)),
+          'symbol': '+' if i == len(x) - 1 else 'o'}
          for i, (xi, yi, vi, c) in enumerate(zip(x, y, v, c))])
     arrow.setIndex(max_index)
     text.setText(f'Max: ({x[max_index]:.2f}, {y[max_index]:.2f})')

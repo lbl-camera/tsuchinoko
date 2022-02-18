@@ -1,5 +1,5 @@
-from caproto.server import PVGroup, pvproperty, template_arg_parser, run
 import numpy as np
+from caproto.server import PVGroup, pvproperty, template_arg_parser, run
 from scipy.stats import multivariate_normal
 
 
@@ -17,8 +17,8 @@ class TestOpticsBeamline(PVGroup):
     @scalar_sensor.getter
     async def scalar_sensor(self, instance):
         return np.multivariate_normal.pdf([self.optic_1.value, self.optic_2.value],
-                                       self.target,
-                                       np.diag(self.sigma**2))+1 * np.random.rand()*1e-1
+                                          self.target,
+                                          np.diag(self.sigma ** 2)) + 1 * np.random.rand() * 1e-1
 
 
 class TwoDScanBeamline(TestOpticsBeamline):
@@ -40,7 +40,6 @@ def twod_scan_beamline():
 
 
 if __name__ == "__main__":
-
     parser, split_args = template_arg_parser(default_prefix='test:', desc='beamline optics test')
 
     args = parser.parse_args()

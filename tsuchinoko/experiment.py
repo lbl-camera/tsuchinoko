@@ -1,17 +1,17 @@
 import time
 from functools import partial
 
+import numpy as np
+import pyqtgraph as pg
 from bluesky.plan_stubs import checkpoint, stage
 from bluesky.preprocessors import run_decorator
-import numpy as np
 from gpcam.autonomous_experimenter import AutonomousExperimenterGP
-import pyqtgraph as pg
 
 from tsuchinoko.utils.threads import invoke_in_main_thread
 from tsuchinoko.widgets.displays import RunEngineControls, GraphManager
 
 
-class Experiment():
+class Experiment:
     def __init__(self, graph_manager: GraphManager):
         super(Experiment, self).__init__()
 
@@ -28,7 +28,7 @@ class Experiment():
         if name not in self.graph_manager.graphs:
             graph = pg.PlotWidget()
             scatter = pg.ScatterPlotItem(x=[0], y=[0], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 255, 255, 120))
-            self._graph_items[name]={'scatter': scatter}
+            self._graph_items[name] = {'scatter': scatter}
             graph.addItem(scatter)
             if indicator:
                 arrow = pg.CurveArrow(scatter)
@@ -58,8 +58,8 @@ class Experiment():
 
 
 class GPExperiment(Experiment):
-
     delayed_data = None
+
     def delay_measure(self, data):
         self.delayed_data = data
         # for entry in data:
@@ -120,7 +120,7 @@ class GPExperiment(Experiment):
             invoke_in_main_thread(self.update_graphs, experiment)
             # show_result(experiment)
             yield from checkpoint()
-            RunEngineControls().cycle_time.setText(f'{time.time()-cycle_start:.1f} s')
+            RunEngineControls().cycle_time.setText(f'{time.time() - cycle_start:.1f} s')
 
             n += 1
 
@@ -138,4 +138,3 @@ class GPExperiment(Experiment):
             self._update_graph(metric_name, x, y, [acq['metrics'][metric_name] for acq in experiment.data.dataset])
 
         self._update_graph('score', x, y, [acq['value'] for acq in experiment.data.dataset])
-

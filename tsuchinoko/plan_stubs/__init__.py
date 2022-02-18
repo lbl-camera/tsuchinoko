@@ -1,9 +1,7 @@
+import numpy as np
 from PySide2.QtCore import Qt
 from astropy import modeling
-from bluesky import preprocessors as bpp, Msg
-from bluesky import plan_stubs as bps
-import numpy as np
-from scipy import stats
+from bluesky import Msg, plan_stubs as bps
 
 from tsuchinoko.utils.threads import invoke_in_main_thread
 
@@ -18,7 +16,7 @@ def tune_max_and_fit(
         expected_spot_size=1,
         debug=False,
         sleep=0,
-        dark_value = 0,
+        dark_value=0,
         *, md=None):
     r"""
     plan: tune a motor to the centroid of signal(motor)
@@ -117,7 +115,7 @@ def tune_max_and_fit(
         step = (stop - start) / (num - 1)
         peak_position = None
         cur_I = None
-        sum_I = 0       # for peak centroid calculation, I(x)
+        sum_I = 0  # for peak centroid calculation, I(x)
         sum_xI = 0
 
         xs = []
@@ -147,7 +145,7 @@ def tune_max_and_fit(
                     next_points = [xs[arg_max] + step]
                 else:
                     step /= 2
-                    next_points = [xs[arg_max]-step, xs[arg_max]+step]
+                    next_points = [xs[arg_max] - step, xs[arg_max] + step]
 
         return xs, ys
 
@@ -158,20 +156,21 @@ def tune_max_and_fit(
     model = modeling.models.Gaussian1D(amplitude=ys.max(), mean=xs[np.argmax(ys)], stddev=expected_spot_size) + modeling.models.Const1D(dark_value)
     fitter = modeling.fitting.SLSQPLSQFitter()
     fitted_model = fitter(model, xs, ys)
-    if debug: # and (fitted_model.stddev.value <= .1 or fitted_model.stddev.value >= 100):  # disabled; for debugging purposes
+    if debug:  # and (fitted_model.stddev.value <= .1 or fitted_model.stddev.value >= 100):  # disabled; for debugging purposes
         import pyqtgraph as pg
         def plot_poor_fit(xs, ys):
             w = pg.plot(title=f'Scan of {motor_name}')
             w.addLegend()
             sorted_xs = sorted(xs)
-            w.plot(sorted_xs, model(sorted_xs),pen='g', name='initial model')
+            w.plot(sorted_xs, model(sorted_xs), pen='g', name='initial model')
             w.plot(xs, ys, pen=pg.mkPen(color='w', style=Qt.DashLine))
             w.plot(sorted_xs, fitted_model(sorted_xs), pen='r', name='fit')
             w.addItem(pg.ScatterPlotItem(x=xs, y=ys, size=10, pen=pg.mkPen(None), brush=pg.mkBrush('w')), name='measurement')
             w.show()
+
         invoke_in_main_thread(plot_poor_fit, xs=xs, ys=ys)
 
-    if start<fitted_model.mean_0.value<stop and fitted_model.amplitude_0>dark_value and fitted_model.stddev_0<10*expected_spot_size:
+    if start < fitted_model.mean_0.value < stop and fitted_model.amplitude_0 > dark_value and fitted_model.stddev_0 < 10 * expected_spot_size:
         yield from bps.mov(motor, fitted_model.mean_0.value)
 
         return fitted_model

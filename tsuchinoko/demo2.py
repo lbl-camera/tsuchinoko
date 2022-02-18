@@ -3,14 +3,11 @@ import time
 
 import numpy as np
 from PySide2.QtWidgets import QApplication
-from bluesky.plan_stubs import mov, sleep, checkpoint, trigger_and_read
+from bluesky.plan_stubs import mov, checkpoint, trigger_and_read
 from ophyd.sim import SynAxis, SynSignal
 from scipy.stats import multivariate_normal
 
-from tsuchinoko import RE
 from tsuchinoko.experiment import GPExperiment
-from tsuchinoko.main import alignment_plan
-from tsuchinoko.plan_stubs import tune_max_and_fit
 from tsuchinoko.widgets.displays import RunEngineControls, Configuration
 from tsuchinoko.widgets.mainwindow import MainWindow
 
@@ -35,23 +32,23 @@ class AlignmentExperiment(GPExperiment):
         beam_center = self.motor1.readback.get(), self.motor2.readback.get()
         beam_stddev = self.motor1.readback.get() ** 2 + .5, self.motor2.readback.get() ** 2 + .5
 
-        return 10*multivariate_normal.pdf((0, 0),
-                                       beam_center,
-                                       np.diag(np.asarray(beam_stddev) ** 2))# * np.random.rand()*1e-1
+        return 10 * multivariate_normal.pdf((0, 0),
+                                            beam_center,
+                                            np.diag(np.asarray(beam_stddev) ** 2))  # * np.random.rand()*1e-1
 
     def __init__(self, *args, **kwargs):
         super(AlignmentExperiment, self).__init__(*args, **kwargs)
 
         self.monitor = SynSignal(name='monitor',
-                            labels={'monitor'},
-                            func=self.measure_monitor)
+                                 labels={'monitor'},
+                                 func=self.measure_monitor)
 
         self.beam_stddev_x = SynSignal(name='beam_stddev_x',
-                                 labels={'beam_stddev_x'},
-                                 func=lambda : self.motor1.readback.get() ** 2 + .5)
+                                       labels={'beam_stddev_x'},
+                                       func=lambda: self.motor1.readback.get() ** 2 + .5)
         self.beam_stddev_y = SynSignal(name='beam_stddev_y',
-                                 labels={'beam_stddev_y'},
-                                 func=lambda : self.motor2.readback.get() ** 2 + .5)
+                                       labels={'beam_stddev_y'},
+                                       func=lambda: self.motor2.readback.get() ** 2 + .5)
 
     def acq_func(self, x, gp):
         m = gp.posterior_mean(x)["f(x)"]
@@ -74,10 +71,10 @@ class AlignmentExperiment(GPExperiment):
 
             # get value
             metric_factors = [Configuration().mean_weight.value(), Configuration().stddev_x_weight.value(), Configuration().stddev_y_weight.value()]
-            metric_vec = np.asarray([amplitude, 1/stddev_x, 1/stddev_y]) * np.asarray(metric_factors)
+            metric_vec = np.asarray([amplitude, 1 / stddev_x, 1 / stddev_y]) * np.asarray(metric_factors)
             logging.info(msg=f'metrics: {metric_vec}')
             entry['value'] = np.linalg.norm(metric_vec)
-            entry['variance'] = 0.0005**2  # TODO: use the variance from the fit
+            entry['variance'] = 0.0005 ** 2  # TODO: use the variance from the fit
             entry['metrics'] = dict()
             entry['metrics']['amplitude'] = amplitude
             entry['metrics']['X stddev'] = stddev_x
@@ -106,7 +103,6 @@ class AlignmentExperiment(GPExperiment):
 if __name__ == '__main__':
     import pyqtgraph as pg
 
-
     qapp = QApplication([])
 
     main_window = MainWindow()
@@ -122,6 +118,5 @@ if __name__ == '__main__':
     iv.addItem(scatter)
     iv.addItem(arrow)
     iv.addItem(text)
-
 
     exit(qapp.exec_())

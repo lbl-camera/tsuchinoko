@@ -1,12 +1,9 @@
 import logging
-from functools import cached_property
 
-import pyqtgraph
 from PySide2.QtCore import QObject
 from PySide2.QtGui import QBrush, Qt
-from proxy_tools import module_property
-from qtpy.QtWidgets import QDockWidget, QDoubleSpinBox, QCheckBox, QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy
 from pyqtgraph.dockarea import Dock, DockArea
+from qtpy.QtWidgets import QDoubleSpinBox, QCheckBox, QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy
 
 from tsuchinoko import RE
 
@@ -127,8 +124,6 @@ class RunEngineControls(Display, metaclass=Singleton):
         RE.resume()
         self.resume.hide()
         self.pause.show()
-
-
 
 
 class GraphManager(Display, metaclass=Singleton):

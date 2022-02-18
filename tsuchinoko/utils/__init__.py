@@ -1,12 +1,14 @@
+import logging
 import sys
 import traceback
-import logging
+
 from qtpy import QtCore, QtWidgets
 
 # basic logger functionality
 log = logging.getLogger(__name__)
 handler = logging.StreamHandler(stream=sys.stdout)
 log.addHandler(handler)
+
 
 def show_exception_box(log_msg):
     """Checks if a QApplication instance is available and shows a messagebox with the exception message.
@@ -18,6 +20,7 @@ def show_exception_box(log_msg):
         errorbox.exec_()
     else:
         log.debug("No QApplication instance available.")
+
 
 class UncaughtHook(QtCore.QObject):
     _exception_caught = QtCore.Signal(object)
@@ -46,6 +49,7 @@ class UncaughtHook(QtCore.QObject):
 
             # trigger message box show
             self._exception_caught.emit(log_msg)
+
 
 # create a global instance of our class to register the hook
 qt_exception_hook = UncaughtHook()

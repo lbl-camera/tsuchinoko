@@ -1,7 +1,6 @@
-import pyqtgraph
 from PySide2.QtGui import QIcon
-from qtmodern.styles import dark
 from pyqtgraph.dockarea import DockArea
+from qtmodern.styles import dark
 from qtpy.QtWidgets import QMainWindow, QApplication
 
 from tsuchinoko.widgets.displays import Log, Configuration, RunEngineControls, GraphManager
@@ -23,10 +22,10 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.dock_area)
 
         for position, w, *relaltive_to in [('bottom', self.graph_manager_widget),
-                            ('bottom', self.log_widget, self.graph_manager_widget),
-                            ('right', self.configuration_widget, self.graph_manager_widget),
-                            ('bottom', self.run_engine_widget, self.configuration_widget),
-                            ]:
+                                           ('bottom', self.log_widget, self.graph_manager_widget),
+                                           ('right', self.configuration_widget, self.graph_manager_widget),
+                                           ('bottom', self.run_engine_widget, self.configuration_widget),
+                                           ]:
             self.dock_area.addDock(w, position, *relaltive_to)
 
         dark(QApplication.instance())

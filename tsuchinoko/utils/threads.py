@@ -1,15 +1,16 @@
-import time
-import sys
-import traceback
-from functools import partial, wraps
 import logging
-from qtpy.QtCore import QTimer, Qt, Signal, QThread, QObject, QEvent, QCoreApplication
-from qtpy.QtWidgets import QApplication
-from qtpy.QtGui import QStandardItemModel, QColor, QStandardItem
+import sys
 import threading
+import time
+import traceback
+from functools import wraps
 
+from qtpy.QtCore import QTimer, Signal, QThread, QObject, QEvent, QCoreApplication
+from qtpy.QtWidgets import QApplication
 
 log = logging.log
+
+
 def log_error(exception: Exception, value=None, tb=None, **kwargs):
     """
     Logs an exception with traceback. All uncaught exceptions get hooked here
@@ -33,58 +34,10 @@ def log_error(exception: Exception, value=None, tb=None, **kwargs):
         logging.log(logging.ERROR, "\n" + ' '.join(traceback.format_exception(exception, value, tb)), extra={"caller_name": caller_name}, **kwargs)
     except AttributeError:
         logging.log(logging.ERROR, "\n" + ' '.join(traceback.format_exception_only(exception, value)), extra={"caller_name": caller_name}, **kwargs)
+
+
 show_busy = lambda *_: None
 show_ready = lambda *_: None
-#
-#
-# class ThreadManager(QStandardItemModel):
-#     """
-#     A global thread manager that holds on to threads with 'keepalive'
-#     """
-#
-#     ThreadRole = Qt.UserRole
-#
-#     def __init__(self):
-#         super(ThreadManager, self).__init__()
-#         self.timer = QTimer()
-#         self.timer.setInterval(1000)
-#         self.timer.timeout.connect(self.update)
-#         self.timer.start()
-#         self._threads = []
-#
-#     @property
-#     def threads(self):
-#         return self._threads
-#
-#     def update(self):
-#         # purge
-#         for i in reversed(range(self.rowCount())):
-#             item = self.item(i)
-#             thread = item.data(self.ThreadRole)
-#             if thread._purge:
-#                 self.removeRow(i)
-#                 self._threads.remove(thread)
-#                 continue
-#             elif thread.done or thread.cancelled or thread.exception:
-#                 thread._purge = True
-#
-#             if thread.exception:
-#                 item.setData(QColor(Qt.red), Qt.ForegroundRole)
-#             elif thread.cancelled:
-#                 item.setData(QColor(Qt.magenta), Qt.ForegroundRole)
-#             elif thread.done:
-#                 item.setData(QColor(Qt.green), Qt.ForegroundRole)
-#             elif thread.running:
-#                 item.setData(QColor(Qt.yellow), Qt.ForegroundRole)
-#
-#     def append(self, thread):
-#         item = QStandardItem(repr(thread.method))
-#         item.setData(thread, role=self.ThreadRole)
-#         self.appendRow(item)
-#         self._threads.append(thread)
-#
-#
-# manager = ThreadManager()
 
 
 # Justification for subclassing qthread: https://woboq.com/blog/qthread-you-were-not-doing-so-wrong.html
@@ -204,7 +157,7 @@ class QThreadFuture(QThread):
                     QApplication.instance().aboutToQuit.disconnect(self.quit)
                 # Somehow the application never had its aboutToQuit connected to quit...
                 except (TypeError, RuntimeError) as e:
-                    #msg.logError(e)
+                    # msg.logError(e)
                     ...
 
     def _run(self, *args, **kwargs):  # Used to generalize to QThreadFutureIterator

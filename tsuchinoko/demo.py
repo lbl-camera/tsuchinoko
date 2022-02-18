@@ -34,7 +34,8 @@ if __name__ == '__main__':
 
         return multivariate_normal.pdf(pinhole,
                                        beam_center,
-                                       np.diag(np.asarray(beam_stddev) ** 2))# * np.random.rand()*1e-1
+                                       np.diag(np.asarray(beam_stddev) ** 2))  # * np.random.rand()*1e-1
+
 
     monitor = SynSignal(name='monitor',
                         labels={'monitor'},
