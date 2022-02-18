@@ -47,7 +47,7 @@ class Experiment():
         max_index = np.argmax(v)
         self._graph_items[name]['scatter'].setData(
             [{'pos': (xi, yi),
-              'size': vi / max(v) * 20 + 5,
+              'size': (vi - min(v)) / (max(v) - min(v)) * 20 + 2,
               'brush': pg.mkBrush(color=pg.mkColor(255, 255, 255)) if i == len(x) - 1 else pg.mkBrush(
                   color=pg.mkColor(255 - c, c, 0)),
               'symbol': '+' if i == len(x) - 1 else 'o'}
