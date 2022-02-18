@@ -9,3 +9,4 @@ numpy
 scipy
 qdarkstyle
 astropy
+qtpy
