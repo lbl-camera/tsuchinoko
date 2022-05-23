@@ -130,11 +130,26 @@ class QThreadFuture(QThread):
         if self.showBusy:
             show_busy()
         try:
-            for self._result in self._run(*args, **kwargs):
-                if not isinstance(self._result, tuple):
-                    self._result = (self._result,)
-                if self.callback_slot:
-                    invoke_in_main_thread(self.callback_slot, *self._result)
+            # while not self.isInterruptionRequested():
+            value = [None]
+            runner = self._run(*args, **kwargs)
+            while True:
+                try:
+                    value = next(runner)
+                except StopIteration as ex:
+                    value = ex.value
+                    if not isinstance(value, tuple):
+                        value = (value,)
+                    if isinstance(self, QThreadFutureIterator) and self.callback_slot:
+                        self.callback_slot(*value)
+                    self._result = value
+                    break
+                if not isinstance(value, tuple):
+                    value = (value,)
+                if isinstance(self, QThreadFutureIterator) and self.yield_slot:
+                    invoke_in_main_thread(self.yield_slot, *value)
+                elif isinstance(self, QThreadFuture) and self.callback_slot:
+                    invoke_in_main_thread(self.callback_slot, *value)
 
         except Exception as ex:
             self.exception = ex
@@ -176,6 +191,7 @@ class QThreadFuture(QThread):
         self.cancelled = True
         if self.except_slot:
             invoke_in_main_thread(self.except_slot, InterruptedError("Thread cancelled."))
+        self.requestInterruption()
         self.quit()
         self.wait()
 
@@ -184,9 +200,12 @@ class QThreadFutureIterator(QThreadFuture):
     """
     Same as QThreadFuture, but emits to the callback_slot for every yielded value of a generator
     """
+    def __init__(self, *args, yield_slot=None, **kwargs):
+        super(QThreadFutureIterator, self).__init__(*args, **kwargs)
+        self.yield_slot = yield_slot
 
     def _run(self, *args, **kwargs):
-        yield from self.method(*self.args, **self.kwargs)
+        return (yield from self.method(*self.args, **self.kwargs))
 
 
 class InvokeEvent(QEvent):
