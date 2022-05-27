@@ -24,12 +24,12 @@ class BlueskyInProcessEngine(Engine):
 
     def target_queue_plan(self, measure_target, get_position):
         yield from open_run()
-        self.position = yield from get_position()
+        self.position = tuple((yield from get_position()))
         while True:
-            target = self.targets.get()
+            target = tuple(self.targets.get())
             self.position = target
             value = yield from measure_target(target)
-            self.new_measurements.append((self.position, value, 0))  # TODO: Add variance
+            self.new_measurements.append((self.position, value, 0, {}))  # TODO: Add variance; TODO: add metrics
 
     def get_position(self):
         return self.position
