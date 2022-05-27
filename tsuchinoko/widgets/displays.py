@@ -52,7 +52,7 @@ class LogHandler(logging.Handler):
 
 class Log(Display, logging.Handler):
     def __init__(self):
-        super(Log, self).__init__('Log')
+        super(Log, self).__init__('Log', size=(800, 300))
 
         log = QListWidget()
 
@@ -62,7 +62,7 @@ class Log(Display, logging.Handler):
 
 class Configuration(Display, metaclass=Singleton):
     def __init__(self):
-        super(Configuration, self).__init__('Configuration')
+        super(Configuration, self).__init__('Configuration', size=(300, 500))
 
         container_widget = QWidget()
 
@@ -138,15 +138,21 @@ class RunEngineControls(Display, metaclass=Singleton):
 
 class GraphManager(Display, metaclass=Singleton):
     def __init__(self):
-        super(GraphManager, self).__init__('Graphs', hideTitle=True)
+        super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500))
         self.dock_area = DockArea()
         self.addWidget(self.dock_area)
 
         self.graphs = dict()
+        self.update_callbacks = dict()
 
-    def register_graph(self, name, widget):
+    def register_graph(self, name, widget, update_callback):
         display = Display(name)
         display.addWidget(widget)
         self.dock_area.addDock(display, 'below')
 
         self.graphs[name] = widget
+        self.update_callbacks[name] = update_callback
+
+    def update(self, data):
+        for update_callback in self.update_callbacks.values():
+            update_callback(data)
