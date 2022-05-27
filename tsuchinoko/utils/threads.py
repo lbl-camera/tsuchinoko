@@ -331,6 +331,7 @@ def method(
 
 
 def iterator(
+        yield_slot=None,
         callback_slot=None,
         finished_slot=None,
         interrupt_signal=None,
@@ -373,6 +374,7 @@ def iterator(
             future = QThreadFutureIterator(
                 func,
                 *args,
+                yield_slot=yield_slot,
                 callback_slot=callback_slot,
                 finished_slot=finished_slot,
                 except_slot=except_slot,
