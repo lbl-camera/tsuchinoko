@@ -22,7 +22,6 @@ class GPCAMInProcessEngine(Engine):
                                # gp_mean_function = self.prior_mean_func,
                                # sparse = sparse)
 
-
     @property
     def dimensionality(self):
         return self.optimizer.iput_dim
