@@ -22,6 +22,7 @@ class Core:
         data = Data(dimensionality=self.adaptive_engine.dimensionality)
 
         while True:
+            logger.info(f'Iteration: {len(data)}')
             with log_time('getting position', cumulative_key='getting position'):
                 position = tuple(self.execution_engine.get_position())
             with log_time('getting targets', cumulative_key='getting targets'):
@@ -36,6 +37,10 @@ class Core:
                     self.adaptive_engine.update_measurements(data)
             with log_time('informing clients', cumulative_key='informing clients'):
                 await self.notify_clients(data)
+
+            if not (len(data) % 2000) and len(data):
+                with log_time('training', cumulative_key='training'):
+                    self.adaptive_engine.train()
 
     async def notify_clients(self, data):
         ...
