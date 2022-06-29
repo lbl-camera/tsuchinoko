@@ -32,3 +32,5 @@ class GPCAMInProcessEngine(Engine):
     def request_targets(self, position, n, **kwargs):
         return self.optimizer.ask(position, n, **kwargs)['x']
 
+    def train(self):
+        self.optimizer.train(self.hyperparameter_bounds, self.hyperparameters)
