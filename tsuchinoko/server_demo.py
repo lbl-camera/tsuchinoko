@@ -38,7 +38,7 @@ if __name__ == '__main__':
         yield from checkpoint()
         yield from mov(point_detector.motor1, target[0], point_detector.motor2, target[1])
         ret = (yield from trigger_and_read([point_detector]))
-        return ret[point_detector.value.name]['value']
+        return ret[point_detector.value.name]['value'], 2  # variance of 1
 
     def get_position():
         yield from checkpoint()
