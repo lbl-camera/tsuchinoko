@@ -10,6 +10,8 @@ from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 from pyqtgraph.graphicsItems.ScatterPlotItem import SymbolAtlas, ScatterPlotItem
 from scipy.spatial import Delaunay
 
+pg.setConfigOption('useOpenGL', True)
+pg.setConfigOption('enableExperimental', True)
 
 
 HAVE_OPENGL = hasattr(QtWidgets, 'QOpenGLWidget')
@@ -80,6 +82,7 @@ class CloudItem(pg.GraphicsObject):
 
     def updateData(self, **kwargs):
         self.clear()
+        self.scatter.clear()
         self.extendData(**kwargs)
 
     def extendData(self, x, y, c, **kwargs):
@@ -105,7 +108,7 @@ class CloudItem(pg.GraphicsObject):
         data = {'x': x, 'y': y, 'c': c}
 
         for k, datum in data.items():
-            if isinstance(datum, list):
+            if isinstance(datum, (list, tuple)):
                 data[k] = datum = np.array(datum)
             if not isinstance(datum, np.ndarray) or datum.ndim > 1:
                 raise Exception("Plot data must be 1D ndarray.")
@@ -292,7 +295,8 @@ class CloudItem(pg.GraphicsObject):
             gl.glStencilFunc(gl.GL_EQUAL, 1, 0xFF)
 
         try:
-            c = self.cData / max(self.cData) * (len(self._lut)-1)
+            c = self.cData - min(self.cData)
+            c = np.nan_to_num(c / max(c) * (len(self._lut)-1))
             lut_c = self._lut[c.astype(np.int_)]
             gl.glBegin(gl.GL_TRIANGLES)
             for i, (i, j, k) in enumerate(self.simplices):
@@ -315,6 +319,7 @@ class CloudItem(pg.GraphicsObject):
         self._mouseShape = None
         self._mouseBounds = None
         self._boundsCache = [None, None]
+        self._boundingRect = None
         self.fragmentAtlas = SymbolAtlas()
         self.delaunay = None
 
@@ -357,7 +362,7 @@ class CloudItem(pg.GraphicsObject):
         if cache is not None and cache[0] == (frac, orthoRange):
             return cache[1]
 
-        if x is None or len(x) == 0:
+        if self.xData is None or len(self.xData) == 0:
             return (None, None)
 
         if ax == 0:
