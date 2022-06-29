@@ -28,8 +28,8 @@ class BlueskyInProcessEngine(Engine):
         while True:
             target = tuple(self.targets.get())
             self.position = target
-            value = yield from measure_target(target)
-            self.new_measurements.append((self.position, value, 0, {}))  # TODO: Add variance; TODO: add metrics
+            value, variance = (yield from measure_target(target))
+            self.new_measurements.append((self.position, value, variance, {}))  # TODO: Add variance; TODO: add metrics
 
     def get_position(self):
         return self.position
