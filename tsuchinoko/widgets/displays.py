@@ -1,11 +1,12 @@
 import logging
 
-from PySide2.QtCore import QObject
+from PySide2.QtCore import QObject, Signal
 from PySide2.QtGui import QBrush, Qt
 from pyqtgraph.dockarea import Dock, DockArea
-from qtpy.QtWidgets import QDoubleSpinBox, QCheckBox, QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy
+from qtpy.QtWidgets import QDoubleSpinBox, QCheckBox, QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout
 
 from tsuchinoko import RE
+from tsuchinoko.core import CoreState
 
 
 class Singleton(type(QObject)):
@@ -136,6 +137,64 @@ class RunEngineControls(Display, metaclass=Singleton):
         self.pause.show()
 
 
+class StateManager(Display, metaclass=Singleton):
+    sigStart = Signal()
+    sigStop = Signal()
+    sigPause = Signal()
+
+    def __init__(self):
+        super(StateManager, self).__init__('Tsuchinoko Status', size=(300, 100))
+
+        self.state = CoreState.Connecting
+
+        self.stop_button = QToolButton()
+        self.start_pause_button = QToolButton()
+        self.state_label = QLabel('...')
+
+        self.stop_button.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+        self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+
+        self.start_pause_button.clicked.connect(self._start_or_pause)
+        self.stop_button.clicked.connect(self.sigStop)
+
+        layout_widget = QWidget()
+        layout_widget.setLayout(QHBoxLayout())
+
+        layout_widget.layout().addWidget(self.stop_button)
+        layout_widget.layout().addWidget(self.start_pause_button)
+        layout_widget.layout().addWidget(self.state_label)
+
+        self.addWidget(layout_widget)
+
+        self.update_state(self.state)
+
+    def update_state(self, state):
+        if state in [CoreState.Starting, CoreState.Pausing, CoreState.Restarting, CoreState.Connecting]:
+            self.start_pause_button.setDisabled(True)
+            self.stop_button.setDisabled(True)
+        elif state in [CoreState.Running]:
+            self.start_pause_button.setText('Pause')
+            self.start_pause_button.setEnabled(True)
+            self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+        elif state in [CoreState.Paused]:
+            self.start_pause_button.setText('Resume')
+            self.start_pause_button.setEnabled(True)
+            self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        elif state in [CoreState.Inactive]:
+            self.start_pause_button.setText('Start')
+            self.start_pause_button.setEnabled(True)
+            self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+
+        self.state_label.setText(CoreState(state).name)
+        self.state = state
+
+    def _start_or_pause(self):
+        if self.start_pause_button.text() == 'Pause':
+            self.sigPause.emit()
+        elif self.start_pause_button.text() in ['Start', 'Resume']:
+            self.sigStart.emit()
+
+
 class GraphManager(Display, metaclass=Singleton):
     def __init__(self):
         super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500))
@@ -153,6 +212,6 @@ class GraphManager(Display, metaclass=Singleton):
         self.graphs[name] = widget
         self.update_callbacks[name] = update_callback
 
-    def update(self, data):
+    def update(self, data, last_data_size):
         for update_callback in self.update_callbacks.values():
-            update_callback(data)
+            update_callback(data, last_data_size)
