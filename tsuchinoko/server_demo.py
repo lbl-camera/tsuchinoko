@@ -59,5 +59,5 @@ if __name__ == '__main__':
     core.set_execution_engine(execution)
     core.start_server()
 
-    asyncio.run(core.start())
+    asyncio.run(core.main())
 
