@@ -57,7 +57,5 @@ if __name__ == '__main__':
     core = ZMQCore()
     core.set_adaptive_engine(adaptive)
     core.set_execution_engine(execution)
-    core.start_server()
 
-    asyncio.run(core.main())
-
+    core.main()

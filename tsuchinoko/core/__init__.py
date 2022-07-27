@@ -1,7 +1,11 @@
 from loguru import logger
 from enum import Enum, auto
-from asyncio import sleep
+from asyncio import sleep, create_task, events
+import time
+import threading
+from queue import Queue
 
+from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse
 from ..execution import Engine as ExecutionEngine
 from ..adaptive import Engine as AdaptiveEngine, Data
 from ..utils.logging import log_time
@@ -27,6 +31,7 @@ class Core:
         self.iteration = 0
 
         self._state = CoreState.Inactive
+        self._exception_queue = Queue()
 
     @property
     def state(self):
@@ -43,33 +48,77 @@ class Core:
     def set_adaptive_engine(self, engine: AdaptiveEngine):
         self.adaptive_engine = engine
 
-    async def main(self):
-        data = None
+    def main(self, debug=False):
+        loop = events.new_event_loop()  # <---- this ensures the current loop is replaced
+        try:
+            events.set_event_loop(loop)
+            loop.set_debug(debug)
+            return loop.run_until_complete(self._main())
+        finally:
+            try:
+                # _cancel_all_tasks(loop)
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            finally:
+                events.set_event_loop(None)
+                loop.close()
+        # import asyncio
+        # asyncio.run(self._main())
+
+    async def _main(self, min_response_sleep=.1):
+        data = Data()
+        experiment_thread = None
 
         while True:
-            if self.state == CoreState.Running:
-                logger.info(f'Iteration: {len(data)}')
-                await self.experiment_iteration(data)
 
+            if self.state == CoreState.Running:
+                pass
+                # await sleep(min_response_sleep)  # short-circuit case
             elif self.state == CoreState.Starting:
-                if not data:
+                if not len(data):
                     data = Data(dimensionality=self.adaptive_engine.dimensionality)
+                self.adaptive_engine.reset()
+                experiment_thread = threading.Thread(target=self.experiment_loop, args=(data,))  # must hold ref
+                experiment_thread.start()
                 self.state = CoreState.Running
 
             elif self.state == CoreState.Inactive:
-                await sleep(1)
+                pass
+                # await sleep(min_response_sleep)
 
             elif self.state == CoreState.Paused:
-                await sleep(1)
+                pass
+                # await sleep(min_response_sleep)
 
             elif self.state == CoreState.Pausing:
                 self.state = CoreState.Paused
-                await sleep(1)
 
-            with log_time('informing clients', cumulative_key='informing clients'):
-                await self.notify_clients(data)
+            elif self.state == CoreState.Resuming:
+                self.state = CoreState.Running
 
-    async def experiment_iteration(self, data):
+            elif self.state == CoreState.Stopping:
+                self.state = CoreState.Inactive
+                data = Data()
+                # await sleep(min_response_sleep)
+
+            await self.notify_clients(data)
+
+    def experiment_loop(self, data):
+        while True:
+            if self.state == CoreState.Running:
+                logger.info(f'Iteration: {len(data)}')
+                try:
+                    self.experiment_iteration(data)
+                except Exception as ex:
+                    self._exception_queue.put(ex)
+                    self.state = CoreState.Pausing
+                    logger.exception(ex)
+                    logger.exception(ex)
+            elif self.state == CoreState.Stopping:
+                return
+            else:
+                time.sleep(.1)
+
+    def experiment_iteration(self, data):
         with log_time('getting position', cumulative_key='getting position'):
             position = tuple(self.execution_engine.get_position())
         with log_time('getting targets', cumulative_key='getting targets'):
@@ -94,45 +143,69 @@ class Core:
 class ZMQCore(Core):
     def __init__(self):
         super(ZMQCore, self).__init__()
-        self.start_server()
+        # self.start_server()
+        self.context = None
+        self.poller = None
 
     def start_server(self):
         import zmq
-        from zmq.asyncio import Context
+        from zmq.asyncio import Context, Poller
+        self.poller = Poller()
         self.context = Context()
-        self.socket = self.context.socket(zmq.REP)
-        self.socket.bind("tcp://*:5555")
+        socket = self.context.socket(zmq.REP)
+        socket.bind("tcp://*:5555")
+        self.poller.register(socket, zmq.POLLIN)
 
     async def notify_clients(self, data: Data):
         import zmq
-        if self.socket:
-            try:
-                message = await self.socket.recv(zmq.NOBLOCK)
-            except zmq.ZMQError:
-                pass
-            else:
-                logger.info("Received request: %s" % message.decode())
-                import json
-                if message == b'full_data':
-                    if data:
-                        await self.socket.send_string(json.dumps(data.as_dict()))
-                    else:
-                        await self.socket.send_string('')
-                elif b'partial_data' in message:
-                    if data:
-                        start = int(message.split(b' ')[1])
-                        partial_data = data[start:]
-                        await self.socket.send_string(json.dumps(partial_data.as_dict()))
-                    else:
-                        await self.socket.send_string('')
-                elif message == b'start':
-                    self.state = CoreState.Starting
-                    await self.socket.send_pyobj(self.state)
-                elif message == b'pause':
-                    self.state = CoreState.Pausing
-                    await self.socket.send_pyobj(self.state)
-                elif message == b'get_state':
-                    await self.socket.send_pyobj(self.state)
+        if not self.poller:
+            self.start_server()
 
+        sockets = dict(await self.poller.poll())
+        for socket in sockets:
+            try:
+                request = await socket.recv_pyobj()  # zmq.NOBLOCK)
+            except zmq.ZMQError as ex:
+                logger.exception(ex)
+            else:
+                logger.info(f"Received request: {request}")
+                with log_time('preparing response', cumulative_key='preparing response'):
+
+                    if isinstance(request, FullDataRequest):
+                        response = FullDataResponse(data.as_dict())
+                    elif isinstance(request, PartialDataRequest):
+                        if data and request.payload[0] <= len(data):
+                            partial_data = data[request.payload[0]:]
+                            response = PartialDataResponse(partial_data.as_dict(), request.payload[0])
+                        else:
+                            response = StateResponse(self.state)
+                    elif isinstance(request, StartRequest):
+                        if self.state == CoreState.Paused:
+                            self.state = CoreState.Resuming
+                        elif self.state == CoreState.Inactive:
+                            self.state = CoreState.Starting
+                        response = StateResponse(self.state)
+                    elif isinstance(request, StopRequest):
+                        self.state = CoreState.Stopping
+                        response = StateResponse(self.state)
+                    elif isinstance(request, PauseRequest):
+                        self.state = CoreState.Pausing
+                        response = StateResponse(self.state)
+                    elif isinstance(request, StateRequest):
+                        response = StateResponse(self.state)
+                    elif isinstance(request, GetParametersRequest):
+                        response = GetParametersResponse(self.adaptive_engine.parameters.saveState())
+                    elif isinstance(request, SetParameterRequest):
+                        child_path, value = request.payload
+                        self.adaptive_engine.parameters.child(*child_path).setValue(value)
+                        response = SetParameterResponse(True)
+                    else:
+                        response = UnknownResponse()
+
+                logger.info(f'Sending response: {response}')
+                await socket.send_pyobj(response)
+
+                if isinstance(response, UnknownResponse):
+                    logger.exception(ValueError(f'Unknown request received: {request}'))
 
 

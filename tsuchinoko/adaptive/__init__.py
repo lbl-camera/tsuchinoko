@@ -3,7 +3,7 @@ import threading
 
 @dataclass()
 class Data:
-    dimensionality: int
+    dimensionality: int = None
     positions: list = field(default_factory=list)
     scores: list = field(default_factory=list)
     variances: list = field(default_factory=list)
@@ -25,7 +25,7 @@ class Data:
 
     as_dict = asdict
 
-    def __getitem__(self, item:slice):
+    def __getitem__(self, item: slice):
         return Data(self.dimensionality, self.positions[item], self.scores[item], self.variances[item], {key: value[item] for key, value in self.metrics.items()})
 
     def __len__(self):
@@ -38,12 +38,16 @@ class Data:
             self.variances += data.variances
             for key in self.metrics:
                 self.metrics[key] += data[key]
+            self.dimensionality = data.dimensionality
 
     def __enter__(self):
         self._lock.__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._lock.__exit__(exc_type, exc_val, exc_tb)
+
+    def __bool__(self):
+        return bool(len(self))
 
 
 class Engine:
@@ -55,3 +59,5 @@ class Engine:
     def request_targets(self, position, n, **kwargs):
         ...
 
+    def reset(self):
+        ...
