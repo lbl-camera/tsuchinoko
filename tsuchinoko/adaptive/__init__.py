@@ -1,5 +1,7 @@
+from collections import defaultdict
 from dataclasses import dataclass, field, asdict, fields
 import threading
+from copy import copy
 
 @dataclass()
 class Data:
@@ -7,7 +9,9 @@ class Data:
     positions: list = field(default_factory=list)
     scores: list = field(default_factory=list)
     variances: list = field(default_factory=list)
-    metrics: dict = field(default_factory=dict)
+    metrics: dict = field(default_factory=lambda: defaultdict(list))
+    states: dict = field(default_factory=dict)
+    graphics_items: dict = field(default_factory=dict)
 
     def __post_init__(self):
         self._lock = threading.Lock()
@@ -23,10 +27,19 @@ class Data:
                         self.metrics[metric] = []
                     self.metrics[metric].append(datum[3][metric])
 
-    as_dict = asdict
+    def as_dict(self):
+        self_copy = copy(self)
+        self_copy.metrics = dict(self_copy.metrics)
+        return asdict(self_copy)
 
     def __getitem__(self, item: slice):
-        return Data(self.dimensionality, self.positions[item], self.scores[item], self.variances[item], {key: value[item] for key, value in self.metrics.items()})
+        return Data(self.dimensionality,
+                    self.positions[item],
+                    self.scores[item],
+                    self.variances[item],
+                    {key: value[item] for key, value in self.metrics.items()},
+                    self.states,
+                    self.graphics_items)
 
     def __len__(self):
         return len(self.positions)
@@ -36,9 +49,11 @@ class Data:
             self.positions += data.positions
             self.scores += data.scores
             self.variances += data.variances
-            for key in self.metrics:
-                self.metrics[key] += data[key]
+            for key in set(self.metrics) | set(data.metrics):
+                self.metrics[key] += data.metrics.get(key, [])
             self.dimensionality = data.dimensionality
+            self.graphics_items.update(data.graphics_items)
+            self.states = data.states
 
     def __enter__(self):
         self._lock.__enter__()

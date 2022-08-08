@@ -48,14 +48,14 @@ class GPCAMInProcessEngine(Engine):
 
     @cached_property
     def parameters(self):
-        hyper_parameters = [SimpleParameter(title=f'Hyperparameter #{i+ 1}', name=f'hyperparameter_{i}', type='float')
-                            for i in range(1+self.dimensionality)]
-        hyper_parameters_bounds = [SimpleParameter(title=f'Hyperparameter #{i+ 1} {edge}', name=f'hyperparameter_{i}_{edge}', type='float')
-                            for i in range(1+self.dimensionality) for edge in ['min', 'max']]
+        hyper_parameters = [SimpleParameter(title=f'Hyperparameter #{i + 1}', name=f'hyperparameter_{i}', type='float')
+                            for i in range(1 + self.dimensionality)]
+        hyper_parameters_bounds = [SimpleParameter(title=f'Hyperparameter #{i + 1} {edge}', name=f'hyperparameter_{i}_{edge}', type='float')
+                                   for i in range(1 + self.dimensionality) for edge in ['min', 'max']]
         bounds_parameters = [SimpleParameter(title=f'Axis #{i + 1} {edge}', name=f'axis_{i}_{edge}', type='float')
-                                 for i in range(self.dimensionality) for edge in ['min', 'max']]
+                             for i in range(self.dimensionality) for edge in ['min', 'max']]
         func_parameters = [ListParameter(title='Method', name='method', values=['global', 'local', 'hgdl']),
-                           ListParameter(title='Acquisition Function', name='acquisition_function', values=['variance', 'shannon_ig', 'UCB', 'maximum', 'minimum', 'covariance']),
+                           ListParameter(title='Acquisition Function', name='acquisition_function', values=['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'blah']),
                            SimpleParameter(title='Queue Length', name='n', value=1, type='int'),
                            SimpleParameter(title='Population Size (global only)', name='pop_size', value=20, type='int'),
                            SimpleParameter(title='Tolerance', name='tol', value=1e-6, type='float')]
@@ -78,7 +78,30 @@ class GPCAMInProcessEngine(Engine):
         return self.optimizer.iput_dim
 
     def update_measurements(self, data: Data):
-        self.optimizer.tell(data.positions, data.scores, data.variances)
+        with data:  # quickly grab values within lock before passing to optimizer
+            positions = data.positions.copy()
+            scores = data.scores.copy()
+            variances = data.scores.copy()
+        self.optimizer.tell(positions, scores, variances)
+        self.update_metrics(data)
+
+    def update_metrics(self, data: Data):
+        with data:  # quickly grab positions within lock before passing to optimizer
+            positions = np.asarray(data.positions.copy())
+
+        # compute posterior covariance without lock
+        result_dict = self.optimizer.posterior_covariance(positions)
+
+        # calculate acquisition function
+        acquisition_function_value = list(self.optimizer.evaluate_acquisition_function(positions,
+                                                     acquisition_function=self.parameters['acquisition_function']))
+
+        # assign to data object with lock
+        with data:
+            data.states['Posterior Covariance'] = result_dict['S(x)']
+            # data.metrics['Posterior Variance'] = list(result_dict['v(x)'])
+            data.graphics_items['Posterior Covariance'] = 'imageitem'
+            data.states['Acquisition Function'] = acquisition_function_value
 
     def request_targets(self, position, n, **kwargs):
         for key in ['acquisition_function', 'method', 'pop_size', 'tol']:

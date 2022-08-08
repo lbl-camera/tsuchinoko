@@ -172,10 +172,12 @@ class ZMQCore(Core):
                 with log_time('preparing response', cumulative_key='preparing response'):
 
                     if isinstance(request, FullDataRequest):
-                        response = FullDataResponse(data.as_dict())
+                        with data:
+                            response = FullDataResponse(data.as_dict())
                     elif isinstance(request, PartialDataRequest):
                         if data and request.payload[0] <= len(data):
-                            partial_data = data[request.payload[0]:]
+                            with data:
+                                partial_data = data[request.payload[0]:]
                             response = PartialDataResponse(partial_data.as_dict(), request.payload[0])
                         else:
                             response = StateResponse(self.state)

@@ -6,7 +6,7 @@ from typing import Any, Type, Union
 import numpy as np
 from PySide2.QtGui import QIcon
 from loguru import logger
-from pyqtgraph import PlotWidget, TextItem, mkBrush, mkPen, HistogramLUTWidget
+from pyqtgraph import PlotWidget, TextItem, mkBrush, mkPen, HistogramLUTWidget, ImageItem, ImageView, PlotItem
 from pyqtgraph.dockarea import DockArea
 from qtmodern.styles import dark
 from qtpy.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget
@@ -158,77 +158,115 @@ class MainWindow(QMainWindow):
             invoke_as_event(self.update_graphs, self.data, self.last_data_size)
         self.last_data_size = len(self.data)
 
-    def init_graph(self, name, indicator='maxvalue'):
+    def init_graph(self, name, item_key):
         if name not in self.graph_manager_widget.graphs:
-            graph = PlotWidget()
-            # scatter = ScatterPlotItem(name='scatter', x=[0], y=[0], size=10, pen=mkPen(None), brush=mkBrush(255, 255, 255, 120))
-            cloud = CloudItem(name='scatter', size=10)
-            histlut = HistogramLUTWidget()
-            histlut.setImageItem(cloud)
+            if item_key == 'clouditem':
+                name, widget, update_callback = self.init_cloud(name)
+            elif item_key == 'imageitem':
+                name, widget, update_callback = self.init_image(name)
+            else:
+                print('blah')
 
-            widget = QWidget()
-            widget.setLayout(QHBoxLayout())
+        self.graph_manager_widget.register_graph(name, widget, update_callback)
 
-            widget.layout().addWidget(graph)
-            widget.layout().addWidget(histlut)
+    @staticmethod
+    def init_image(name):
+        graph = PlotItem()
+        widget = ImageView(view=graph)
 
+        def _update_graph(data, last_data_size):
+            v = data.states[name]
+            widget.imageItem.setImage(v, autoLevels=widget.imageItem.image is None)
 
-            graph.addItem(cloud)
-            if indicator:
-                max_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('r'))
-                last_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('w'))
-                text = TextItem()
-                graph.addItem(max_arrow)
-                # graph.addItem(text)
+        return name, widget, _update_graph
 
-            def _update_graph(data, last_data_size, indicator='maxvalue'):
-                with data:
-                    if name == 'score':
-                        v = data.scores
-                    elif name == 'variance':
-                        v = data.variances
-                    else:
-                        v = data.metrics[name]
+    @staticmethod
+    def init_cloud(name):
+        graph = PlotWidget()
+        # scatter = ScatterPlotItem(name='scatter', x=[0], y=[0], size=10, pen=mkPen(None), brush=mkBrush(255, 255, 255, 120))
+        cloud = CloudItem(name='scatter', size=10)
+        histlut = HistogramLUTWidget()
+        histlut.setImageItem(cloud)
 
-                    x, y = zip(*data.positions)
+        widget = QWidget()
+        widget.setLayout(QHBoxLayout())
 
-                # c = [255 * i / len(x) for i in range(len(x))]
-                max_index = np.argmax(v)
+        widget.layout().addWidget(graph)
+        widget.layout().addWidget(histlut)
 
-                if last_data_size == 0:
-                    action = cloud.setData
-                else:
-                    action = cloud.extendData
+        graph.addItem(cloud)
 
-                action(x=x[last_data_size:],
-                       y=y[last_data_size:],
-                       c=v[last_data_size:],
-                       data=v[last_data_size:],
-                       # size=5,
-                       hoverable=True,
-                       # hoverSymbol='s',
-                       # hoverSize=6,
-                       hoverPen=mkPen('b', width=2),
-                       # hoverBrush=mkBrush('g'),
-                       )
-                # scatter.setData(
-                #     [{'pos': (xi, yi),
-                #       'size': (vi - min(v)) / (max(v) - min(v)) * 20 + 2 if max(v) != min(v) else 20,
-                #       'brush': mkBrush(color=mkColor(255, 255, 255)) if i == len(x) - 1 else mkBrush(
-                #           color=mkColor(255 - c, c, 0)),
-                #       'symbol': '+' if i == len(x) - 1 else 'o'}
-                #      for i, (xi, yi, vi, c) in enumerate(zip(x, y, v, c))])
+        # Hard-coded to show max
+        max_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('r'))
+        last_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('w'))
+        text = TextItem()
+        graph.addItem(max_arrow)
+        # graph.addItem(text)
 
-                max_arrow.setIndex(max_index)
-                last_arrow.setIndex(len(x)-1)
-                # text.setText(f'Max: {v[max_index]:.2f} ({x[max_index]:.2f}, {y[max_index]:.2f})')
-                # text.setPos(x[max_index], y[max_index])
+        def _update_graph(data, last_data_size, indicator='maxvalue'):
+            with data:
+                if name == 'Score':
+                    v = data.scores.copy()
+                elif name == 'Variance':
+                    v = data.variances.copy()
+                elif name in data.metrics:
+                    v = data.metrics[name].copy()
+                elif name in data.states:
+                    v = data.states[name].copy()
 
-            self.graph_manager_widget.register_graph(name, widget, _update_graph)
+                x, y = zip(*data.positions)
+
+            lengths = len(v), len(x), len(y)
+
+            if not np.all(np.array(lengths) == min(lengths)):
+                logger.warning(f'Ragged arrays passed to cloud item with lengths (v, x, y): {lengths}')
+                x = x[:min(lengths)]
+                y = y[:min(lengths)]
+                v = v[:min(lengths)]
+
+            if not len(x):
+                return
+
+            # c = [255 * i / len(x) for i in range(len(x))]
+            max_index = np.argmax(v)
+
+            last_data_size = min(last_data_size, len(cloud.cData))
+
+            if last_data_size == 0:
+                action = cloud.setData
+            else:
+                action = cloud.extendData
+
+            action(x=x[last_data_size+1:],
+                   y=y[last_data_size+1:],
+                   c=v[last_data_size+1:],
+                   data=v[last_data_size+1:],
+                   # size=5,
+                   hoverable=True,
+                   # hoverSymbol='s',
+                   # hoverSize=6,
+                   hoverPen=mkPen('b', width=2),
+                   # hoverBrush=mkBrush('g'),
+                   )
+            # scatter.setData(
+            #     [{'pos': (xi, yi),
+            #       'size': (vi - min(v)) / (max(v) - min(v)) * 20 + 2 if max(v) != min(v) else 20,
+            #       'brush': mkBrush(color=mkColor(255, 255, 255)) if i == len(x) - 1 else mkBrush(
+            #           color=mkColor(255 - c, c, 0)),
+            #       'symbol': '+' if i == len(x) - 1 else 'o'}
+            #      for i, (xi, yi, vi, c) in enumerate(zip(x, y, v, c))])
+
+            max_arrow.setIndex(max_index)
+            last_arrow.setIndex(len(cloud.cData) - 1)
+            # text.setText(f'Max: {v[max_index]:.2f} ({x[max_index]:.2f}, {y[max_index]:.2f})')
+            # text.setPos(x[max_index], y[max_index])
+
+        return name, widget, _update_graph
 
     def update_graphs(self, data, last_data_size):
-        for metric_name in ['variance', 'score', *data.metrics]:
-            self.init_graph(metric_name)
+        for metric_name in ['Variance', 'Score', *data.metrics, *data.states]:
+            if metric_name not in self.graph_manager_widget.graphs:
+                self.init_graph(metric_name, data.graphics_items.get(metric_name, 'clouditem'))
 
         self.graph_manager_widget.update(data, last_data_size)
         # x, y = zip(*data.positions)
