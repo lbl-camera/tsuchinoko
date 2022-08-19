@@ -78,7 +78,7 @@ class GPCAMInProcessEngine(Engine):
         return self.optimizer.iput_dim
 
     def update_measurements(self, data: Data):
-        with data:  # quickly grab values within lock before passing to optimizer
+        with data.r_lock():  # quickly grab values within lock before passing to optimizer
             positions = data.positions.copy()
             scores = data.scores.copy()
             variances = data.scores.copy()
@@ -86,7 +86,7 @@ class GPCAMInProcessEngine(Engine):
         self.update_metrics(data)
 
     def update_metrics(self, data: Data):
-        with data:  # quickly grab positions within lock before passing to optimizer
+        with data.r_lock():  # quickly grab positions within lock before passing to optimizer
             positions = np.asarray(data.positions.copy())
 
         # compute posterior covariance without lock
@@ -97,7 +97,7 @@ class GPCAMInProcessEngine(Engine):
                                                      acquisition_function=self.parameters['acquisition_function']))
 
         # assign to data object with lock
-        with data:
+        with data.w_lock():
             data.states['Posterior Covariance'] = result_dict['S(x)']
             # data.metrics['Posterior Variance'] = list(result_dict['v(x)'])
             data.graphics_items['Posterior Covariance'] = 'imageitem'

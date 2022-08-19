@@ -204,7 +204,9 @@ class MainWindow(QMainWindow):
         # graph.addItem(text)
 
         def _update_graph(data, last_data_size, indicator='maxvalue'):
-            with data:
+            require_clear = False
+
+            with data.r_lock():
                 if name == 'Score':
                     v = data.scores.copy()
                 elif name == 'Variance':
