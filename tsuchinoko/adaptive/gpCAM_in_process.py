@@ -5,6 +5,11 @@ from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParamet
 
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
+from .acquisition_functions import explore_target_100
+
+
+acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
+acquisition_functions['explore_target_100'] = explore_target_100
 
 
 class GPCAMInProcessEngine(Engine):
@@ -55,7 +60,7 @@ class GPCAMInProcessEngine(Engine):
         bounds_parameters = [SimpleParameter(title=f'Axis #{i + 1} {edge}', name=f'axis_{i}_{edge}', type='float')
                              for i in range(self.dimensionality) for edge in ['min', 'max']]
         func_parameters = [ListParameter(title='Method', name='method', values=['global', 'local', 'hgdl']),
-                           ListParameter(title='Acquisition Function', name='acquisition_function', values=['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'blah']),
+                           ListParameter(title='Acquisition Function', name='acquisition_function', values=list(acquisition_functions.keys())),
                            SimpleParameter(title='Queue Length', name='n', value=1, type='int'),
                            SimpleParameter(title='Population Size (global only)', name='pop_size', value=20, type='int'),
                            SimpleParameter(title='Tolerance', name='tol', value=1e-6, type='float')]
@@ -94,7 +99,7 @@ class GPCAMInProcessEngine(Engine):
 
         # calculate acquisition function
         acquisition_function_value = list(self.optimizer.evaluate_acquisition_function(positions,
-                                                     acquisition_function=self.parameters['acquisition_function']))
+                                                     acquisition_function=acquisition_functions[self.parameters['acquisition_function']]))
 
         # assign to data object with lock
         with data.w_lock():
@@ -109,7 +114,7 @@ class GPCAMInProcessEngine(Engine):
         kwargs.update({'bounds': np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                                               for edge in ['min', 'max']]
                                              for i in range(self.dimensionality)])})
-        return self.optimizer.ask(position, n, **kwargs)['x']
+        return self.optimizer.ask(position, n, acquisition_function=acquisition_functions[kwargs.pop('acquisition_function')], **kwargs)['x']
 
     def train(self):
         self.optimizer.train(np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
@@ -118,6 +123,4 @@ class GPCAMInProcessEngine(Engine):
                              np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                          for i in range(self.dimensionality+1)]))
 
-    def metrics(self):
-        points = np.random.random()
-        return self.optimizer.posterior_covariance(points)
+
