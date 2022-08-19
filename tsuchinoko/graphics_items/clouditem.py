@@ -26,6 +26,7 @@ class CloudItem(pg.GraphicsObject):
 
     def __init__(self, **kwargs):
         super(CloudItem, self).__init__(kwargs.get('parent', None))
+        self.levels = None
         self.clear()
 
         self.scatter = ScatterPlotItem(**kwargs)
@@ -78,14 +79,13 @@ class CloudItem(pg.GraphicsObject):
         Line widths greater than 1 pixel affect the performance as discussed in
         the documentation of :class:`PlotDataItem <pyqtgraph.PlotDataItem>`.
         """
-
+        if 'autoLevels' not in kwargs:
+            kwargs['autoLevels'] = True
         self.updateData(**kwargs)
 
     def updateData(self, **kwargs):
         self.clear()
         self.scatter.clear()
-        if 'autoLevels' not in kwargs:
-            kwargs['autoLevels'] = True
         self.extendData(**kwargs)
 
     def extendData(self, x, y, c, autoLevels=False, **kwargs):
@@ -124,14 +124,15 @@ class CloudItem(pg.GraphicsObject):
         self.yData = np.append(self.yData, data['y'])
         self.cData = np.append(self.cData, data['c'])
 
-        points = np.column_stack([data['x'], data['y']])
+        if len(self.xData) > 4:
+            if not self.delaunay:
+                points = np.column_stack([self.xData, self.yData])
+                self.delaunay = Delaunay(points, incremental=True)
+            else:
+                points = np.column_stack([data['x'], data['y']])
+                self.delaunay.add_points(points)
 
-        if not self.delaunay:
-            self.delaunay = Delaunay(points, incremental=True)
-        else:
-            self.delaunay.add_points(points)
-
-        self.simplices = self.delaunay.simplices
+            self.simplices = self.delaunay.simplices
 
         self.invalidateBounds()
         self.prepareGeometryChange()
@@ -156,7 +157,7 @@ class CloudItem(pg.GraphicsObject):
                 autoLevels = False
             else:
                 autoLevels = True
-        if autoLevels:
+        if autoLevels or self.levels is None:
             mn, mx = self.cData.min(), self.cData.max()
             # mn and mx can still be NaN if the data is all-NaN
             if mn == mx or np.isnan(mn) or np.isnan(mx):
@@ -377,7 +378,7 @@ class CloudItem(pg.GraphicsObject):
         self._boundingRect = None
         self.fragmentAtlas = SymbolAtlas()
         self.delaunay = None
-        self.levels = None
+        self.simplices = []
         self._effectiveLut = None
 
     def boundingRect(self):
