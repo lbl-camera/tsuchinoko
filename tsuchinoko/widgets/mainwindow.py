@@ -215,6 +215,7 @@ class MainWindow(QMainWindow):
                     v = data.metrics[name].copy()
                 elif name in data.states:
                     v = data.states[name].copy()
+                    require_clear = True
 
                 x, y = zip(*data.positions)
 
@@ -236,13 +237,18 @@ class MainWindow(QMainWindow):
 
             if last_data_size == 0:
                 action = cloud.setData
+            elif require_clear:
+                action = cloud.updateData
             else:
                 action = cloud.extendData
+                x = x[last_data_size+1:]
+                y = y[last_data_size+1:]
+                v = v[last_data_size+1:]
 
-            action(x=x[last_data_size+1:],
-                   y=y[last_data_size+1:],
-                   c=v[last_data_size+1:],
-                   data=v[last_data_size+1:],
+            action(x=x,
+                   y=y,
+                   c=v,
+                   data=v,
                    # size=5,
                    hoverable=True,
                    # hoverSymbol='s',
