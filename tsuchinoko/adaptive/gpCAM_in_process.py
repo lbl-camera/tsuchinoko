@@ -97,9 +97,19 @@ class GPCAMInProcessEngine(Engine):
         # compute posterior covariance without lock
         result_dict = self.optimizer.posterior_covariance(positions)
 
+        bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
+                              for edge in ['min', 'max']]
+                             for i in range(self.dimensionality)])
+
+        num = 25
+
+        grid_positions = np.asarray(np.meshgrid(*(np.linspace(*bound, num=num) for bound in bounds))).T.reshape(-1, 2)
+
         # calculate acquisition function
-        acquisition_function_value = list(self.optimizer.evaluate_acquisition_function(positions,
-                                                     acquisition_function=acquisition_functions[self.parameters['acquisition_function']]))
+        acquisition_function_value = self.optimizer.evaluate_acquisition_function(grid_positions,
+                                                     acquisition_function=acquisition_functions[self.parameters['acquisition_function']])
+
+        acquisition_function_value = acquisition_function_value.reshape(num, num)
 
         # assign to data object with lock
         with data.w_lock():
@@ -107,6 +117,7 @@ class GPCAMInProcessEngine(Engine):
             # data.metrics['Posterior Variance'] = list(result_dict['v(x)'])
             data.graphics_items['Posterior Covariance'] = 'imageitem'
             data.states['Acquisition Function'] = acquisition_function_value
+            data.graphics_items['Acquisition Function'] = 'imageitem'
 
     def request_targets(self, position, n, **kwargs):
         for key in ['acquisition_function', 'method', 'pop_size', 'tol']:

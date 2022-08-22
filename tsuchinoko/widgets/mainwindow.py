@@ -165,7 +165,7 @@ class MainWindow(QMainWindow):
             elif item_key == 'imageitem':
                 name, widget, update_callback = self.init_image(name)
             else:
-                print('blah')
+                logger.exception(ValueError(f'Invalid item key: {item_key}'))
 
         self.graph_manager_widget.register_graph(name, widget, update_callback)
 
@@ -173,6 +173,7 @@ class MainWindow(QMainWindow):
     def init_image(name):
         graph = PlotItem()
         widget = ImageView(view=graph)
+        graph.vb.invertY(False)  # imageview forces invertY; this resets it
 
         def _update_graph(data, last_data_size):
             v = data.states[name]
