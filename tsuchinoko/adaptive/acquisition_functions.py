@@ -20,4 +20,9 @@ def explore_target(x, gp, N, k=100, tau=0.5):
 
 explore_target_100 = partial(explore_target, N=100, k=1e-3, tau=255/2)
 
-explore_target_100 = explore_target(100, 1e-3, 255/2)
+
+def radical_gradient(x, gp):
+    mean_grad = gp.posterior_mean_grad(x)["df/dx"]
+    std = np.sqrt(gp.posterior_covariance(x, variance_only=True)["v(x)"])
+    res = np.sqrt(np.linalg.norm(mean_grad, axis=1)) * std
+    return res

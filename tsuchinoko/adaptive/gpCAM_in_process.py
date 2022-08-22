@@ -5,11 +5,11 @@ from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParamet
 
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
-from .acquisition_functions import explore_target_100
-
+from .acquisition_functions import explore_target_100, radical_gradient
 
 acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
 acquisition_functions['explore_target_100'] = explore_target_100
+acquisition_functions['radical_gradient'] = radical_gradient
 
 
 class GPCAMInProcessEngine(Engine):
