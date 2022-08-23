@@ -5,7 +5,8 @@ import time
 import threading
 from queue import Queue
 
-from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse
+from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse, MeasureRequest, \
+    MeasureResponse
 from ..execution import Engine as ExecutionEngine
 from ..adaptive import Engine as AdaptiveEngine, Data
 from ..utils.logging import log_time
@@ -201,6 +202,9 @@ class ZMQCore(Core):
                         child_path, value = request.payload
                         self.adaptive_engine.parameters.child(*child_path).setValue(value)
                         response = SetParameterResponse(True)
+                    elif isinstance(request, MeasureRequest):
+                        self.execution_engine.update_targets([request.payload[0]])
+                        response = MeasureResponse(True)
                     else:
                         response = UnknownResponse()
 

@@ -135,3 +135,11 @@ class UnknownResponse(Message):
 
 class ExceptionResponse(Message):
     __slots__ = ('exception',)
+
+
+class MeasureRequest(Message):
+    __slots__ = ('position',)
+
+
+class MeasureResponse(Message):
+    __slots__ = ('success',)

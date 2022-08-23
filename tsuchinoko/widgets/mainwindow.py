@@ -14,11 +14,16 @@ from zmq import ZMQError
 
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
-from tsuchinoko.core.messages import StateRequest, PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse
+from tsuchinoko.core.messages import StateRequest, PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
+from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
 from tsuchinoko.utils.threads import QThreadFutureIterator, invoke_as_event, invoke_in_main_thread
 from tsuchinoko.widgets.displays import Log, Configuration, GraphManager, StateManager
+
+
+class ImageViewBlend(ClickRequester):
+    pass
 
 
 class MainWindow(QMainWindow):
@@ -53,6 +58,7 @@ class MainWindow(QMainWindow):
         self.state_manager_widget.sigStop.connect(self.stop)
         self.configuration_widget.sigPushParameter.connect(self.set_parameter)
         self.configuration_widget.sigRequestParameters.connect(self.request_parameters)
+        request_relay.sigRequestMeasure.connect(self.request_measure)
 
         self.update_thread = QThreadFutureIterator(self.update)
         self.update_thread.start()
@@ -88,6 +94,9 @@ class MainWindow(QMainWindow):
 
     def stop(self):
         self.message_queue.put(StopRequest())
+
+    def request_measure(self, pos):
+        self.message_queue.put(MeasureRequest(pos))
 
     def request_parameters(self):
         self.message_queue.put(GetParametersRequest())
@@ -172,7 +181,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def init_image(name):
         graph = PlotItem()
-        widget = ImageView(view=graph)
+        widget = ImageViewBlend(view=graph)
         graph.vb.invertY(False)  # imageview forces invertY; this resets it
 
         def _update_graph(data, last_data_size):
@@ -183,7 +192,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def init_cloud(name):
-        graph = PlotWidget()
+        graph = ClickRequesterPlot()
         # scatter = ScatterPlotItem(name='scatter', x=[0], y=[0], size=10, pen=mkPen(None), brush=mkBrush(255, 255, 255, 120))
         cloud = CloudItem(name='scatter', size=10)
         histlut = HistogramLUTWidget()
@@ -200,7 +209,7 @@ class MainWindow(QMainWindow):
         # Hard-coded to show max
         max_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('r'))
         last_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('w'))
-        text = TextItem()
+        # text = TextItem()
         graph.addItem(max_arrow)
         # graph.addItem(text)
 
