@@ -11,8 +11,13 @@ from tsuchinoko.execution.bluesky_in_process import BlueskyInProcessEngine
 
 
 if __name__ == '__main__':
+    image = np.flipud(np.asarray(Image.open('test2.jpg')))
+    luminosity = np.average(image, axis=2)
+    blurred_luminosity = ndimage.gaussian_filter(luminosity, sigma=5)
 
-    image = np.asarray(Image.open('test.jpeg'))
+    def bilinear_sample(img, pos):
+        return ndimage.map_coordinates(img, [[pos[0]], [pos[1]]], order=1)
+
 
     class PointDetector(Device):
         motor1 = Cpt(SynAxis, name='motor1')
@@ -26,7 +31,7 @@ if __name__ == '__main__':
             self.value.sim_set_func(self.get_value)
 
         def get_value(self):
-            return np.average(image[-int(self.motor2.position), int(self.motor1.position)])
+            return np.average(bilinear_sample(luminosity, [int(self.motor2.position), int(self.motor1.position)]))
 
         def trigger(self, *args, **kwargs):
             return self.value.trigger(*args, **kwargs)
