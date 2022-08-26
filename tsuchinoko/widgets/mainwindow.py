@@ -14,7 +14,8 @@ from zmq import ZMQError
 
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
-from tsuchinoko.core.messages import StateRequest, PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest
+from tsuchinoko.core.messages import StateRequest, PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest, \
+    ConnectRequest, ConnectResponse
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
 from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
@@ -68,20 +69,25 @@ class MainWindow(QMainWindow):
         self.callbacks = defaultdict(list)
 
         self.subscribe(self.state_manager_widget.update_state, StateResponse)
+        self.subscribe(self.state_manager_widget.update_state, ConnectResponse)
         self.subscribe(self.configuration_widget.update_parameters, GetParametersResponse)
         self.subscribe(self._data_callback, FullDataResponse)
         self.subscribe(self._data_callback, PartialDataResponse)
+        self.subscribe(self.refresh_state, ConnectResponse)
 
     def init_socket(self):
         import zmq
         context = zmq.Context()
 
         #  Socket to talk to server
-        print("Connecting to core server…")
+        logger.info("Connecting to core server…")
         self.socket = context.socket(zmq.REQ)
         self.socket.connect("tcp://localhost:5555")
         self.socket.RCVTIMEO = 5000
         self.message_queue = Queue()
+
+    def try_connect(self):
+        self.message_queue.put(ConnectRequest())
 
     def get_state(self):
         self.message_queue.put(StateRequest())
@@ -108,7 +114,6 @@ class MainWindow(QMainWindow):
     def update(self):
         self.data = Data()
         self.last_data_size = 0
-        import json, zmq
 
         while True:
             request = None
@@ -116,7 +121,10 @@ class MainWindow(QMainWindow):
             if self.state_manager_widget.state == CoreState.Stopping:
                 self.last_data_size = 0
 
-            if self.state_manager_widget.state in [CoreState.Connecting, CoreState.Pausing, CoreState.Starting, CoreState.Resuming, CoreState.Resuming, CoreState.Stopping]:
+            if self.state_manager_widget.state == CoreState.Connecting:
+                self.try_connect()
+
+            if self.state_manager_widget.state in [CoreState.Pausing, CoreState.Starting, CoreState.Resuming, CoreState.Resuming, CoreState.Stopping]:
                 self.get_state()
 
             try:
@@ -144,6 +152,7 @@ class MainWindow(QMainWindow):
                 self.init_socket()
                 self.data = Data()  # wipeout data and get a full update next time
                 self.last_data_size = 0
+                self.state_manager_widget.update_state(CoreState.Connecting)
             else:
                 logger.info(f'response: {response}')
                 if not response:
@@ -166,6 +175,9 @@ class MainWindow(QMainWindow):
         if len(data_payload['positions']):
             invoke_as_event(self.update_graphs, self.data, self.last_data_size)
         self.last_data_size = len(self.data)
+
+    def refresh_state(self, _):
+        self.message_queue.put(GetParametersRequest())
 
     def init_graph(self, name, item_key):
         if name not in self.graph_manager_widget.graphs:

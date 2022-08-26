@@ -6,7 +6,7 @@ import threading
 from queue import Queue
 
 from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse, MeasureRequest, \
-    MeasureResponse
+    MeasureResponse, ConnectRequest, ConnectResponse
 from ..execution import Engine as ExecutionEngine
 from ..adaptive import Engine as AdaptiveEngine, Data
 from ..utils.logging import log_time
@@ -113,7 +113,6 @@ class Core:
                     self._exception_queue.put(ex)
                     self.state = CoreState.Pausing
                     logger.exception(ex)
-                    logger.exception(ex)
             elif self.state == CoreState.Stopping:
                 return
             else:
@@ -129,8 +128,9 @@ class Core:
         with log_time('getting measurements', cumulative_key='getting measurements'):
             new_measurements = self.execution_engine.get_measurements()
         if len(new_measurements):
-            with log_time('injecting new measurements', cumulative_key='injecting new measurements'):
+            with log_time('stashing new measurements', cumulative_key='injecting new measurements'):
                 data.inject_new(new_measurements)
+            with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
                 self.adaptive_engine.update_measurements(data)
 
         if not (len(data) % 2000) and len(data):
@@ -176,7 +176,7 @@ class ZMQCore(Core):
                         with data.r_lock():
                             response = FullDataResponse(data.as_dict())
                     elif isinstance(request, PartialDataRequest):
-                        if data and request.payload[0] <= len(data):
+                        if data and request.payload[0] <= len(data) and self.state == CoreState.Running:
                             with data.r_lock():
                                 partial_data = data[request.payload[0]:]
                             response = PartialDataResponse(partial_data.as_dict(), request.payload[0])
@@ -205,6 +205,8 @@ class ZMQCore(Core):
                     elif isinstance(request, MeasureRequest):
                         self.execution_engine.update_targets([request.payload[0]])
                         response = MeasureResponse(True)
+                    elif isinstance(request, ConnectRequest):
+                        response = ConnectResponse(self.state)
                     else:
                         response = UnknownResponse()
 

@@ -143,3 +143,12 @@ class MeasureRequest(Message):
 
 class MeasureResponse(Message):
     __slots__ = ('success',)
+
+
+class ConnectRequest(Message):
+    __slots__ = ()
+
+
+class ConnectResponse(Message):
+    __slots__ = ('state',)
+

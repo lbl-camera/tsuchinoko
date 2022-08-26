@@ -81,8 +81,6 @@ class Configuration(Display, metaclass=Singleton):
         container_widget.setLayout(layout)
         self.addWidget(container_widget)
 
-        invoke_as_event(self.request_parameters)  # invoke as event so that signals can be connected in the meantime
-
     def request_parameters(self):
         self.sigRequestParameters.emit()
 
@@ -154,8 +152,6 @@ class StateManager(Display, metaclass=Singleton):
     def __init__(self):
         super(StateManager, self).__init__('Status', size=(300, 50))
 
-        self.state = CoreState.Connecting
-
         self.stop_button = QToolButton()
         self.start_pause_button = QToolButton()
         self.state_label = QLabel('...')
@@ -175,9 +171,17 @@ class StateManager(Display, metaclass=Singleton):
 
         self.addWidget(layout_widget)
 
-        self.update_state(self.state)
+        self.state = CoreState.Connecting
 
     def update_state(self, state):
+        self.state = state
+
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, state):
         if state in [CoreState.Starting, CoreState.Pausing, CoreState.Restarting, CoreState.Connecting]:
             self.start_pause_button.setDisabled(True)
             self.stop_button.setDisabled(True)
@@ -198,7 +202,7 @@ class StateManager(Display, metaclass=Singleton):
             self.stop_button.setEnabled(False)
 
         self.state_label.setText(CoreState(state).name)
-        self.state = state
+        self._state = state
 
     def _start_or_pause(self):
         if self.start_pause_button.text() == 'Pause':

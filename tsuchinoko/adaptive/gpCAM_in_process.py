@@ -6,6 +6,7 @@ from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParamet
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
+from ..utils.logging import log_time
 
 acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
 acquisition_functions['explore_target_100'] = explore_target_100
@@ -88,7 +89,8 @@ class GPCAMInProcessEngine(Engine):
             scores = data.scores.copy()
             variances = data.scores.copy()
         self.optimizer.tell(positions, scores, variances)
-        self.update_metrics(data)
+        with log_time('updating metrics', cumulative_key='updating metrics'):
+            self.update_metrics(data)
 
     def update_metrics(self, data: Data):
         with data.r_lock():  # quickly grab positions within lock before passing to optimizer
@@ -109,7 +111,10 @@ class GPCAMInProcessEngine(Engine):
         acquisition_function_value = self.optimizer.evaluate_acquisition_function(grid_positions,
                                                      acquisition_function=acquisition_functions[self.parameters['acquisition_function']])
 
-        acquisition_function_value = acquisition_function_value.reshape(num, num)
+        try:
+            acquisition_function_value = acquisition_function_value.reshape(num, num)
+        except ValueError:
+            acquisition_function_value = np.array([[0]])
 
         # assign to data object with lock
         with data.w_lock():
