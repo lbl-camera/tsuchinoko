@@ -104,7 +104,7 @@ class GPCAMInProcessEngine(Engine):
         with data.r_lock():  # quickly grab values within lock before passing to optimizer
             positions = data.positions.copy()
             scores = data.scores.copy()
-            variances = data.scores.copy()
+            variances = data.variances.copy()
         self.optimizer.tell(positions, scores, variances)
         with log_time('updating metrics', cumulative_key='updating metrics'):
             self.update_metrics(data)
