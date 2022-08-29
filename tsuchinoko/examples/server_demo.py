@@ -4,8 +4,10 @@ import numpy as np
 from ophyd.sim import SynAxis, Device, Cpt, SynSignalRO, SynSignal
 from bluesky.plan_stubs import mv, trigger_and_read, create, stage, checkpoint, mov
 from PIL import Image
+from scipy import ndimage
 
 from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
+from tsuchinoko.adaptive.random_in_process import RandomInProcess
 from tsuchinoko.core import Core, ZMQCore
 from tsuchinoko.execution.bluesky_in_process import BlueskyInProcessEngine
 
@@ -53,10 +55,13 @@ if __name__ == '__main__':
     adaptive = GPCAMInProcessEngine(dimensionality=2,
                                     parameter_bounds=[(0, image.shape[1]),
                                                       (0, image.shape[0])],
-                                    hyperparameters=[255, 2, 2],
-                                    hyperparameter_bounds=[(0, 255),
-                                                           (0, 1e1),
-                                                           (0, 1e1)])
+                                    hyperparameters=[255, 100, 100],
+                                    hyperparameter_bounds=[(0, 1e5),
+                                                           (0, 1e5),
+                                                           (0, 1e5)])
+    # adaptive = RandomInProcess(dimensionality=2,
+    #                            parameter_bounds=[(0, image.shape[1]),
+    #                                              (0, image.shape[0])])
     execution = BlueskyInProcessEngine(measure_target, get_position)
 
     core = ZMQCore()
