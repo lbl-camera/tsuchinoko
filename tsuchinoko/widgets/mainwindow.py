@@ -238,6 +238,8 @@ class MainWindow(QMainWindow):
                 elif name in data.states:
                     v = data.states[name].copy()
                     require_clear = True
+                else:
+                    raise ValueError(f'No value for key: {name}')
 
                 x, y = zip(*data.positions)
 
