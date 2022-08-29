@@ -6,7 +6,10 @@ from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParamet
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
+from ..parameters import TrainingParameter
 from ..utils.logging import log_time
+import uuid
+
 
 acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
 acquisition_functions['explore_target_100'] = explore_target_100
@@ -14,6 +17,8 @@ acquisition_functions['radical_gradient'] = radical_gradient
 
 
 class GPCAMInProcessEngine(Engine):
+    default_retrain_globally_at = (20, 50, 100, 400, 1000)
+    default_retrain_locally_at = (20, 40, 60, 80, 100, 200, 400, 1000)
 
     def __init__(self, dimensionality, parameter_bounds, hyperparameters, hyperparameter_bounds, **kwargs):
         self.kwargs = kwargs
@@ -36,6 +41,9 @@ class GPCAMInProcessEngine(Engine):
         self.optimizer.points = np.array([])
         self.optimizer.values = np.array([])
         self.optimizer.variances = np.array([])
+
+        self._completed_training = {'global': set(),
+                                    'local': set()}
 
     def reset(self):
         parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
@@ -66,12 +74,21 @@ class GPCAMInProcessEngine(Engine):
                            SimpleParameter(title='Population Size (global only)', name='pop_size', value=20, type='int'),
                            SimpleParameter(title='Tolerance', name='tol', value=1e-6, type='float')]
 
+        global_train_parameter = TrainingParameter(title='Train globally at...', name='global_training', addText='Add', children=[
+            SimpleParameter(title='N=', name=str(uuid.uuid4()), value=N, type='int') for N in self.default_retrain_globally_at
+        ])
+        local_train_parameter = TrainingParameter(title='Train locally at...', name='local_training', addText='Add', children=[
+            SimpleParameter(title='N=', name=str(uuid.uuid4()), value=N, type='int') for N in self.default_retrain_locally_at
+        ])
+
         # wireup callback-based parameters
         for param in hyper_parameters:
             param.sigValueChanged.connect(self._set_hyperparameter)
 
         parameters = func_parameters + [GroupParameter(name='bounds', title='Axis Bounds', children=bounds_parameters),
-                                        GroupParameter(name='hyperparameters', title='Hyperparameter Bounds', children=hyper_parameters+hyper_parameters_bounds)]
+                                        GroupParameter(name='hyperparameters', title='Hyperparameter Bounds', children=hyper_parameters+hyper_parameters_bounds),
+                                        global_train_parameter,
+                                        local_train_parameter,]
         return GroupParameter(name='top', children=parameters)
 
     def _set_hyperparameter(self, parameter, value):
@@ -133,10 +150,17 @@ class GPCAMInProcessEngine(Engine):
         return self.optimizer.ask(position, n, acquisition_function=acquisition_functions[kwargs.pop('acquisition_function')], **kwargs)['x']
 
     def train(self):
-        self.optimizer.train(np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
-                                          for edge in ['min', 'max']]
-                                         for i in range(self.dimensionality+1)]),
-                             np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                         for i in range(self.dimensionality+1)]))
+        for method in ['global', 'local']:
+            train_at = set(child.value() for child in self.parameters.child(f'{method}_training').children())
+
+            for N in train_at:
+                if len(self.optimizer.values) > N and N not in self._completed_training[method]:
+                    self.optimizer.train(np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
+                                                      for edge in ['min', 'max']]
+                                                     for i in range(self.dimensionality+1)]),
+                                         np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
+                                                     for i in range(self.dimensionality+1)]), method=method)
+                    self._completed_training[method].add(N)
+                    break  # only does global training if specified for both
 
 

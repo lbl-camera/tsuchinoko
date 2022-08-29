@@ -132,10 +132,8 @@ class Core:
                 data.inject_new(new_measurements)
             with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
                 self.adaptive_engine.update_measurements(data)
-
-        if not (len(data) % 2000) and len(data):
-            with log_time('training', cumulative_key='training'):
-                self.adaptive_engine.train()
+        with log_time('training', cumulative_key='training'):
+            self.adaptive_engine.train()
 
     async def notify_clients(self, data):
         ...
