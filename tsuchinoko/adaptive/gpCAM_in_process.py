@@ -128,6 +128,9 @@ class GPCAMInProcessEngine(Engine):
         acquisition_function_value = self.optimizer.evaluate_acquisition_function(grid_positions,
                                                      acquisition_function=acquisition_functions[self.parameters['acquisition_function']])
 
+        # calculate acquisition function
+        posterior_mean_value = self.optimizer.posterior_mean(grid_positions)['f(x)'].reshape(num, num)
+
         try:
             acquisition_function_value = acquisition_function_value.reshape(num, num)
         except ValueError:
@@ -140,6 +143,8 @@ class GPCAMInProcessEngine(Engine):
             data.graphics_items['Posterior Covariance'] = 'imageitem'
             data.states['Acquisition Function'] = acquisition_function_value
             data.graphics_items['Acquisition Function'] = 'imageitem'
+            data.states['Posterior Mean'] = posterior_mean_value
+            data.graphics_items['Posterior Mean'] = 'imageitem'
 
     def request_targets(self, position, n, **kwargs):
         for key in ['acquisition_function', 'method', 'pop_size', 'tol']:
