@@ -9,7 +9,7 @@ class TrainingParameter(GroupParameter):
         kwargs['type'] = 'training'
         super(TrainingParameter, self).__init__(**kwargs)
 
-    def addNew(self, typ):
+    def addNew(self):
         self.addChild(dict(name=str(uuid.uuid4()), title='N=', type=int, value=1, removable=True, renamable=False))
 
 
