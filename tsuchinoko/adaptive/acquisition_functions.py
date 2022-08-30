@@ -18,7 +18,7 @@ def explore_target(x, gp, N, k=100, tau=0.5):
         return transform(mean, k, tau) * cov
 
 
-explore_target_100 = partial(explore_target, N=100, k=1e-3, tau=255/2)
+explore_target_100 = partial(explore_target, N=100, k=100, tau=.5)
 
 
 def radical_gradient(x, gp):
