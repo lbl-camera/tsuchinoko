@@ -10,7 +10,7 @@ class TrainingParameter(GroupParameter):
         super(TrainingParameter, self).__init__(**kwargs)
 
     def addNew(self):
-        self.addChild(dict(name=str(uuid.uuid4()), title='N=', type=int, value=1, removable=True, renamable=False))
+        self.addChild(dict(name=str(uuid.uuid4()), title='N=', type='int', value=1, removable=True, renamable=False))
 
 
 registerParameterType('training', TrainingParameter)
