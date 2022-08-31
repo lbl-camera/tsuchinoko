@@ -120,12 +120,12 @@ class GPCAMInProcessEngine(Engine):
                               for edge in ['min', 'max']]
                              for i in range(self.dimensionality)])
 
-        num = 25
+        num = 50
 
         grid_positions = np.asarray(np.meshgrid(*(np.linspace(*bound, num=num) for bound in bounds))).T.reshape(-1, 2)
 
         # calculate acquisition function
-        acquisition_function_value = self.optimizer.evaluate_acquisition_function(grid_positions,
+        acquisition_function_value = self.optimizer.evaluate_acquisition_function(grid_positions[::2, ::2],
                                                      acquisition_function=acquisition_functions[self.parameters['acquisition_function']])
 
         # calculate acquisition function
@@ -133,7 +133,7 @@ class GPCAMInProcessEngine(Engine):
 
         try:
             acquisition_function_value = acquisition_function_value.reshape(num, num)
-        except ValueError:
+        except (ValueError, AttributeError):
             acquisition_function_value = np.array([[0]])
 
         # assign to data object with lock
