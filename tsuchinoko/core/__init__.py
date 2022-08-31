@@ -113,7 +113,7 @@ class Core:
                     self._exception_queue.put(ex)
                     self.state = CoreState.Pausing
                     logger.exception(ex)
-            elif self.state == CoreState.Stopping:
+            elif self.state in [CoreState.Stopping, CoreState.Inactive]:
                 return
             else:
                 time.sleep(.1)

@@ -120,6 +120,7 @@ class MainWindow(QMainWindow):
 
             if self.state_manager_widget.state == CoreState.Stopping:
                 self.last_data_size = 0
+                self.data = Data()
 
             if self.state_manager_widget.state == CoreState.Connecting:
                 self.try_connect()
