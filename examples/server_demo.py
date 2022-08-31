@@ -13,7 +13,7 @@ from tsuchinoko.execution.bluesky_in_process import BlueskyInProcessEngine
 
 
 if __name__ == '__main__':
-    image = np.flipud(np.asarray(Image.open('test2.jpg')))
+    image = np.flipud(np.asarray(Image.open('test3.jpg')))
     luminosity = np.average(image, axis=2)
     blurred_luminosity = ndimage.gaussian_filter(luminosity, sigma=5)
 

@@ -111,7 +111,8 @@ def instrument_synthetic(data):
     return data
 
 fileName = 'E:\\data\\IR-gpcam\\20180216r_S1_tr_area1.h5'
-ref_path = 'E:\\data\\IR-gpcam\\Lipopolysaccharides.CSV'
+# ref_path = 'E:\\data\\IR-gpcam\\Lipopolysaccharides.CSV'
+ref_path = 'E:\\data\\IR-gpcam\\black_carbons_on_minerals.CSV'
 dataName = 'E:\\data\\IR-gpcam\\'
 ir_data = ir_getdata(fileName, ref_path, dataName=dataName)
 
