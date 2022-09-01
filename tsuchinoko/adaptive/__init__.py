@@ -1,15 +1,22 @@
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict, fields
-import threading
 from copy import copy
+from dataclasses import dataclass, field, asdict
+from abc import ABC, abstractmethod
+from typing import Tuple, Iterable
+
 from loguru import logger
 from pyqtgraph.parametertree import Parameter
 
 from tsuchinoko.utils.mutex import RWLock
 
 
-@dataclass()
-class Data():
+@dataclass
+class Data:
+    """
+    A data class to track the data state of an experiment. This type can be appended to as new data is received. A
+    locking mechanism is provided to support read/write locking for parallelism.
+    """
+
     dimensionality: int = None
     positions: list = field(default_factory=list)
     scores: list = field(default_factory=list)
@@ -73,21 +80,58 @@ class Data():
         return bool(len(self))
 
 
-class Engine:
+class Engine(ABC):
+    """
+    The Adaptive Engine base class. This component is generally to be responsible for determining future measurement targets.
+    """
+
     dimensionality: int = None
     parameters: Parameter = None
 
+    @abstractmethod
     def update_measurements(self, data: Data):
+        """
+        Update internal variables with the provided new data
+        """
         ...
 
-    def request_targets(self, position, n, **kwargs):
+    @abstractmethod
+    def request_targets(self, position: Tuple, n: int) -> Iterable[Tuple]:
+        """
+        Determine `n` new targets to be measured
+
+        Parameters
+        ----------
+        position: tuple
+            The current 'position' of the experiment in the target domain.
+        n: int
+            The number of targets requested to be returned
+
+        Returns
+        -------
+        targets: array_like
+            The new targets to be measured.
+        """
         ...
 
+    @abstractmethod
     def reset(self):
+        """
+        Called when an experiment stops, or is about to start. Returns the engine to a clean state.
+        """
         ...
 
+    @abstractmethod
     def train(self):
+        """
+        Perform training. This can be short-circuited to only train on every N-th iteration, for example.
+        """
         ...
 
+    @abstractmethod
     def update_metrics(self, data: Data):
+        """
+        Calculates various metrics to drive visualizations for the client. The data object is expected to be mutated to
+        include these new values.
+        """
         ...
