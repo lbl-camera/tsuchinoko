@@ -6,6 +6,10 @@ from . import Engine
 
 
 class ThreadedInProcessEngine(Engine):
+    """
+    A simple Execution Engine which performs measurements in a background thread.
+    """
+
     def __init__(self, measure_target, get_position=None):
         # These would normally be on the remote end
         self.targets = Queue()
