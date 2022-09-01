@@ -19,6 +19,10 @@ HAVE_OPENGL = hasattr(QtWidgets, 'QOpenGLWidget')
 
 
 class CloudItem(pg.GraphicsObject):
+    """
+    An opengl point cloud visualization utilizing Delaunay Triangulation. Hardware acceleration is required.
+    """
+
     sigDataChanged = sigImageChanged = QtCore.Signal()
     sigClicked = QtCore.Signal(object, object)
     sigPointsClicked = QtCore.Signal(object, object, object)
