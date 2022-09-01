@@ -1,44 +1,38 @@
-import asyncio
-import time
+"""
+Pulls data from 3D hyperspectral h5 data block; performs analysis using reference spectra
+"""
 
-import numpy as np
-from ophyd.sim import SynAxis, Device, Cpt, SynSignalRO, SynSignal
-from bluesky.plan_stubs import mv, trigger_and_read, create, stage, checkpoint, mov
-from PIL import Image
-from scipy import ndimage
-
-from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
-from tsuchinoko.adaptive.random_in_process import RandomInProcess
-from tsuchinoko.core import Core, ZMQCore
-from tsuchinoko.execution.bluesky_in_process import BlueskyInProcessEngine
-
-import numpy as np
 import os
 import time
-import sys
-import h5py
 
+import h5py
+import numpy as np
+
+from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
+from tsuchinoko.core import ZMQCore
 from tsuchinoko.execution.threaded_in_process import ThreadedInProcessEngine
 
+
 def val2ind(val, an_array):
-    return np.argmin(abs(an_array-val), axis=0)
+    return np.argmin(abs(an_array - val), axis=0)
+
 
 class ir_getdata:
 
     def __init__(self, fileName, ref_path, print_dir=False, dataName=r'./gpdata/Test'):
         h5_groups = []
         epsilon, b = 0.4, 0.29
-        with h5py.File(fileName,'r') as f:
+        with h5py.File(fileName, 'r') as f:
             root_name = list(f.keys())[0]
             print(root_name)
-            h = f[root_name] #folder name
-            self.xy = f[root_name + '/data/xy'][:,:]
+            h = f[root_name]  # folder name
+            self.xy = f[root_name + '/data/xy'][:, :]
             self.wav = f[root_name + '/data/wavenumbers'][:]
             self.N_w = len(self.wav)
-            self.data_list = f[root_name + '/data/spectra'][:,:]
-            self.data_cube = f[root_name + '/data/image/image_cube'][:, : ,:]
-            self.data_list = -np.log10(self.data_list/100 + epsilon) + b
-            self.data_cube = -np.log10(self.data_cube/100 + epsilon) + b
+            self.data_list = f[root_name + '/data/spectra'][:, :]
+            self.data_cube = f[root_name + '/data/image/image_cube'][:, :, :]
+            self.data_list = -np.log10(self.data_list / 100 + epsilon) + b
+            self.data_cube = -np.log10(self.data_cube / 100 + epsilon) + b
             h.visit(h5_groups.append)
             if print_dir:
                 print(*h5_groups, sep='\n')
@@ -50,12 +44,12 @@ class ir_getdata:
         print(f'ref_spec: {os.path.basename(ref_path)}')
 
         # get X, Y coordinates
-        self.X = np.unique(self.xy[:,0])
-        self.Y = np.unique(self.xy[:,1])
+        self.X = np.unique(self.xy[:, 0])
+        self.Y = np.unique(self.xy[:, 1])
 
     def get_spec(self, pos):
         row, col = [], []
-        pos = pos.reshape(-1,2)
+        pos = pos.reshape(-1, 2)
         for i in range(len(pos)):
             row.append(val2ind(pos[i, 1], self.Y))  # align y coordinate to get row
             col.append(val2ind(pos[i, 0], self.X))  # align x coordinate to get col
@@ -87,11 +81,12 @@ class ir_getdata:
         spec, ref = self.alignWithRef(spec, self.ref_spec)
         return np.corrcoef(spec, ref[None, :])[0, 1]
 
+
 def instrument_synthetic(data):
     # load last saved data
     variance = 1e-3
 
-    if (ir_data.n_spec == 0) and os.path.exists(ir_data.cum_specName) :
+    if (ir_data.n_spec == 0) and os.path.exists(ir_data.cum_specName):
         ir_data.cum_spectra = np.load(ir_data.cum_specName)
         ir_data.n_spec = ir_data.cum_spectra.shape[0]
 
@@ -110,31 +105,31 @@ def instrument_synthetic(data):
         data[idx_data]["time stamp"] = time.time()
     return data
 
+
 fileName = 'E:\\data\\IR-gpcam\\20180216r_S1_tr_area1.h5'
 # ref_path = 'E:\\data\\IR-gpcam\\Lipopolysaccharides.CSV'
 ref_path = 'E:\\data\\IR-gpcam\\black_carbons_on_minerals.CSV'
 dataName = 'E:\\data\\IR-gpcam\\'
 ir_data = ir_getdata(fileName, ref_path, dataName=dataName)
 
-
-
-
 if __name__ == '__main__':
 
+    # Define a function to measure target positions
     def measure_target(target):
         data = instrument_synthetic([{'position': target, 'measured': False}])
         return data[0]['value'], data[0]['variance']
 
-
+    # Define a gpCAM adaptive engine with initial parameters
     adaptive = GPCAMInProcessEngine(dimensionality=2,
-                                    parameter_bounds=[[-20590.4,  -20010.4], [3394.0, 3894.0]],
+                                    parameter_bounds=[[-20590.4, -20010.4], [3394.0, 3894.0]],
                                     hyperparameters=[1, 1, 1],
-                                    hyperparameter_bounds=[[0.0001,10],[0.001,1e4],[0.001,1e4]])
+                                    hyperparameter_bounds=[[0.0001, 10], [0.001, 1e4], [0.001, 1e4]])
 
+    # Define an execution engine with the measurement function
     execution = ThreadedInProcessEngine(measure_target)
 
+    # Construct and start a core server
     core = ZMQCore()
     core.set_adaptive_engine(adaptive)
     core.set_execution_engine(execution)
-
     core.main()
