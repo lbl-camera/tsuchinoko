@@ -6,7 +6,7 @@ from typing import Any, Type, Union
 import numpy as np
 from PySide2.QtGui import QIcon
 from loguru import logger
-from pyqtgraph import PlotWidget, TextItem, mkBrush, mkPen, HistogramLUTWidget, ImageItem, ImageView, PlotItem
+from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea
 from qtmodern.styles import dark
 from qtpy.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget
@@ -14,7 +14,7 @@ from zmq import ZMQError
 
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
-from tsuchinoko.core.messages import StateRequest, PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest, \
+from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest, \
     ConnectRequest, ConnectResponse
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
@@ -28,7 +28,7 @@ class ImageViewBlend(ClickRequester):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, core_address='localhost'):
         super(MainWindow, self).__init__()
 
         self.setWindowTitle('Tsuchinoko')
@@ -52,6 +52,7 @@ class MainWindow(QMainWindow):
 
         dark(QApplication.instance())
 
+        self.core_address = core_address
         self.init_socket()
 
         self.state_manager_widget.sigPause.connect(self.pause)
@@ -82,7 +83,7 @@ class MainWindow(QMainWindow):
         #  Socket to talk to server
         logger.info("Connecting to core server…")
         self.socket = context.socket(zmq.REQ)
-        self.socket.connect("tcp://localhost:5555")
+        self.socket.connect(f"tcp://{self.core_address}:5555")
         self.socket.RCVTIMEO = 5000
         self.message_queue = Queue()
 
@@ -224,6 +225,7 @@ class MainWindow(QMainWindow):
         last_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('w'))
         # text = TextItem()
         graph.addItem(max_arrow)
+
         # graph.addItem(text)
 
         def _update_graph(data, last_data_size, indicator='maxvalue'):
@@ -266,9 +268,9 @@ class MainWindow(QMainWindow):
                 action = cloud.updateData
             else:
                 action = cloud.extendData
-                x = x[last_data_size+1:]
-                y = y[last_data_size+1:]
-                v = v[last_data_size+1:]
+                x = x[last_data_size + 1:]
+                y = y[last_data_size + 1:]
+                v = v[last_data_size + 1:]
 
             action(x=x,
                    y=y,
@@ -310,8 +312,8 @@ class MainWindow(QMainWindow):
         # self._update_graph('score', x, y, data.scores)
         # self._update_graph('variance', x, y, data.variances)
 
-    def subscribe(self, callback, response_type:Union[Type[Message], None] = None):
+    def subscribe(self, callback, response_type: Union[Type[Message], None] = None):
         self.callbacks[response_type].append(callback)
 
-    def unsubscribe(self, callback, response_type:Union[Type[Message], None] = None):
+    def unsubscribe(self, callback, response_type: Union[Type[Message], None] = None):
         self.callbacks[response_type].remove(callback)
