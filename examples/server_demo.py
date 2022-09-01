@@ -11,7 +11,7 @@ from tsuchinoko.execution.bluesky_in_process import BlueskyInProcessEngine
 if __name__ == '__main__':
 
     # Load data from a jpg image to be used as a luminosity map
-    image = np.flipud(np.asarray(Image.open('sombrero_pug.jpg')))
+    image = np.flipud(np.asarray(Image.open('example_assets/sombrero_pug.jpg')))
     luminosity = np.average(image, axis=2)
 
     # Bilinear sampling will be used to effectively smooth pixel edges in source data
