@@ -7,6 +7,12 @@ from . import Engine
 
 
 class BlueskyInProcessEngine(Engine):
+    """
+    An execution engine powered by Bluesky. This engine utilized Bluesky's "plan" concept for experimental procedures,
+    and measurements are natively compatible with Databroker ingestion.
+
+    https://nsls-ii.github.io/bluesky/index.html
+    """
     def __init__(self, measure_target, get_position):
         # These would normally be on the remote end
         self.targets = Queue()
