@@ -5,12 +5,11 @@ from PySide2.QtCore import QObject, Signal
 from PySide2.QtGui import QBrush, Qt
 from pyqtgraph.dockarea import Dock, DockArea
 from pyqtgraph.parametertree import ParameterTree, Parameter
-from pyqtgraph.parametertree.parameterTypes import GroupParameter, SimpleParameter
-from qtpy.QtWidgets import QDoubleSpinBox, QCheckBox, QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout, QVBoxLayout
+from pyqtgraph.parametertree.parameterTypes import GroupParameter
+from qtpy.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout, QVBoxLayout
 
 from tsuchinoko import RE
 from tsuchinoko.core import CoreState
-from tsuchinoko.utils.threads import invoke_as_event
 
 
 class Singleton(type(QObject)):
