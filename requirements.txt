@@ -7,6 +7,6 @@ pyqtgraph
 gpCAM==7.2.5
 numpy
 scipy
-qdarkstyle
+qtmodern
 astropy
 qtpy

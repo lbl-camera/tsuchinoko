@@ -1,11 +1,15 @@
 import logging
+from typing import List, Any, Tuple
 
-from PySide2.QtCore import QObject
+from PySide2.QtCore import QObject, Signal
 from PySide2.QtGui import QBrush, Qt
 from pyqtgraph.dockarea import Dock, DockArea
-from qtpy.QtWidgets import QDoubleSpinBox, QCheckBox, QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy
+from pyqtgraph.parametertree import ParameterTree, Parameter
+from pyqtgraph.parametertree.parameterTypes import GroupParameter
+from qtpy.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout, QVBoxLayout
 
 from tsuchinoko import RE
+from tsuchinoko.core import CoreState
 
 
 class Singleton(type(QObject)):
@@ -52,7 +56,7 @@ class LogHandler(logging.Handler):
 
 class Log(Display, logging.Handler):
     def __init__(self):
-        super(Log, self).__init__('Log')
+        super(Log, self).__init__('Log', size=(800, 300))
 
         log = QListWidget()
 
@@ -61,33 +65,36 @@ class Log(Display, logging.Handler):
 
 
 class Configuration(Display, metaclass=Singleton):
+    sigRequestParameters = Signal()
+    sigPushParameter = Signal(list, object)
+
     def __init__(self):
-        super(Configuration, self).__init__('Configuration')
+        super(Configuration, self).__init__('Configuration', size=(300, 500))
 
         container_widget = QWidget()
+        layout = QVBoxLayout()
 
-        mean_weight_default, stddev_x_weight_default, stddev_y_weight_default = [1e0, 1e-1, 1e-1]
-        posterior_weight_factor_default = 3
-
-        self.posterior_weight_factor = QDoubleSpinBox()
-        self.posterior_weight_factor.setValue(posterior_weight_factor_default)
-        self.mean_weight = QDoubleSpinBox()
-        self.mean_weight.setValue(mean_weight_default)
-        self.stddev_x_weight = QDoubleSpinBox()
-        self.stddev_x_weight.setValue(stddev_x_weight_default)
-        self.stddev_y_weight = QDoubleSpinBox()
-        self.stddev_y_weight.setValue(stddev_y_weight_default)
-        self.debug_fit = QCheckBox()
-
-        form_layout = QFormLayout()
-        form_layout.addRow('Post. Mean/Covariance Weighting', self.posterior_weight_factor)
-        form_layout.addRow('Amplitude weight', self.mean_weight)
-        form_layout.addRow('Std. Dev. X weight', self.stddev_x_weight)
-        form_layout.addRow('Std. Dev. Y weight', self.stddev_y_weight)
-        form_layout.addRow('Debug centroid/tune/fit', self.debug_fit)
-
-        container_widget.setLayout(form_layout)
+        self.parameter = None
+        self.parameter_tree = ParameterTree()
+        layout.addWidget(self.parameter_tree)
+        container_widget.setLayout(layout)
         self.addWidget(container_widget)
+
+    def request_parameters(self):
+        self.sigRequestParameters.emit()
+
+    def update_parameters(self, state: dict):
+        self.parameter = GroupParameter(name='top')
+        self.parameter.restoreState(state)
+        self.parameter_tree.setParameters(self.parameter, showTop=False)  # required to hide top
+        self.parameter.sigTreeStateChanged.connect(self.push_changes)
+
+    def push_changes(self, sender, changes: List[Tuple[Parameter, str, Any]]):
+        for change in changes:
+            if len(change) == 3:
+                param, change, info = change
+                if change == 'value':
+                    self.sigPushParameter.emit(self.parameter.childPath(param), info)
 
 
 class RunEngineControls(Display, metaclass=Singleton):
@@ -136,17 +143,90 @@ class RunEngineControls(Display, metaclass=Singleton):
         self.pause.show()
 
 
+class StateManager(Display, metaclass=Singleton):
+    sigStart = Signal()
+    sigStop = Signal()
+    sigPause = Signal()
+
+    def __init__(self):
+        super(StateManager, self).__init__('Status', size=(300, 50))
+
+        self.stop_button = QToolButton()
+        self.start_pause_button = QToolButton()
+        self.state_label = QLabel('...')
+
+        self.stop_button.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+        self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+
+        self.start_pause_button.clicked.connect(self._start_or_pause)
+        self.stop_button.clicked.connect(self.sigStop)
+
+        layout_widget = QWidget()
+        layout_widget.setLayout(QHBoxLayout())
+
+        layout_widget.layout().addWidget(self.stop_button)
+        layout_widget.layout().addWidget(self.start_pause_button)
+        layout_widget.layout().addWidget(self.state_label)
+
+        self.addWidget(layout_widget)
+
+        self.state = CoreState.Connecting
+
+    def update_state(self, state):
+        self.state = state
+
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, state):
+        if state in [CoreState.Starting, CoreState.Pausing, CoreState.Restarting, CoreState.Connecting]:
+            self.start_pause_button.setDisabled(True)
+            self.stop_button.setDisabled(True)
+        elif state in [CoreState.Running]:
+            self.start_pause_button.setText('Pause')
+            self.start_pause_button.setEnabled(True)
+            self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+            self.stop_button.setEnabled(True)
+        elif state in [CoreState.Paused]:
+            self.start_pause_button.setText('Resume')
+            self.start_pause_button.setEnabled(True)
+            self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+            self.stop_button.setEnabled(True)
+        elif state in [CoreState.Inactive]:
+            self.start_pause_button.setText('Start')
+            self.start_pause_button.setEnabled(True)
+            self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+            self.stop_button.setEnabled(False)
+
+        self.state_label.setText(CoreState(state).name)
+        self._state = state
+
+    def _start_or_pause(self):
+        if self.start_pause_button.text() == 'Pause':
+            self.sigPause.emit()
+        elif self.start_pause_button.text() in ['Start', 'Resume']:
+            self.sigStart.emit()
+
+
 class GraphManager(Display, metaclass=Singleton):
     def __init__(self):
-        super(GraphManager, self).__init__('Graphs', hideTitle=True)
+        super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500))
         self.dock_area = DockArea()
         self.addWidget(self.dock_area)
 
         self.graphs = dict()
+        self.update_callbacks = dict()
 
-    def register_graph(self, name, widget):
+    def register_graph(self, name, widget, update_callback):
         display = Display(name)
         display.addWidget(widget)
         self.dock_area.addDock(display, 'below')
 
         self.graphs[name] = widget
+        self.update_callbacks[name] = update_callback
+
+    def update(self, data, last_data_size):
+        for update_callback in self.update_callbacks.values():
+            update_callback(data, last_data_size)
