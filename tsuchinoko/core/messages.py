@@ -46,12 +46,14 @@ class _MetaDirectionalMessage(type):
 
 
 class Message(metaclass=_MetaDirectionalMessage):
-    __slots__ = ('payload')
+    __slots__ = ('payload',)
     WRITE_REQUIRED = False
     FNC = None
 
     def __init__(self, *payload):
         self.payload = payload
+        for name, value in zip(self.__slots__, payload):
+            setattr(self, name, value)
 
     # @classmethod
     # def from_wire(cls, payload_buffers):
