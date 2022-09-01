@@ -71,7 +71,7 @@ class MainWindow(QMainWindow):
 
         self.subscribe(self.state_manager_widget.update_state, StateResponse)
         self.subscribe(self.state_manager_widget.update_state, ConnectResponse)
-        self.subscribe(self.configuration_widget.update_parameters, GetParametersResponse)
+        self.subscribe(self.configuration_widget.update_parameters, GetParametersResponse, invoke_as_event=True)
         self.subscribe(self._data_callback, FullDataResponse)
         self.subscribe(self._data_callback, PartialDataResponse)
         self.subscribe(self.refresh_state, ConnectResponse)
@@ -160,11 +160,11 @@ class MainWindow(QMainWindow):
                 if not response:
                     self.get_state()
                 else:
-                    for callback in self.callbacks[type(response)]:
-                        if callback == self._data_callback:
-                            callback(*response.payload)
+                    for callback, as_event in self.callbacks[type(response)]:
+                        if as_event:
+                            invoke_as_event(callback, *response.payload)
                         else:
-                            invoke_in_main_thread(callback, *response.payload)
+                            callback(*response.payload)
 
     def _data_callback(self, data_payload, last_data_size=None):
         if not isinstance(data_payload, dict):  # TODO: Remove when responses are mapped to callbacks
@@ -179,6 +179,7 @@ class MainWindow(QMainWindow):
         self.last_data_size = len(self.data)
 
     def refresh_state(self, _):
+        self.message_queue.queue.clear()
         self.message_queue.put(GetParametersRequest())
 
     def init_graph(self, name, item_key):
@@ -312,8 +313,8 @@ class MainWindow(QMainWindow):
         # self._update_graph('score', x, y, data.scores)
         # self._update_graph('variance', x, y, data.variances)
 
-    def subscribe(self, callback, response_type: Union[Type[Message], None] = None):
-        self.callbacks[response_type].append(callback)
+    def subscribe(self, callback, response_type: Union[Type[Message], None] = None, invoke_as_event: bool = False):
+        self.callbacks[response_type].append((callback, invoke_as_event))
 
     def unsubscribe(self, callback, response_type: Union[Type[Message], None] = None):
-        self.callbacks[response_type].remove(callback)
+        self.callbacks[response_type] = list(filter(lambda match_callback, invoke_as_event: match_callback == callback, self.callbacks[response_type]))
