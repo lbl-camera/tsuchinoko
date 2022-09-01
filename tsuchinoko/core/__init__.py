@@ -1,14 +1,15 @@
-from loguru import logger
-from enum import Enum, auto
-from asyncio import sleep, create_task, events
-import time
 import threading
+import time
+from asyncio import events
+from enum import Enum, auto
 from queue import Queue
+
+from loguru import logger
 
 from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse, MeasureRequest, \
     MeasureResponse, ConnectRequest, ConnectResponse
-from ..execution import Engine as ExecutionEngine
 from ..adaptive import Engine as AdaptiveEngine, Data
+from ..execution import Engine as ExecutionEngine
 from ..utils.logging import log_time
 
 
@@ -62,8 +63,6 @@ class Core:
             finally:
                 events.set_event_loop(None)
                 loop.close()
-        # import asyncio
-        # asyncio.run(self._main())
 
     async def _main(self, min_response_sleep=.1):
         data = Data()
@@ -122,7 +121,7 @@ class Core:
         with log_time('getting position', cumulative_key='getting position'):
             position = tuple(self.execution_engine.get_position())
         with log_time('getting targets', cumulative_key='getting targets'):
-            targets = self.adaptive_engine.request_targets(position, n=1, acquisition_function='covariance')
+            targets = self.adaptive_engine.request_targets(position, n=1)
         with log_time('updating targets', cumulative_key='updating targets'):
             self.execution_engine.update_targets(targets)
         with log_time('getting measurements', cumulative_key='getting measurements'):
@@ -132,6 +131,8 @@ class Core:
                 data.inject_new(new_measurements)
             with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
                 self.adaptive_engine.update_measurements(data)
+            with log_time('updating metrics', cumulative_key='updating metrics'):
+                self.adaptive_engine.update_metrics(data)
         with log_time('training', cumulative_key='training'):
             self.adaptive_engine.train()
 
@@ -174,10 +175,10 @@ class ZMQCore(Core):
                         with data.r_lock():
                             response = FullDataResponse(data.as_dict())
                     elif isinstance(request, PartialDataRequest):
-                        if data and request.payload[0] <= len(data) and self.state == CoreState.Running:
+                        if data and request.iteration <= len(data) and self.state == CoreState.Running:
                             with data.r_lock():
-                                partial_data = data[request.payload[0]:]
-                            response = PartialDataResponse(partial_data.as_dict(), request.payload[0])
+                                partial_data = data[request.iteration:]
+                            response = PartialDataResponse(partial_data.as_dict(), request.iteration)
                         else:
                             response = StateResponse(self.state)
                     elif isinstance(request, StartRequest):
@@ -197,11 +198,10 @@ class ZMQCore(Core):
                     elif isinstance(request, GetParametersRequest):
                         response = GetParametersResponse(self.adaptive_engine.parameters.saveState())
                     elif isinstance(request, SetParameterRequest):
-                        child_path, value = request.payload
-                        self.adaptive_engine.parameters.child(*child_path).setValue(value)
+                        self.adaptive_engine.parameters.child(*request.child_path).setValue(request.value)
                         response = SetParameterResponse(True)
                     elif isinstance(request, MeasureRequest):
-                        self.execution_engine.update_targets([request.payload[0]])
+                        self.execution_engine.update_targets([request.position])
                         response = MeasureResponse(True)
                     elif isinstance(request, ConnectRequest):
                         response = ConnectResponse(self.state)
@@ -213,5 +213,3 @@ class ZMQCore(Core):
 
                 if isinstance(response, UnknownResponse):
                     logger.exception(ValueError(f'Unknown request received: {request}'))
-
-
