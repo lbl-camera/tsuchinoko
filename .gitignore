@@ -71,6 +71,8 @@ target/
 #vim
 *.swp
 *.swo
+*.py.un*
+*.un~*
 
 #pycharm
 .idea/
@@ -80,3 +82,12 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+# HDGL stashes
+Data*.npy
+
+# Dask
+*dask*
+
+# Text notes
+*/*.txt
