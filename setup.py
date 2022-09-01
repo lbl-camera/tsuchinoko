@@ -24,7 +24,7 @@ pip install --upgrade pip
 
 here = path.abspath(path.dirname(__file__))
 
-with open(path.join(here, 'README.rst'), encoding='utf-8') as readme_file:
+with open(path.join(here, 'README.md'), encoding='utf-8') as readme_file:
     readme = readme_file.read()
 
 with open(path.join(here, 'requirements.txt')) as requirements_file:
@@ -39,11 +39,12 @@ setup(
     cmdclass=versioneer.get_cmdclass(),
     description="An adaptive optics alignment tool for ALS beamlines utilizing gpCAM.",
     long_description=readme,
+    long_description_content_type="text/markdown",
     author="Ronald J Pandolfi",
     author_email='ronpandolfi@lbl.gov',
     url='https://github.com/ronpandolfi/tsuchinoko',
     python_requires='>={}'.format('.'.join(str(n) for n in min_version)),
-    packages=find_packages(exclude=['docs', 'tests']),
+    packages=find_packages(exclude=['docs', 'tests', 'examples']),
     entry_points={
         'console_scripts': [
             # 'command = some.module:some_function',
