@@ -16,8 +16,6 @@ class RandomInProcess(Engine):
             for j, edge in enumerate(['min', 'max']):
                 self.parameters[('bounds', f'axis_{i}_{edge}')] = parameter_bounds[i][j]
 
-
-
     @cached_property
     def parameters(self):
         bounds_parameters = [SimpleParameter(title=f'Axis #{i + 1} {edge}', name=f'axis_{i}_{edge}', type='float')
