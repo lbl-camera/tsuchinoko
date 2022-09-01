@@ -7,7 +7,6 @@ from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
 from ..parameters import TrainingParameter
-from ..utils.logging import log_time
 import uuid
 
 
@@ -17,6 +16,9 @@ acquisition_functions['radical_gradient'] = radical_gradient
 
 
 class GPCAMInProcessEngine(Engine):
+    """
+    An adaptive engine powered by gpCAM: https://gpcam.readthedocs.io/en/latest/
+    """
     default_retrain_globally_at = (20, 50, 100, 400, 1000)
     default_retrain_locally_at = (20, 40, 60, 80, 100, 200, 400, 1000)
 
@@ -33,10 +35,6 @@ class GPCAMInProcessEngine(Engine):
             for j, edge in enumerate(['min', 'max']):
                 self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')] = hyperparameter_bounds[i][j]
             self.parameters.child('hyperparameters', f'hyperparameter_{i}').setValue(hyperparameters[i], blockSignal=self._set_hyperparameter)
-                               # compute_device = compute_device,
-                               # gp_kernel_function = self.kernel_func,
-                               # gp_mean_function = self.prior_mean_func,
-                               # sparse = sparse)
 
         self.optimizer.points = np.array([])
         self.optimizer.values = np.array([])
@@ -106,8 +104,6 @@ class GPCAMInProcessEngine(Engine):
             scores = data.scores.copy()
             variances = data.variances.copy()
         self.optimizer.tell(positions, scores, variances)
-        with log_time('updating metrics', cumulative_key='updating metrics'):
-            self.update_metrics(data)
 
     def update_metrics(self, data: Data):
         with data.r_lock():  # quickly grab positions within lock before passing to optimizer
@@ -139,16 +135,14 @@ class GPCAMInProcessEngine(Engine):
         # assign to data object with lock
         with data.w_lock():
             data.states['Posterior Covariance'] = result_dict['S(x)']
-            # data.metrics['Posterior Variance'] = list(result_dict['v(x)'])
             data.graphics_items['Posterior Covariance'] = 'imageitem'
             data.states['Acquisition Function'] = acquisition_function_value
             data.graphics_items['Acquisition Function'] = 'imageitem'
             data.states['Posterior Mean'] = posterior_mean_value
             data.graphics_items['Posterior Mean'] = 'imageitem'
 
-    def request_targets(self, position, n, **kwargs):
-        for key in ['acquisition_function', 'method', 'pop_size', 'tol']:
-            kwargs.update({key: self.parameters[key]})
+    def request_targets(self, position, n):
+        kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
         kwargs.update({'bounds': np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                                               for edge in ['min', 'max']]
                                              for i in range(self.dimensionality)])})
@@ -167,5 +161,3 @@ class GPCAMInProcessEngine(Engine):
                                                      for i in range(self.dimensionality+1)]), method=method)
                     self._completed_training[method].add(N)
                     break  # only does global training if specified for both
-
-
