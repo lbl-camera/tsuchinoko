@@ -10,6 +10,7 @@ from qtpy.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, Q
 
 from tsuchinoko import RE
 from tsuchinoko.core import CoreState
+from tsuchinoko.utils.threads import invoke_as_event
 
 
 class Singleton(type(QObject)):
@@ -173,7 +174,10 @@ class StateManager(Display, metaclass=Singleton):
         self.state = CoreState.Connecting
 
     def update_state(self, state):
-        self.state = state
+        # set state value immediately
+        self._state = state
+        # defer setter actions until event can be consumed
+        invoke_as_event(setattr, self, 'state', state)
 
     @property
     def state(self):
