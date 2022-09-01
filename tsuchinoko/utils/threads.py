@@ -200,6 +200,7 @@ class QThreadFutureIterator(QThreadFuture):
     """
     Same as QThreadFuture, but emits to the callback_slot for every yielded value of a generator
     """
+
     def __init__(self, *args, yield_slot=None, **kwargs):
         super(QThreadFutureIterator, self).__init__(*args, **kwargs)
         self.yield_slot = yield_slot
