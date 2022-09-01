@@ -1,35 +1,32 @@
-import asyncio
-
 import numpy as np
-from ophyd.sim import SynAxis, Device, Cpt, SynSignalRO, SynSignal
-from bluesky.plan_stubs import mv, trigger_and_read, create, stage, checkpoint, mov
 from PIL import Image
+from bluesky.plan_stubs import trigger_and_read, checkpoint, mov
+from ophyd.sim import SynAxis, Device, Cpt, SynSignal
 from scipy import ndimage
 
 from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
-from tsuchinoko.adaptive.random_in_process import RandomInProcess
-from tsuchinoko.core import Core, ZMQCore
+from tsuchinoko.core import ZMQCore
 from tsuchinoko.execution.bluesky_in_process import BlueskyInProcessEngine
 
-
 if __name__ == '__main__':
-    image = np.flipud(np.asarray(Image.open('test3.jpg')))
-    luminosity = np.average(image, axis=2)
-    blurred_luminosity = ndimage.gaussian_filter(luminosity, sigma=5)
 
+    # Load data from a jpg image to be used as a luminosity map
+    image = np.flipud(np.asarray(Image.open('sombrero_pug.jpg')))
+    luminosity = np.average(image, axis=2)
+
+    # Bilinear sampling will be used to effectively smooth pixel edges in source data
     def bilinear_sample(img, pos):
         return ndimage.map_coordinates(img, [[pos[0]], [pos[1]]], order=1)
 
-
+    # Define a simulated Ophyd Device class for measurement and control of position;
+    # this pulls measurements from the image data above
     class PointDetector(Device):
         motor1 = Cpt(SynAxis, name='motor1')
         motor2 = Cpt(SynAxis, name='motor2')
         value = Cpt(SynSignal, name='value')
 
         def __init__(self, name):
-
             super(PointDetector, self).__init__(name=name)
-
             self.value.sim_set_func(self.get_value)
 
         def get_value(self):
@@ -38,20 +35,25 @@ if __name__ == '__main__':
         def trigger(self, *args, **kwargs):
             return self.value.trigger(*args, **kwargs)
 
-
+    # Instantiate a simulated device
     point_detector = PointDetector('point_detector')
 
+    # Define a Bluesky Plan component for performing measurements at targets.
+    # Note that this returs the measured value and variance
     def measure_target(target):
         yield from checkpoint()
         yield from mov(point_detector.motor1, target[0], point_detector.motor2, target[1])
         ret = (yield from trigger_and_read([point_detector]))
         return ret[point_detector.value.name]['value'], 2  # variance of 1
 
+    # Define a Bluesky Plan component to get the current position of the device
+    # (which may not necessarily be precisely the requested position)
     def get_position():
         yield from checkpoint()
         return point_detector.motor1.position, point_detector.motor2.position
 
 
+    # Define a gpCAM adaptive engine with initial parameters
     adaptive = GPCAMInProcessEngine(dimensionality=2,
                                     parameter_bounds=[(0, image.shape[1]),
                                                       (0, image.shape[0])],
@@ -59,13 +61,12 @@ if __name__ == '__main__':
                                     hyperparameter_bounds=[(0, 1e5),
                                                            (0, 1e5),
                                                            (0, 1e5)])
-    # adaptive = RandomInProcess(dimensionality=2,
-    #                            parameter_bounds=[(0, image.shape[1]),
-    #                                              (0, image.shape[0])])
+
+    # Define an execution engine with the measurement and get_position functions
     execution = BlueskyInProcessEngine(measure_target, get_position)
 
+    # Construct and start a core server
     core = ZMQCore()
     core.set_adaptive_engine(adaptive)
     core.set_execution_engine(execution)
-
     core.main()
