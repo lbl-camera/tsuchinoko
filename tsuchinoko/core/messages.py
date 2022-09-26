@@ -79,6 +79,14 @@ class _DataResponse(Message):
         return f'{self.__class__.__name__} size: {len(self.payload[0]["positions"])}'
 
 
+class PushDataRequest(Message):
+    __slots__ = ('data',)
+
+
+class PushDataResponse(Message):
+    __slots__ = ()
+
+
 class FullDataRequest(Message):
     __slots__ = ()
 

@@ -1,5 +1,6 @@
 import logging
 from typing import List, Any, Tuple
+from os import environ
 
 from PySide2.QtCore import QObject, Signal
 from PySide2.QtGui import QBrush, Qt
@@ -7,9 +8,10 @@ from pyqtgraph.dockarea import Dock, DockArea
 from pyqtgraph.parametertree import ParameterTree, Parameter
 from pyqtgraph.parametertree.parameterTypes import GroupParameter
 from qtpy.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout, QVBoxLayout
+from loguru import logger
 
 from tsuchinoko import RE
-from tsuchinoko.core import CoreState
+from tsuchinoko.core import CoreState, ExceptionResponse
 from tsuchinoko.utils.threads import invoke_as_event
 
 
@@ -26,29 +28,29 @@ class Display(Dock):
     ...
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        # logging.FileHandler("debug.log"),
-        logging.StreamHandler()
-    ]
-)
-
-
 class LogHandler(logging.Handler):
     colors = {logging.DEBUG: Qt.gray, logging.ERROR: Qt.darkRed, logging.CRITICAL: Qt.red,
               logging.INFO: Qt.white, logging.WARNING: Qt.yellow}
 
-    def __init__(self, log_widget, level=logging.DEBUG):
+    def __init__(self, log_widget, level=logging.WARNING):
         super(LogHandler, self).__init__(level=level)
         logging.getLogger().addHandler(self)
         self.log_widget = log_widget
 
+        logger.add(logging.getLogger().handlers[-1], level=level)
+
+    # follows same design as vanilla logger emissions
     def emit(self, record, level=logging.INFO, timestamp=None, icon=None, *args):  # We can have icons!
         item = QListWidgetItem(record.getMessage())
         item.setForeground(QBrush(self.colors[record.levelno]))
         item.setToolTip(timestamp)
+        self.log_widget.insertItem(0, item)
+
+        while self.log_widget.count() > 100:
+            self.log_widget.takeItem(self.log_widget.count() - 1)
+
+    def sink(self, message:str):
+        item = QListWidgetItem(message.strip())
         self.log_widget.insertItem(0, item)
 
         while self.log_widget.count() > 100:
@@ -63,6 +65,10 @@ class Log(Display, logging.Handler):
 
         self.addWidget(log)
         self.log_handler = LogHandler(log)
+
+    def log_exception(self, ex: Exception):
+        logger.error('An exception occurred in the experiment. More info to follow:')
+        logger.exception(ex)
 
 
 class Configuration(Display, metaclass=Singleton):
@@ -234,3 +240,13 @@ class GraphManager(Display, metaclass=Singleton):
     def update(self, data, last_data_size):
         for update_callback in self.update_callbacks.values():
             update_callback(data, last_data_size)
+
+    def clear(self):
+        for graph in self.graphs.values():
+            # NOTE: the parent's parent is always a Display instance containing only that graph
+            graph.parent().parent().setParent(None)
+            graph.parent().parent().close()
+            graph.parent().parent().deleteLater()
+
+        self.update_callbacks.clear()
+        self.graphs.clear()

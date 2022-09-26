@@ -7,7 +7,7 @@ from queue import Queue
 from loguru import logger
 
 from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse, MeasureRequest, \
-    MeasureResponse, ConnectRequest, ConnectResponse
+    MeasureResponse, ConnectRequest, ConnectResponse, ExceptionResponse, PushDataRequest, PushDataResponse
 from ..adaptive import Engine as AdaptiveEngine, Data
 from ..execution import Engine as ExecutionEngine
 from ..utils.logging import log_time
@@ -34,6 +34,8 @@ class Core:
 
         self._state = CoreState.Inactive
         self._exception_queue = Queue()
+
+        self.data = Data()
 
     @property
     def state(self):
@@ -65,7 +67,6 @@ class Core:
                 loop.close()
 
     async def _main(self, min_response_sleep=.1):
-        data = Data()
         experiment_thread = None
 
         while True:
@@ -74,10 +75,10 @@ class Core:
                 pass
                 # await sleep(min_response_sleep)  # short-circuit case
             elif self.state == CoreState.Starting:
-                if not len(data):
-                    data = Data(dimensionality=self.adaptive_engine.dimensionality)
+                if not len(self.data):
+                    self.data = Data(dimensionality=self.adaptive_engine.dimensionality)
                 self.adaptive_engine.reset()
-                experiment_thread = threading.Thread(target=self.experiment_loop, args=(data,))  # must hold ref
+                experiment_thread = threading.Thread(target=self.experiment_loop, args=())  # must hold ref
                 experiment_thread.start()
                 self.state = CoreState.Running
 
@@ -97,17 +98,17 @@ class Core:
 
             elif self.state == CoreState.Stopping:
                 self.state = CoreState.Inactive
-                data = Data()
+                self.data = Data()
                 # await sleep(min_response_sleep)
 
-            await self.notify_clients(data)
+            await self.notify_clients()
 
-    def experiment_loop(self, data):
+    def experiment_loop(self):
         while True:
             if self.state == CoreState.Running:
-                logger.info(f'Iteration: {len(data)}')
+                logger.info(f'Iteration: {len(self.data)}')
                 try:
-                    self.experiment_iteration(data)
+                    self.experiment_iteration()
                 except Exception as ex:
                     self._exception_queue.put(ex)
                     self.state = CoreState.Pausing
@@ -117,7 +118,7 @@ class Core:
             else:
                 time.sleep(.1)
 
-    def experiment_iteration(self, data):
+    def experiment_iteration(self):
         with log_time('getting position', cumulative_key='getting position'):
             position = tuple(self.execution_engine.get_position())
         with log_time('getting targets', cumulative_key='getting targets'):
@@ -128,15 +129,15 @@ class Core:
             new_measurements = self.execution_engine.get_measurements()
         if len(new_measurements):
             with log_time('stashing new measurements', cumulative_key='injecting new measurements'):
-                data.inject_new(new_measurements)
+                self.data.inject_new(new_measurements)
             with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
-                self.adaptive_engine.update_measurements(data)
+                self.adaptive_engine.update_measurements(self.data)
             with log_time('updating metrics', cumulative_key='updating metrics'):
-                self.adaptive_engine.update_metrics(data)
+                self.adaptive_engine.update_metrics(self.data)
         with log_time('training', cumulative_key='training'):
             self.adaptive_engine.train()
 
-    async def notify_clients(self, data):
+    async def notify_clients(self):
         ...
 
 
@@ -156,7 +157,7 @@ class ZMQCore(Core):
         socket.bind("tcp://*:5555")
         self.poller.register(socket, zmq.POLLIN)
 
-    async def notify_clients(self, data: Data):
+    async def notify_clients(self):
         import zmq
         if not self.poller:
             self.start_server()
@@ -172,15 +173,18 @@ class ZMQCore(Core):
                 with log_time('preparing response', cumulative_key='preparing response'):
 
                     if isinstance(request, FullDataRequest):
-                        with data.r_lock():
-                            response = FullDataResponse(data.as_dict())
+                        with self.data.r_lock():
+                            response = FullDataResponse(self.data.as_dict())
                     elif isinstance(request, PartialDataRequest):
-                        if data and request.iteration <= len(data) and self.state == CoreState.Running:
-                            with data.r_lock():
-                                partial_data = data[request.iteration:]
+                        if self.data and request.iteration <= len(self.data) and self.state == CoreState.Running:
+                            with self.data.r_lock():
+                                partial_data = self.data[request.iteration:]
                             response = PartialDataResponse(partial_data.as_dict(), request.iteration)
                         else:
                             response = StateResponse(self.state)
+                    elif isinstance(request, PushDataRequest):
+                        self.data = Data(**request.data)
+                        response = PushDataResponse()
                     elif isinstance(request, StartRequest):
                         if self.state == CoreState.Paused:
                             self.state = CoreState.Resuming
@@ -194,7 +198,10 @@ class ZMQCore(Core):
                         self.state = CoreState.Pausing
                         response = StateResponse(self.state)
                     elif isinstance(request, StateRequest):
-                        response = StateResponse(self.state)
+                        if not self._exception_queue.empty():
+                            response = ExceptionResponse(self._exception_queue.get())
+                        else:
+                            response = StateResponse(self.state)
                     elif isinstance(request, GetParametersRequest):
                         response = GetParametersResponse(self.adaptive_engine.parameters.saveState())
                     elif isinstance(request, SetParameterRequest):

@@ -3,23 +3,28 @@ from collections import defaultdict
 from queue import Queue, Empty
 from typing import Any, Type, Union
 
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper, dump, load
+except ImportError:
+    from yaml import Loader, Dumper
+
 import numpy as np
 from PySide2.QtGui import QIcon
 from loguru import logger
 from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea
 from qtmodern.styles import dark
-from qtpy.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget
+from qtpy.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMenuBar, QAction, QStyle, QFileDialog, QDialog, QMessageBox
 from zmq import ZMQError
 
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
 from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest, \
-    ConnectRequest, ConnectResponse
+    ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
 from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
-from tsuchinoko.utils.threads import QThreadFutureIterator, invoke_as_event, invoke_in_main_thread
+from tsuchinoko.utils.threads import QThreadFutureIterator, invoke_as_event
 from tsuchinoko.widgets.displays import Log, Configuration, GraphManager, StateManager
 
 
@@ -30,6 +35,25 @@ class ImageViewBlend(ClickRequester):
 class MainWindow(QMainWindow):
     def __init__(self, core_address='localhost'):
         super(MainWindow, self).__init__()
+
+        menubar = QMenuBar()
+        file_menu = menubar.addMenu("&File")
+        file_menu.addAction('&New...', self.new_data)
+        open_data_action = QAction(self.style().standardIcon(QStyle.SP_DirOpenIcon), 'Open data...', parent=file_menu)
+        open_parameters_action = QAction(self.style().standardIcon(QStyle.SP_DirOpenIcon), 'Open parameters...', parent=file_menu)
+        save_data_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), 'Save data as...', parent=file_menu)
+        save_parameters_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), 'Save parameters as...', parent=file_menu)
+        file_menu.addAction(open_data_action)
+        file_menu.addAction(open_parameters_action)
+        file_menu.addAction(save_data_action)
+        file_menu.addAction(save_parameters_action)
+        file_menu.addAction('E&xit', self.close)
+        self.setMenuBar(menubar)
+
+        save_data_action.triggered.connect(self.save_data)
+        open_data_action.triggered.connect(self.open_data)
+        save_parameters_action.triggered.connect(self.save_parameters)
+        open_parameters_action.triggered.connect(self.open_parameters)
 
         self.setWindowTitle('Tsuchinoko')
         self.setWindowIcon(QIcon('assets/tsuchinoko.png'))
@@ -75,6 +99,7 @@ class MainWindow(QMainWindow):
         self.subscribe(self._data_callback, FullDataResponse)
         self.subscribe(self._data_callback, PartialDataResponse)
         self.subscribe(self.refresh_state, ConnectResponse)
+        self.subscribe(self.log_widget.log_exception, ExceptionResponse)
 
     def init_socket(self):
         import zmq
@@ -200,8 +225,9 @@ class MainWindow(QMainWindow):
         graph.vb.invertY(False)  # imageview forces invertY; this resets it
 
         def _update_graph(data, last_data_size):
-            v = data.states[name]
-            widget.imageItem.setImage(v, autoLevels=widget.imageItem.image is None)
+            if name in data.states:
+                v = data.states[name]
+                widget.imageItem.setImage(v, autoLevels=widget.imageItem.image is None)
 
         return name, widget, _update_graph
 
@@ -318,3 +344,66 @@ class MainWindow(QMainWindow):
 
     def unsubscribe(self, callback, response_type: Union[Type[Message], None] = None):
         self.callbacks[response_type] = list(filter(lambda match_callback, invoke_as_event: match_callback == callback, self.callbacks[response_type]))
+
+    def open_data(self):
+        name, filter = QFileDialog.getOpenFileName(filter=("YAML (*.yml)"))
+        if not name:
+            return
+
+        if len(self.data):
+            result = QMessageBox.question(self,
+                                          'Clear current data?',
+                                          "Loading data will clear the current data set. Would you like to proceed?",
+                                          buttons=QMessageBox.StandardButtons(QMessageBox.Yes | QMessageBox.Cancel),
+                                          defaultButton=QMessageBox.Yes)
+            if result != QMessageBox.Yes:
+                return
+
+        self.data = Data(**load(open(name, 'r'), Loader=Loader))
+        self.last_data_size = len(self.data)
+        self.graph_manager_widget.clear()
+        self.update_graphs(self.data, 0)
+        if self.state_manager_widget.state == CoreState.Connecting:
+            logger.warning('Data has been loaded before connecting to an experiment server. Remember to reload data after a connection is established.')
+        else:
+            result = QMessageBox.question(self,
+                                          'Send data to server?',
+                                          "Would you like to send the opened data to the experiment server? This will overwrite the server's current data.",
+                                          buttons=QMessageBox.StandardButtons(QMessageBox.Yes | QMessageBox.No),
+                                          defaultButton=QMessageBox.Yes)
+            if result == QMessageBox.Yes:
+                self.message_queue.put(PushDataRequest(self.data.as_dict()))
+
+    def save_data(self):
+        name, filter = QFileDialog.getSaveFileName(filter=("YAML (*.yml)"))
+        if not name:
+            return
+        with self.data.r_lock():
+            dump(self.data.as_dict(), open(name, 'w'), Dumper=Dumper)
+
+    def open_parameters(self):
+        name, filter = QFileDialog.getOpenFileName(filter=("YAML (*.yml)"))
+        if not name:
+            return
+        state = load(open(name, 'r'), Loader=Loader)
+        self.configuration_widget.parameter.restoreState(state, addChildren=True, removeChildren=True)
+
+    def save_parameters(self):
+        name, filter = QFileDialog.getSaveFileName(filter=("YAML (*.yml)"))
+        if not name:
+            return
+        state = self.configuration_widget.parameter.saveState(filter='user')
+        dump(state, open(name, 'r'), Dumper=Dumper)
+
+    def new_data(self):
+        if len(self.data):
+            result = QMessageBox.question(self,
+                                          'Clear current data?',
+                                          "There is an active data set in memory. Would you like to proceed with clearing the current data?",
+                                          buttons=QMessageBox.StandardButtons(QMessageBox.Yes | QMessageBox.Cancel),
+                                          defaultButton=QMessageBox.Yes)
+            if result != QMessageBox.Yes:
+                return
+
+        self.data = Data()
+        self.graph_manager_widget.clear()
