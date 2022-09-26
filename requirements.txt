@@ -1,5 +1,4 @@
 # List required packages in this file, one per line.
-caproto
 pyside2
 bluesky
 ophyd
@@ -8,5 +7,4 @@ gpCAM==7.2.5
 numpy
 scipy
 qtmodern
-astropy
 qtpy
