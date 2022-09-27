@@ -22,7 +22,7 @@ def launch_client(core_address='localhost'):
 
     if os.name == 'nt':
         # https://stackoverflow.com/questions/67599432/setting-the-same-icon-as-application-icon-in-task-bar-for-pyqt5-application
-        myappid = 'camera.xicam'  # arbitrary string
+        myappid = 'camera.tsuchinoko'  # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)  # Allows taskbar icon to be shown on windows
 
     from .widgets.mainwindow import MainWindow
