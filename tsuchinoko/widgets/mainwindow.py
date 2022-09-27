@@ -17,7 +17,7 @@ from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea
 from qtmodern.styles import dark
 from qtpy.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMenuBar, QAction, QStyle, QFileDialog, QDialog, QMessageBox
-from zmq import ZMQError
+from zmq.error import ZMQError
 
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
@@ -175,9 +175,9 @@ class MainWindow(QMainWindow):
                 self.socket.send_pyobj(request)
                 response = self.socket.recv_pyobj()
             except ZMQError as ex:
-                logger.info('Unable to connect to core server...')
+                logger.warning(f'Unable to connect to core server at {self.core_address}...')
                 time.sleep(1)
-                logger.exception(ex)
+                # logger.exception(ex)
                 self.init_socket()
                 self.data = Data()  # wipeout data and get a full update next time
                 self.last_data_size = 0
