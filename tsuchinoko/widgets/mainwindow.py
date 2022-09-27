@@ -3,6 +3,8 @@ from collections import defaultdict
 from queue import Queue, Empty
 from typing import Any, Type, Union
 
+from tsuchinoko.assets import path
+
 try:
     from yaml import CLoader as Loader, CDumper as Dumper, dump, load
 except ImportError:
@@ -56,7 +58,7 @@ class MainWindow(QMainWindow):
         open_parameters_action.triggered.connect(self.open_parameters)
 
         self.setWindowTitle('Tsuchinoko')
-        self.setWindowIcon(QIcon('assets/tsuchinoko.png'))
+        self.setWindowIcon(QIcon(path('tsuchinoko.png')))
         self.resize(1700, 1000)
 
         self.log_widget = Log()
