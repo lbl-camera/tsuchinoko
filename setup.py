@@ -59,9 +59,10 @@ setup(
         ]
     },
     install_requires=requirements,
-    license="BSD (3-clause)",
+    license='GPLv3+',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
+        'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
         'Natural Language :: English',
         'Programming Language :: Python :: 3',
     ],
