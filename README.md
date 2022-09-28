@@ -30,7 +30,7 @@ For more information, see the [installation documentation](https://xi-cam.readth
 ## Resources
 
 * Documentation: https://tsuchinoko.readthedocs.io/en/latest
-* Report an issue in Xi-CAM: [New Bug Report](https://github.com/ronpandolfi/tsuchinoko/issues/new?labels=bug)
+* Report an issue in Tsuchinoko: [New Bug Report](https://github.com/ronpandolfi/tsuchinoko/issues/new?labels=bug)
 
 ## About the name
 
