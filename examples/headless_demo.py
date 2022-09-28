@@ -10,7 +10,7 @@ from tsuchinoko.execution.bluesky_in_process import BlueskyInProcessEngine
 
 if __name__ == '__main__':
 
-    image = np.asarray(Image.open('test.jpeg'))
+    image = np.asarray(Image.open('example_assets/sombrero_pug.jpg'))
 
     class PointDetector(Device):
         motor1 = Cpt(SynAxis, name='motor1')
