@@ -1,9 +1,9 @@
 # Tsuchinoko
 [![PyPI](https://badgen.net/pypi/v/tsuchinoko)](https://pypi.org/project/tsuchinoko/)
-[![License](https://badgen.net/pypi/license/tsuchinoko)](https://github.com/ronpandolfi/tsuchinoko)
+[![License](https://badgen.net/pypi/license/tsuchinoko)](https://github.com/lbl-camera/tsuchinoko)
 [![Build Status](https://img.shields.io/travis/Xi-cam/Xi-cam/master.svg)](https://travis-ci.org/Xi-cam/Xi-cam)
 [![Documentation Status](https://readthedocs.org/projects/tsuchinoko/badge/?version=latest)](https://tsuchinoko.readthedocs.io/en/latest/?badge=latest)
-[![Test Coverage](https://img.shields.io/codecov/c/github/ronpandolfi/tsuchinoko/master.svg)](https://codecov.io/github/ronpandolfi/tsuchinoko?branch=master)
+[![Test Coverage](https://img.shields.io/codecov/c/github/lbl-camera/tsuchinoko/master.svg)](https://codecov.io/github/lbl-camera/tsuchinoko?branch=master)
 [![Slack Status](https://img.shields.io/badge/slack-gpCAM-yellow.svg?logo=slack)](https://nikea.slack.com/messages/U7Q1N42F6)
 
 Tsuchinoko is a Qt application for adaptive experiment execution and tuning. Live visualizations show details of 
@@ -30,7 +30,7 @@ For more information, see the [installation documentation](https://xi-cam.readth
 ## Resources
 
 * Documentation: https://tsuchinoko.readthedocs.io/en/latest
-* Report an issue in Tsuchinoko: [New Bug Report](https://github.com/ronpandolfi/tsuchinoko/issues/new?labels=bug)
+* Report an issue in Tsuchinoko: [New Bug Report](https://github.com/lbl-camera/tsuchinoko/issues/new?labels=bug)
 
 ## About the name
 

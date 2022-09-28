@@ -42,7 +42,7 @@ setup(
     long_description_content_type="text/markdown",
     author="Ronald J Pandolfi",
     author_email='ronpandolfi@lbl.gov',
-    url='https://github.com/ronpandolfi/tsuchinoko',
+    url='https://github.com/lbl-camera/tsuchinoko',
     python_requires='>={}'.format('.'.join(str(n) for n in min_version)),
     packages=find_packages(exclude=['docs', 'tests', 'examples']),
     entry_points={
