@@ -35,5 +35,5 @@ For more information, see the [installation documentation](https://xi-cam.readth
 ## About the name
 
 Japanese folklore describes the [Tsuchinoko](https://cryptidz.fandom.com/wiki/Tsuchinoko) as a wide and short snake-like creature living in the mountains of western
-Japan. This creature has a following much like the Bigfoot of North America. Much like the global optimum of a
+Japan. This creature has a cultural following similar to the Bigfoot of North America. Much like the global optimum of a
 non-convex function, its elusive nature is infamous.
