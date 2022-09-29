@@ -66,4 +66,8 @@ setup(
         'Natural Language :: English',
         'Programming Language :: Python :: 3',
     ],
+    extras_require={
+        "docs": ["sphinx", "recommonmark", "sphinx_bootstrap_theme", "sphinx-markdown-tables"],
+        "tests": ["pytest", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov"],
+    },
 )
