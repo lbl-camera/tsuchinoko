@@ -1,4 +1,4 @@
-# Tsuchinoko Documentation
+# Tsuchinoko
 
 Tsuchinoko is a Qt application for adaptive experiment execution and tuning. Live visualizations show details of
 measurements, and provide feedback on the adaptive engine's decision-making process. The parameters of the adaptive
@@ -23,13 +23,12 @@ For more information, see the [installation documentation](https://xi-cam.readth
 
 ## Getting started
 
-## Resources
-
-* Documentation: https://tsuchinoko.readthedocs.io/en/latest
-* Report an issue in Xi-CAM: [New Bug Report](https://github.com/lbl-camera/tsuchinoko/issues/new?labels=bug)
+You can find demos in the Tsuchinoko Github repository's [examples folder](https://github.com/lbl-camera/tsuchinoko/tree/master/examples).
+It is suggested to first try running both `server_demo.py` and `client_demo.py` simultaneously. This demo performs a
+simulated adaptive experiment by making "measurements" sampled from an image file.
 
 ## About the name
 
 Japanese folklore describes the [Tsuchinoko](https://cryptidz.fandom.com/wiki/Tsuchinoko) as a wide and short snake-like creature living in the mountains of western
-Japan. This creature has a following much like the Bigfoot of North America. Much like the global optimum of a
+Japan. This creature has a cultural following similar to the Bigfoot of North America. Much like the global optimum of a
 non-convex function, its elusive nature is infamous.
