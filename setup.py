@@ -67,7 +67,7 @@ setup(
         'Programming Language :: Python :: 3',
     ],
     extras_require={
-        "docs": ["sphinx", "sphinx_rtd_theme", "sphinx-markdown-tables", "numpydoc", "sphinx_copybutton"],
+        "docs": ["sphinx", "sphinx_bootstrap_theme", "sphinx-markdown-tables", "numpydoc", "sphinx_copybutton", "myst_parser"],
         "tests": ["pytest", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov"],
     },
 )

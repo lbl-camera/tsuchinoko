@@ -20,6 +20,7 @@
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
+import sphinx_bootstrap_theme
 
 
 # -- General configuration ------------------------------------------------
@@ -43,6 +44,7 @@ extensions = [
     'matplotlib.sphinxext.plot_directive',
     'numpydoc',
     'sphinx_copybutton',
+    'myst_parser'
 ]
 
 # MyST extensions
@@ -89,7 +91,7 @@ release = tsuchinoko.__version__
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -108,9 +110,8 @@ todo_include_todos = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
-import sphinx_rtd_theme
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+html_theme = 'bootstrap'
+html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
 
 html_style = 'custom.css'
 
@@ -118,24 +119,79 @@ html_style = 'custom.css'
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {
+    # "relbarbgcolor": "#555",
+    # "bgcolor": "#555",
+    # "sidebarbgcolor": "#333",
+    # "sidebarlinkcolor": "#0dd",
+    # "sidebartextcolor": "#ddd",
+    # "linkcolor": "#bbb",
+    # "textcolor": "#ddd",
+    # "footerbgcolor":"#333",
+    # "headbgcolor":"#555",
+    # "headtextcolor":"#0dd"
+    # Navigation bar title. (Default: ``project`` value)
+    # 'navbar_title': "COSMIC XPCS Documentation",
+    # Tab name for entire site. (Default: "Site")
+    # 'navbar_site_name': "Site",
+    # A list of tuples containing pages or urls to link to.
+    # Valid tuples should be in the following forms:
+    #    (name, page)                 # a link to a page
+    #    (name, "/aa/bb", 1)          # a link to an arbitrary relative url
+    #    (name, "http://example.com", True) # arbitrary absolute url
+    # Note the "1" or "True" value above as the third argument to indicate
+    # an arbitrary url.
+    # 'navbar_links': [
+    #     ("Examples", "examples"),
+    #     ("Link", "http://example.com", True),
+    # ],
+    # Render the next and previous page links in navbar. (Default: true)
+    "navbar_sidebarrel": True,
+    # Render the current pages TOC in the navbar. (Default: true)
+    "navbar_pagenav": True,
+    # Tab name for the current pages TOC. (Default: "Page")
+    "navbar_pagenav_name": "Page",
+    # Global TOC depth for "site" navbar tab. (Default: 1)
+    # Switching to -1 shows all levels.
+    "globaltoc_depth": 2,
+    # Include hidden TOCs in Site navbar?
+    #
+    # Note: If this is "false", you cannot have mixed ``:hidden:`` and
+    # non-hidden ``toctree`` directives in the same page, or else the build
+    # will break.
+    #
+    # Values: "true" (default) or "false"
+    "globaltoc_includehidden": "true",
+    # HTML navbar class (Default: "navbar") to attach to <div> element.
+    # For black navbar, do "navbar navbar-inverse"
+    "navbar_class": "navbar navbar-inverse",
+    # Fix navigation bar to top of page?
+    # Values: "true" (default) or "false"
+    "navbar_fixed_top": "true",
+    # Location of link to source.
+    # Options are "nav" (default), "footer" or anything else to exclude.
+    "source_link_position": "nav",
+    # Bootswatch (http://bootswatch.com/) theme.
+    #
+    # Options are nothing (default) or the name of a valid theme
+    # such as "cosmo" or "sandstone".
+    #
+    # The set of valid themes depend on the version of Bootstrap
+    # that's used (the next config option).
+    #
+    # Currently, the supported themes are:
+    # - Bootstrap 2: https://bootswatch.com/2
+    # - Bootstrap 3: https://bootswatch.com/3
+    "bootswatch_theme": "cyborg",
+    # Choose Bootstrap version.
+    # Values: "3" (default) or "2" (in quotes)
+    "bootstrap_version": "3",
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
-
-# Custom sidebar templates, must be a dictionary that maps document names
-# to template names.
-#
-# This is required for the alabaster theme
-# refs: http://alabaster.readthedocs.io/en/latest/installation.html#sidebars
-html_sidebars = {
-    '**': [
-        'relations.html',  # needs 'show_related': True theme option to display
-        'searchbox.html',
-    ]
-}
 
 
 # -- Options for HTMLHelp output ------------------------------------------
@@ -190,7 +246,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'tsuchinoko', 'Tsuchinoko Documentation',
-     author, 'tsuchinoko', 'An adaptive optics alignment tool for ALS beamlines utilizing gpCAM.',
+     author, 'tsuchinoko', 'A Qt application for adaptive experiment tuning and execution.',
      'Miscellaneous'),
 ]
 
@@ -204,4 +260,5 @@ intersphinx_mapping = {
     'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
     'pandas': ('https://pandas.pydata.org/pandas-docs/stable', None),
     'matplotlib': ('https://matplotlib.org/stable', None),
+    'pyqtgraph': ("https://pyqtgraph.readthedocs.io/en/latest/", None),
 }
