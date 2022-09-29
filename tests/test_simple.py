@@ -31,3 +31,4 @@ def test_simple(qtbot):
     qtbot.waitForWindowShown(main_window)
 
     assert len(main_window.data) > 0
+    server_demo.core.exit()

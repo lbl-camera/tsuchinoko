@@ -23,6 +23,7 @@ class CoreState(Enum):
     Resuming = auto()
     Stopping = auto()
     Restarting = auto()
+    Exiting = auto()
 
 
 class Core:
@@ -36,6 +37,8 @@ class Core:
         self._exception_queue = Queue()
 
         self.data = Data()
+
+        self.experiment_thread = None
 
     @property
     def state(self):
@@ -67,9 +70,7 @@ class Core:
                 loop.close()
 
     async def _main(self, min_response_sleep=.1):
-        experiment_thread = None
-
-        while True:
+        while self.state != CoreState.Exiting:
 
             if self.state == CoreState.Running:
                 pass
@@ -78,8 +79,8 @@ class Core:
                 if not len(self.data):
                     self.data = Data(dimensionality=self.adaptive_engine.dimensionality)
                 self.adaptive_engine.reset()
-                experiment_thread = threading.Thread(target=self.experiment_loop, args=())  # must hold ref
-                experiment_thread.start()
+                self.experiment_thread = threading.Thread(target=self.experiment_loop, args=())  # must hold ref
+                self.experiment_thread.start()
                 self.state = CoreState.Running
 
             elif self.state == CoreState.Inactive:
@@ -104,7 +105,7 @@ class Core:
             await self.notify_clients()
 
     def experiment_loop(self):
-        while True:
+        while self.state != CoreState.Exiting:
             if self.state == CoreState.Running:
                 logger.info(f'Iteration: {len(self.data)}')
                 try:
@@ -120,7 +121,7 @@ class Core:
 
     def experiment_iteration(self):
         with log_time('getting position', cumulative_key='getting position'):
-            position = tuple(self.execution_engine.get_position())
+            position = tuple(self.execution_engine.get_position() or [0]*self.data.dimensionality)
         with log_time('getting targets', cumulative_key='getting targets'):
             targets = self.adaptive_engine.request_targets(position, n=1)
         with log_time('updating targets', cumulative_key='updating targets'):
@@ -220,3 +221,10 @@ class ZMQCore(Core):
 
                 if isinstance(response, UnknownResponse):
                     logger.exception(ValueError(f'Unknown request received: {request}'))
+
+    def exit_later(self):
+        self.state = CoreState.Exiting
+
+    def exit(self):
+        self.exit_later()
+        self.experiment_thread.join()
