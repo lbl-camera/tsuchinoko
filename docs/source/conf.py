@@ -45,6 +45,9 @@ extensions = [
     'sphinx_copybutton',
 ]
 
+# MyST extensions
+myst_enable_extensions = ['colon_fence']
+
 # Configuration options for plot_directive. See:
 # https://github.com/matplotlib/matplotlib/blob/f3ed922d935751e08494e5fb5311d3050a3b637b/lib/matplotlib/sphinxext/plot_directive.py#L81
 plot_html_show_source_link = False
@@ -61,15 +64,15 @@ templates_path = ['_templates']
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+source_suffix = '.md'
 
 # The master toctree document.
 master_doc = 'index'
 
 # General information about the project.
 project = 'Tsuchinoko'
-copyright = '2021, Ronald J Pandolfi'
-author = 'Ronald J Pandolfi'
+copyright = '2021, Ronald J. Pandolfi'
+author = 'Ronald J. Pandolfi'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -108,6 +111,8 @@ todo_include_todos = False
 html_theme = 'sphinx_rtd_theme'
 import sphinx_rtd_theme
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+
+html_style = 'custom.css'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
