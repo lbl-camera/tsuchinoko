@@ -88,6 +88,9 @@ class QRunEngine(QObject):
 
     @threads.method()
     def process_queue(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         while True:
             # get a plan, wait up to .1 sec before hot looping
             if self.RE.state == 'idle':
