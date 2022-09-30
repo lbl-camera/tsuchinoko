@@ -418,7 +418,7 @@ class MainWindow(QMainWindow):
         self.graph_manager_widget.clear()
 
     def closeEvent(self, event):
-        if len(self.data):
+        if self.data and len(self.data):
             result = QMessageBox.question(self,
                                       'Save data?',
                                       "You have unsaved data in the active experiment. Do you want to save the data?",

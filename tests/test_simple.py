@@ -32,3 +32,5 @@ def test_simple(qtbot):
 
     assert len(main_window.data) > 0
     server_demo.core.exit()
+    main_window.data = None
+    main_window.close()
