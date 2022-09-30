@@ -10,8 +10,8 @@ from pyqtgraph.parametertree.parameterTypes import GroupParameter
 from qtpy.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout, QVBoxLayout
 from loguru import logger
 
-from tsuchinoko import RE
 from tsuchinoko.core import CoreState, ExceptionResponse
+from tsuchinoko.utils import runengine
 from tsuchinoko.utils.threads import invoke_as_event
 
 
@@ -135,17 +135,17 @@ class RunEngineControls(Display, metaclass=Singleton):
         self.resume.clicked.connect(self.resume_plan)
 
     def start_plan(self):
-        RE(self.experiment.plan)
+        runengine.RE(self.experiment.plan)
         self.start.hide()
         self.pause.show()
 
     def pause_plan(self):
-        RE.pause()
+        runengine.RE.pause()
         self.resume.show()
         self.pause.hide()
 
     def resume_plan(self):
-        RE.resume()
+        runengine.RE.resume()
         self.resume.hide()
         self.pause.show()
 

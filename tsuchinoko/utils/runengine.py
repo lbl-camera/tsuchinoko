@@ -84,14 +84,24 @@ class QRunEngine(QObject):
         self.sigFinish.connect(self._check_if_ready)
 
         self.queue = PriorityQueue()
-        self.process_queue_thread = self.process_queue()
+        self.process_queue_thread = threads.QThreadFutureIterator(self.process_queue,
+                                                                  finished_slot=self._close,
+                                                                  interrupt_callable=self._close_RE)
+        self.process_queue_thread.start()
 
-    @threads.method()
+    def _close_RE(self):
+        if self.RE.state != 'idle':
+            self.RE.abort('Application is closing.')
+
+    def _close(self):
+        self.asyncio_loop.close()
+
     def process_queue(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        self.asyncio_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.asyncio_loop)
 
         while True:
+            yield
             # get a plan, wait up to .1 sec before hot looping
             if self.RE.state == 'idle':
                 try:
@@ -185,3 +195,5 @@ def get_run_engine():
         RE = QRunEngine()
         RE.sigDocumentYield.connect(logging.debug)
     return RE
+
+threads.invoke_as_event(get_run_engine)

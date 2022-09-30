@@ -3,6 +3,8 @@ from collections import defaultdict
 from queue import Queue, Empty
 from typing import Any, Type, Union
 
+import zmq
+
 from tsuchinoko.assets import path
 
 try:
@@ -78,6 +80,8 @@ class MainWindow(QMainWindow):
 
         dark(QApplication.instance())
 
+        self.context = zmq.Context()
+        self.socket = None
         self.core_address = core_address
         self.init_socket()
 
@@ -88,7 +92,7 @@ class MainWindow(QMainWindow):
         self.configuration_widget.sigRequestParameters.connect(self.request_parameters)
         request_relay.sigRequestMeasure.connect(self.request_measure)
 
-        self.update_thread = QThreadFutureIterator(self.update)
+        self.update_thread = QThreadFutureIterator(self.update, finished_slot=self.socket.close)
         self.update_thread.start()
 
         self.data: Data = Data()
@@ -104,12 +108,13 @@ class MainWindow(QMainWindow):
         self.subscribe(self.log_widget.log_exception, ExceptionResponse)
 
     def init_socket(self):
-        import zmq
-        context = zmq.Context()
+        if self.socket:
+            self.socket.close()
 
         #  Socket to talk to server
         logger.info("Connecting to core server…")
-        self.socket = context.socket(zmq.REQ)
+        self.socket = self.context.socket(zmq.REQ)
+        self.socket.setsockopt(zmq.LINGER, 5)
         self.socket.connect(f"tcp://{self.core_address}:5555")
         self.socket.RCVTIMEO = 5000
         self.message_queue = Queue()
@@ -144,6 +149,7 @@ class MainWindow(QMainWindow):
         self.last_data_size = 0
 
         while True:
+            yield
             request = None
 
             if self.state_manager_widget.state == CoreState.Stopping:
@@ -178,7 +184,8 @@ class MainWindow(QMainWindow):
                 logger.warning(f'Unable to connect to core server at {self.core_address}...')
                 time.sleep(1)
                 # logger.exception(ex)
-                self.init_socket()
+                if self.context:
+                    self.init_socket()
                 self.data = Data()  # wipeout data and get a full update next time
                 self.last_data_size = 0
                 self.state_manager_widget.update_state(CoreState.Connecting)
@@ -409,3 +416,23 @@ class MainWindow(QMainWindow):
 
         self.data = Data()
         self.graph_manager_widget.clear()
+
+    def closeEvent(self, event):
+        if len(self.data):
+            result = QMessageBox.question(self,
+                                      'Save data?',
+                                      "You have unsaved data in the active experiment. Do you want to save the data?",
+                                      buttons=QMessageBox.StandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel),
+                                      defaultButton=QMessageBox.Yes)
+            if result == QMessageBox.Yes:
+                self.save_data()
+            if result in [QMessageBox.Yes, QMessageBox.No]:
+                event.accept()
+                self.socket.close()
+                self.socket = None
+                self.context.term()
+                self.context = None
+            else:
+                event.ignore()
+        else:
+            event.accept()

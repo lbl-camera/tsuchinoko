@@ -1,14 +1,13 @@
-import logging
+
 import sys
 import threading
 import time
 import traceback
 from functools import wraps
 
-from qtpy.QtCore import QTimer, Signal, QThread, QObject, QEvent, QCoreApplication
+from qtpy.QtCore import QTimer, Signal, QThread, QObject, QEvent, QCoreApplication, Qt
 from qtpy.QtWidgets import QApplication
-
-log = logging.log
+from loguru import logger
 
 
 def log_error(exception: Exception, value=None, tb=None, **kwargs):
@@ -29,11 +28,12 @@ def log_error(exception: Exception, value=None, tb=None, **kwargs):
 
     caller_name = kwargs.pop('caller_name', '')
 
-    logging.log(logging.ERROR, "\n The following error was handled safely. It is displayed here for debugging.")
-    try:
-        logging.log(logging.ERROR, "\n" + ' '.join(traceback.format_exception(exception, value, tb)), extra={"caller_name": caller_name}, **kwargs)
-    except AttributeError:
-        logging.log(logging.ERROR, "\n" + ' '.join(traceback.format_exception_only(exception, value)), extra={"caller_name": caller_name}, **kwargs)
+    logger.error("\n The following in {caller_name} was handled safely. It is displayed here for debugging.")
+    logger.exception(exception)
+    # try:
+    #     logging.log(logging.ERROR, "\n" + ' '.join(traceback.format_exception(exception, value, tb)), extra={"caller_name": caller_name}, **kwargs)
+    # except AttributeError:
+    #     logging.log(logging.ERROR, "\n" + ' '.join(traceback.format_exception_only(exception, value)), extra={"caller_name": caller_name}, **kwargs)
 
 
 show_busy = lambda *_: None
@@ -57,6 +57,7 @@ class QThreadFuture(QThread):
             callback_slot=None,
             finished_slot=None,
             except_slot=None,
+            interrupt_callable=None,
             # default_exhandle=True,
             # lock=None,
             # threadkey: str = None,
@@ -79,12 +80,14 @@ class QThreadFuture(QThread):
         self.callback_slot = callback_slot
         self.except_slot = except_slot
         # if callback_slot: self.sigCallback.connect(callback_slot)
+        self.interrupt_callable = interrupt_callable
         if finished_slot:
             self.sigFinished.connect(finished_slot)
         if except_slot:
             self.sigExcept.connect(except_slot)
         if QApplication.instance():
-            QApplication.instance().aboutToQuit.connect(self.quit)
+            # QApplication.instance().aboutToQuit.connect(self.quit)
+            QApplication.instance().aboutToQuit.connect(self.interrupt)
         self.method = method
         self.args = args
         self.kwargs = kwargs
@@ -130,10 +133,9 @@ class QThreadFuture(QThread):
         if self.showBusy:
             show_busy()
         try:
-            # while not self.isInterruptionRequested():
             value = [None]
             runner = self._run(*args, **kwargs)
-            while True:
+            while not self.isInterruptionRequested():
                 try:
                     value = next(runner)
                 except StopIteration as ex:
@@ -154,22 +156,22 @@ class QThreadFuture(QThread):
         except Exception as ex:
             self.exception = ex
             self.sigExcept.emit(ex)
-            log(msg=f"Error in thread: "
+            logger.error(f"Error in thread: "
                     f'Method: {getattr(self.method, "__name__", "UNKNOWN")}\n'
                     f"Args: {self.args}\n"
-                    f"Kwargs: {self.kwargs}",
-                level=logging.ERROR,
-                )
+                    f"Kwargs: {self.kwargs}",)
             log_error(ex)
         else:
             self.sigFinished.emit()
         finally:
             if self.showBusy:
                 show_ready()
+
             self.quit()
             if QApplication.instance():
                 try:
-                    QApplication.instance().aboutToQuit.disconnect(self.quit)
+                    # QApplication.instance().aboutToQuit.disconnect(self.quit)
+                    QApplication.instance().aboutToQuit.disconnect(self.interrupt)
                 # Somehow the application never had its aboutToQuit connected to quit...
                 except (TypeError, RuntimeError) as e:
                     # msg.logError(e)
@@ -193,6 +195,12 @@ class QThreadFuture(QThread):
             invoke_in_main_thread(self.except_slot, InterruptedError("Thread cancelled."))
         self.requestInterruption()
         self.quit()
+        self.wait()
+
+    def interrupt(self):
+        self.requestInterruption()
+        if self.interrupt_callable:
+            self.interrupt_callable()
         self.wait()
 
 
@@ -232,7 +240,7 @@ class Invoker(QObject):
                 event.fn(*event.args, **event.kwargs)
             return True
         except Exception as ex:
-            log(logging.ERROR, "QThreadFuture callback could not be invoked.")
+            logger.error("QThreadFuture callback could not be invoked.")
             log_error(ex)
         return False
 

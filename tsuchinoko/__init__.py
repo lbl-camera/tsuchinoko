@@ -13,8 +13,6 @@ from . import parameters  # registers parameter types
 
 del get_versions
 
-RE = runengine.get_run_engine()
-
 
 @click.command()
 @click.argument('core_address', required=False, default='localhost')
