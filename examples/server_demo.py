@@ -38,7 +38,7 @@ class PointDetector(Device):
 point_detector = PointDetector('point_detector')
 
 # Define a Bluesky Plan component for performing measurements at targets.
-# Note that this returs the measured value and variance
+# Note that this returns the measured value and variance
 def measure_target(target):
     yield from checkpoint()
     yield from mov(point_detector.motor1, target[0], point_detector.motor2, target[1])
