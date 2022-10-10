@@ -3,6 +3,7 @@ import os
 from threading import Thread
 import inspect
 
+from qtpy.QtWidgets import QMessageBox
 from pytestqt import qtbot
 from qtpy import QtCore
 
@@ -14,7 +15,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
 
-def test_simple(qtbot):
+def test_simple(qtbot, monkeypatch):
     from examples import server_demo
 
     main_window = MainWindow()
@@ -32,5 +33,7 @@ def test_simple(qtbot):
 
     assert len(main_window.data) > 0
     server_demo.core.exit()
-    main_window.data = None
-    main_window.close()
+
+    # Suppress save dialog
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.No)
+    # main_window.close()
