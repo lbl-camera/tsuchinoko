@@ -189,7 +189,7 @@ def initialize():
     global RE
 
 
-def get_run_engine():
+def get_run_engine() -> QRunEngine:
     global RE
     if RE is None:
         RE = QRunEngine()
