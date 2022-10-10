@@ -3,15 +3,13 @@ from collections import defaultdict
 from queue import Queue, Empty
 from typing import Any, Type, Union
 
-import zmq
-
-from tsuchinoko.assets import path
-
 try:
     from yaml import CLoader as Loader, CDumper as Dumper, dump, load
 except ImportError:
     from yaml import Loader, Dumper
 
+import zmq
+from zmq.error import ZMQError
 import numpy as np
 from PySide2.QtGui import QIcon
 from loguru import logger
@@ -19,8 +17,8 @@ from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea
 from qtmodern.styles import dark
 from qtpy.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMenuBar, QAction, QStyle, QFileDialog, QDialog, QMessageBox
-from zmq.error import ZMQError
 
+from tsuchinoko.assets import path
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
 from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest, \
@@ -92,7 +90,7 @@ class MainWindow(QMainWindow):
         self.configuration_widget.sigRequestParameters.connect(self.request_parameters)
         request_relay.sigRequestMeasure.connect(self.request_measure)
 
-        self.update_thread = QThreadFutureIterator(self.update, finished_slot=self.socket.close)
+        self.update_thread = QThreadFutureIterator(self.update, finished_slot=self.close_zmq)
         self.update_thread.start()
 
         self.data: Data = Data()
@@ -109,6 +107,7 @@ class MainWindow(QMainWindow):
 
     def init_socket(self):
         if self.socket:
+            logger.debug("Closing socket")
             self.socket.close()
 
         #  Socket to talk to server
@@ -417,6 +416,20 @@ class MainWindow(QMainWindow):
         self.data = Data()
         self.graph_manager_widget.clear()
 
+    def close_zmq(self):
+        if self.update_thread.running:
+            logger.info('waiting for update thread to finish')
+            self.update_thread.requestInterruption()
+            self.update_thread.wait()
+        if self.socket:
+            logger.debug('Closing socket')
+            self.socket.close()
+            self.socket = None
+        if self.context:
+            logger.debug('Closing context')
+            self.context.term()
+            self.context = None
+
     def closeEvent(self, event):
         if self.data and len(self.data):
             result = QMessageBox.question(self,
@@ -428,11 +441,9 @@ class MainWindow(QMainWindow):
                 self.save_data()
             if result in [QMessageBox.Yes, QMessageBox.No]:
                 event.accept()
-                self.socket.close()
-                self.socket = None
-                self.context.term()
-                self.context = None
+                self.close_zmq()
             else:
                 event.ignore()
         else:
             event.accept()
+            self.close_zmq()
