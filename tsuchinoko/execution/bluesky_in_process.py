@@ -2,7 +2,7 @@ from queue import Queue
 
 from bluesky.plan_stubs import open_run
 
-from tsuchinoko.utils.runengine import QRunEngine
+from tsuchinoko.utils.runengine import get_run_engine
 from . import Engine
 
 
@@ -16,7 +16,7 @@ class BlueskyInProcessEngine(Engine):
     def __init__(self, measure_target, get_position):
         # These would normally be on the remote end
         self.targets = Queue()
-        self.RE = QRunEngine()
+        self.RE = get_run_engine()
         self.RE(self.target_queue_plan(measure_target, get_position))
         self.position = None
         self.new_measurements = []
