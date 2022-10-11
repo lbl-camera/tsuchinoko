@@ -66,6 +66,7 @@ class QThreadFuture(QThread):
             # cancelIfRunning=True,
             priority=QThread.InheritPriority,
             timeout=0,
+            name=None,
             **kwargs,
     ):
         super(QThreadFuture, self).__init__()
@@ -77,6 +78,7 @@ class QThreadFuture(QThread):
         #             thread.cancel()
         # self.threadkey = threadkey
 
+        self.name = name
         self.callback_slot = callback_slot
         self.except_slot = except_slot
         # if callback_slot: self.sigCallback.connect(callback_slot)
@@ -128,6 +130,7 @@ class QThreadFuture(QThread):
         """
         # if self.threadkey:
         #     threading.current_thread().name = self.threadkey
+        threading.current_thread().name = self.name
         self.cancelled = False
         self.exception = None
         if self.showBusy:
@@ -286,6 +289,7 @@ def method(
         # cancelIfRunning=True,
         timeout=0,
         block=False,
+        name=None,
 ):
     """
     Decorator for functions/methods to run as RunnableMethods on background QT threads
@@ -327,6 +331,7 @@ def method(
                 # keepalive=keepalive,
                 # cancelIfRunning=cancelIfRunning,
                 timeout=timeout,
+                name=name,
                 **kwargs,
             )
             future.start()
@@ -350,6 +355,7 @@ def iterator(
         # threadkey: str = None,
         showBusy=True,
         priority=QThread.InheritPriority,
+        name=None,
         # keepalive=True,
 ):
     """
@@ -392,6 +398,7 @@ def iterator(
                 # threadkey=threadkey,
                 showBusy=showBusy,
                 priority=priority,
+                name=name,
                 # keepalive=keepalive,
                 **kwargs,
             )

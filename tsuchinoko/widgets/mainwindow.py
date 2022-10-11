@@ -90,7 +90,7 @@ class MainWindow(QMainWindow):
         self.configuration_widget.sigRequestParameters.connect(self.request_parameters)
         request_relay.sigRequestMeasure.connect(self.request_measure)
 
-        self.update_thread = QThreadFutureIterator(self.update, finished_slot=self.close_zmq)
+        self.update_thread = QThreadFutureIterator(self.update, finished_slot=self.close_zmq, name='tsuchinoko-update')
         self.update_thread.start()
 
         self.data: Data = Data()
