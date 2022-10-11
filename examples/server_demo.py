@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from bluesky.plan_stubs import trigger_and_read, checkpoint, mov
+import ophyd  # insulates from ophyd import errors
 from ophyd.sim import SynAxis, Device, Cpt, SynSignal
 from scipy import ndimage
 
