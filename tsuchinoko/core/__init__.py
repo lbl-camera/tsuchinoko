@@ -163,13 +163,17 @@ class ZMQCore(Core):
         if not self.poller:
             self.start_server()
 
-        sockets = dict(await self.poller.poll())
+        sockets = dict(await self.poller.poll(timeout=.1))
         for socket in sockets:
             try:
-                request = await socket.recv_pyobj()  # zmq.NOBLOCK)
+                request = await socket.recv_pyobj(zmq.NOBLOCK)
             except zmq.ZMQError as ex:
                 logger.exception(ex)
             else:
+                if not request:
+                    time.sleep(.1)
+                    continue
+
                 logger.info(f"Received request: {request}")
                 with log_time('preparing response', cumulative_key='preparing response'):
 
