@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from functools import wraps
 from queue import PriorityQueue, Empty
 from typing import Any
+import dask.distributed  # this insulates from errors related to dask asserting its own EventLoopPolicy as squashing the event loop setup for bluesky
 
 from bluesky import RunEngine
 from bluesky.utils import DuringTask, RunEngineInterrupted
@@ -62,9 +63,9 @@ class QRunEngine(QObject):
     def __init__(self, **kwargs):
         super(QRunEngine, self).__init__()
 
-        self.RE = RunEngine(context_managers=[], during_task=DuringTask(), **kwargs)
-        self.RE.subscribe(self.sigDocumentYield.emit)
         self._request_resume = False
+        self._kwargs = kwargs
+        self._RE = None
 
         # # TODO: pull from settings plugin
         # from suitcase.mongo_normalized import Serializer
@@ -73,7 +74,7 @@ class QRunEngine(QObject):
         # username=os.getenv("USER_MONGO")
         # pw = os.getenv("PASSWD_MONGO")
         # try:
-        #     self.RE.subscribe(Serializer(f"mongodb://{username}:{pw}@localhost:27017/mds?authsource=mds",
+        #     self._RE.subscribe(Serializer(f"mongodb://{username}:{pw}@localhost:27017/mds?authsource=mds",
         #                                  f"mongodb://{username}:{pw}@localhost:27017/fs?authsource=fs"))
         # except OperationFailure as err:
         #     msg.notifyMessage("Could not connect to local mongo database.",
@@ -85,31 +86,38 @@ class QRunEngine(QObject):
 
         self.queue = PriorityQueue()
         self.process_queue_thread = threads.QThreadFutureIterator(self.process_queue,
-                                                                  finished_slot=self._close,
-                                                                  interrupt_callable=self._close_RE)
+                                                                  # finished_slot=self._close,
+                                                                  interrupt_callable=self._close_RE,
+                                                                  name='runengine-qthread')
         self.process_queue_thread.start()
 
-    def _close_RE(self):
-        if self.RE.state != 'idle':
-            self.RE.abort('Application is closing.')
+    @property
+    def RE(self):
+        return self._RE
 
-    def _close(self):
-        self.asyncio_loop.close()
+    def _close_RE(self):
+        if self._RE.state != 'idle':
+            self._RE.abort('Application is closing.')
+
+    # def _close(self):
+    #     self.asyncio_loop.close()
 
     def process_queue(self):
-        self.asyncio_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.asyncio_loop)
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self._RE = RunEngine(context_managers=[], during_task=DuringTask(), loop=self.loop, **self._kwargs)
+        self._RE.subscribe(self.sigDocumentYield.emit)
 
         while True:
             yield
             # get a plan, wait up to .1 sec before hot looping
-            if self.RE.state == 'idle':
+            if self._RE.state == 'idle':
                 try:
                     priority_plan = self.queue.get(block=True, timeout=.1)  # timeout is arbitrary, we'll come right back
                 except Empty:
                     continue
                 priority, (args, kwargs) = priority_plan.priority, priority_plan.args
-            elif self.RE.state == 'paused' and self._request_resume:
+            elif self._RE.state == 'paused' and self._request_resume:
                 pass
             else:
                 time.sleep(.1)
@@ -117,15 +125,15 @@ class QRunEngine(QObject):
 
             self.sigStart.emit()
             try:
-                if self.RE.state == 'idle':
-                    self.RE(*args, **kwargs)
-                elif self.RE.state == 'paused' and self._request_resume:
+                if self._RE.state == 'idle':
+                    self._RE(*args, **kwargs)
+                elif self._RE.state == 'paused' and self._request_resume:
                     self._request_resume = False
-                    self.RE.resume()
+                    self._RE.resume()
             except RunEngineInterrupted:
                 logging.critical("Run has been aborted by the user.")
             except RuntimeError as ex:
-                logging.error("An error occured during a Bluesky plan. See the Xi-CAM log for details.")
+                logging.error("An error occured during a Bluesky plan. See the Tsuchinoko log for details.")
                 logging.error(ex, exc_info=True)
                 self.sigException.emit(ex)
             else:
@@ -141,20 +149,20 @@ class QRunEngine(QObject):
 
     @property
     def isIdle(self):
-        return self.RE.state == 'idle'
+        return self._RE.state == 'idle'
 
     def abort(self, reason=''):
-        if self.RE.state != 'idle':
-            self.RE.abort(reason=reason)
+        if self._RE.state != 'idle':
+            self._RE.abort(reason=reason)
             self.sigAbort.emit()
 
     def pause(self, defer=False):
-        if self.RE.state != 'paused':
-            self.RE.request_pause(defer)
+        if self._RE.state != 'paused':
+            self._RE.request_pause(defer)
             self.sigPause.emit()
 
     def resume(self, ):
-        if self.RE.state == 'paused':
+        if self._RE.state == 'paused':
             self._request_resume = True
             self.sigResume.emit()
 
@@ -178,7 +186,7 @@ class QRunEngine(QObject):
 
     def _check_if_ready(self):
         # RE has finished processing everything in the queue
-        if self.RE.state == 'idle' and self.queue.unfinished_tasks == 0:
+        if self._RE.state == 'idle' and self.queue.unfinished_tasks == 0:
             self.sigReady.emit()
 
 
