@@ -43,6 +43,12 @@ running Tsuchinoko server will be needed to run any experiment.
 $ tsuchinoko
 ```
 
+```{image} _static/startup-connecting.PNG
+:alt: Tsuchinoko with no connection
+:width: 500px
+:align: center
+```
+
 According to your preferences, components of Tsuchinoko can also be distributed across multiple systems to accommodate a 
 distributed design which leverages different hardware resources. If you plan to do this, you'll need a Tsuchinoko 
 installation on each system.
@@ -68,10 +74,26 @@ $ tsuchinoko
 The client will automatically connect to the server. From the parameter table on the right, select an Acquisition Function to test (try starting with `gradient`).
 To start the experiment, click the 'run' (▶) button.
 
+```{image} _static/running-score.PNG
+:alt: Tsuchinoko with no connection
+:width: 500px
+:align: center
+
+```
+&nbsp;
+
 Now have fun!
 - Experiment with different acquisition functions! Try switching between them while Tsuchinoko is running.
 - Want to nudge Tsuchinoko in the right direction? Right click in the `Score` or `Posterior Mean` displays and select `Queue Measurement at Point`
 - Save your work! You can save the current state of an experiment from File > Save..., or save an image of a display by right-clicking a display and selecting `Export...`.
+
+```{image} _static/running-posterior-mean.PNG
+:alt: Tsuchinoko with no connection
+:width: 500px
+:align: center
+
+```
+&nbsp;
 
 ## Next Steps
 
