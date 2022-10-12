@@ -26,8 +26,8 @@ sys.path.insert(0, parentdir)
 @fixture
 def bluesky_core():
     logger.info('starting setup')
-    from examples import server_demo
-    server_thread = Thread(target=server_demo.core.main)
+    from examples import server_demo_bluesky
+    server_thread = Thread(target=server_demo_bluesky.core.main)
     server_thread.start()
     logger.info('setup complete')
 
@@ -40,7 +40,7 @@ def bluesky_core():
     RE.process_queue_thread.requestInterruption()
     RE.process_queue_thread.wait()
 
-    server_demo.core.exit()
+    server_demo_bluesky.core.exit()
     server_thread.join()
     logger.info('teardown complete')
 
