@@ -41,5 +41,6 @@ maxdepth: 1
 ---
 quickstart.md
 server_experiment.md
+bluesky.md
 api/index.md
 ```
