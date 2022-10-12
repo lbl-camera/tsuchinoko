@@ -1,4 +1,4 @@
-@import 'bootstrap-sphinx.css';
+@import 'css/theme.css';
 
 /*# "relbarbgcolor": "#555",*/
 /*# "bgcolor": "#555",*/
@@ -23,6 +23,11 @@
 h1 {
     text-shadow: 0 0 15px #0dd;
     font-family: "Zero Threes", "Droid Serif", "DejaVu Serif", "STIX", serif;
+    transition: text-shadow .5s ease-in-out;
+}
+
+h1:hover {
+    text-shadow: 0 0 20px #0dd;
 }
 
 .highlight pre, code, .highlight-default {
@@ -60,12 +65,18 @@ dl.field-list dd.field-odd {
     padding-left:0;
 }
 
-div.highlight pre {
+html[data-theme='dark'] div.highlight pre {
     background-color: #022;
     border: 1px solid #0cc;
+    border-radius: 5px;
 }
 
 a {
+    text-shadow: 0 1px 3px #EEE;
+    transition: text-shadow .5s;
+}
+
+html[data-theme='dark'] a {
     text-shadow: 0 1px 3px #000;
     transition: text-shadow .5s;
 }
@@ -81,6 +92,11 @@ a:hover {
 
 .footer {
     border-top: 1px solid #333;
+}
+
+/* fixes some styles of dark theme */
+html[data-theme='dark'] span.sig-name span.pre, html[data-theme='dark'] span.sig-prename span.pre {
+    color: white;
 }
 
 .highlight .hll { background-color: #000033 }
