@@ -6,6 +6,12 @@
 [![Test Coverage](https://img.shields.io/codecov/c/github/lbl-camera/tsuchinoko/master.svg)](https://codecov.io/github/lbl-camera/tsuchinoko?branch=master)
 [![Slack Status](https://img.shields.io/badge/slack-gpCAM-yellow.svg?logo=slack)](https://nikea.slack.com/messages/U7Q1N42F6)
 
+```{image} docs/source/_static/running-score.PNG
+:alt: Tsuchinoko running simulated measurements
+:align: center
+
+```
+
 Tsuchinoko is a Qt application for adaptive experiment execution and tuning. Live visualizations show details of 
 measurements, and provide feedback on the adaptive engine's decision-making process. The parameters of the adaptive 
 engine can also be tuned live to explore and optimize the search procedure.
