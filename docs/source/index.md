@@ -19,16 +19,27 @@ The latest stable Tsuchinoko version is available on PyPI, and is installable wi
 pip install tsuchinoko
 ```
 
-For more information, see the [installation documentation](https://xi-cam.readthedocs.io/en/latest/quickstart.html).
+For more information, see the [installation documentation](quickstart.md).
 
 ## Getting started
 
 You can find demos in the Tsuchinoko Github repository's [examples folder](https://github.com/lbl-camera/tsuchinoko/tree/master/examples).
 It is suggested to first try running both `server_demo.py` and `client_demo.py` simultaneously. This demo performs a
-simulated adaptive experiment by making "measurements" sampled from an image file.
+simulated adaptive experiment by making "measurements" sampled from an image file. It is recommended as a first run to follow
+the [Getting Started](quickstart.md) guide.
 
 ## About the name
 
 Japanese folklore describes the [Tsuchinoko](https://cryptidz.fandom.com/wiki/Tsuchinoko) as a wide and short snake-like creature living in the mountains of western
 Japan. This creature has a cultural following similar to the Bigfoot of North America. Much like the global optimum of a
 non-convex function, its elusive nature is infamous.
+
+```{toctree}
+---
+hidden: true
+maxdepth: 1
+---
+quickstart.md
+server_experiment.md
+api/index.md
+```
