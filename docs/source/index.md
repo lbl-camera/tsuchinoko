@@ -4,6 +4,14 @@ Tsuchinoko is a Qt application for adaptive experiment execution and tuning. Liv
 measurements, and provide feedback on the adaptive engine's decision-making process. The parameters of the adaptive
 engine can also be tuned live to explore and optimize the search procedure.
 
+```{image} _static/running-score.PNG
+:alt: Tsuchinoko with no connection
+:align: center
+
+```
+
+&nbsp;
+
 While Tsuchinoko is designed to allow custom adaptive engines to drive experiments, the
 [gpCAM](https://gpcam.readthedocs.io/en/latest/) engine is a featured inclusion. This tool is based on a flexible and
 powerful Gaussian process regression at the core.
