@@ -11,3 +11,4 @@ coverage:
 ignore:
   - versioneer.py
   - examples/*.py
+  - setup.py
