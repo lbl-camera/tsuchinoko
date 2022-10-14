@@ -183,6 +183,8 @@ class QRunEngine(QObject):
 
     def _put(self, priority, args, kwargs):
         self.queue.put(PrioritizedPlan(priority, (args, kwargs)))
+        if not self.process_queue_thread.running:
+            self.process_queue_thread.start()
 
     def _check_if_ready(self):
         # RE has finished processing everything in the queue

@@ -26,6 +26,7 @@ from tsuchinoko.execution.simple import SimpleEngine
 # NOTE: if loguru has a backlog of messages
 # logger.remove()
 from tsuchinoko.execution.threaded_in_process import ThreadedInProcessEngine
+from tsuchinoko.utils.runengine import get_run_engine
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -113,7 +114,14 @@ def bluesky_execution_engine(image_func):
     # Define an execution engine with the measurement and get_position functions
     execution = BlueskyInProcessEngine(measure_target, get_position)
 
-    return execution
+    yield execution
+
+    logger.info('starting bluesky engine teardown')
+    RE = get_run_engine()
+    RE.RE.halt()
+    RE.process_queue_thread.requestInterruption()
+    RE.process_queue_thread.wait()
+    logger.info('bluesky engine teardown finished')
 
 
 @fixture
