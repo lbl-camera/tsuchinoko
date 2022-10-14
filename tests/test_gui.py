@@ -30,8 +30,9 @@ def client_window(qtbot):
         yield main_window
 
     logger.info('teardown client window')
-    main_window.close()
-    qtbot.wait_signal(main_window.update_thread.sigFinished)
+    with qtbot.waitCallback() as cb:
+        main_window.update_thread.sigFinished.connect(cb)
+        main_window.close()
     logger.info('client window teardown finished')
 
 
