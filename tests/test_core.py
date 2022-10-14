@@ -28,10 +28,6 @@ from tsuchinoko.execution.simple import SimpleEngine
 from tsuchinoko.execution.threaded_in_process import ThreadedInProcessEngine
 from tsuchinoko.utils.runengine import get_run_engine
 
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0, parentdir)
-
 
 @fixture
 def image_data():
