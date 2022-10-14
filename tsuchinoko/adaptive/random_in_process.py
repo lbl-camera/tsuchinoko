@@ -9,8 +9,10 @@ from tsuchinoko.adaptive import Engine, Data
 class RandomInProcess(Engine):
     dimensionality: int = None
 
-    def __init__(self, dimensionality: int, parameter_bounds):
+    def __init__(self, dimensionality: int, parameter_bounds, max_targets=None):
         self.dimensionality = dimensionality
+        self._max_targets = max_targets
+        self._target_count = 0
 
         for i in range(dimensionality):
             for j, edge in enumerate(['min', 'max']):
@@ -29,10 +31,15 @@ class RandomInProcess(Engine):
         ...
 
     def request_targets(self, position, n, **kwargs):
+        if self._max_targets and self._target_count > self._max_targets:
+            return []
+
         bounds = [[self.parameters[('bounds', f'axis_{i}_{edge}')]
                    for edge in ['min', 'max']]
                   for i in range(self.dimensionality)]
-        return [[np.random.uniform(min_, max_) for min_, max_ in bounds] for i in range(self.parameters['n'])]
+        targets = [[np.random.uniform(min_, max_) for min_, max_ in bounds] for i in range(self.parameters['n'])]
+        self._target_count += len(targets)
+        return targets
 
     def reset(self):
         ...

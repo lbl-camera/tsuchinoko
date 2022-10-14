@@ -73,7 +73,9 @@ def gpcam_engine(image_data):
 def random_engine(image_data):
     adaptive = RandomInProcess(dimensionality=2,
                                parameter_bounds=[(0, image_data.shape[1]),
-                                                 (0, image_data.shape[0])])
+                                                 (0, image_data.shape[0])],
+                               max_targets=100
+                               )  # this engine is FAST, so best to limit it
     return adaptive
 
 
