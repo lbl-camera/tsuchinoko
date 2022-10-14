@@ -1,6 +1,8 @@
-from queue import Queue
+from queue import Queue, Empty
 from threading import Thread
 import time
+
+from loguru import logger
 
 from . import Engine
 
@@ -12,6 +14,7 @@ class ThreadedInProcessEngine(Engine):
 
     def __init__(self, measure_target, get_position=None):
         # These would normally be on the remote end
+        self.exiting = False
         self.targets = Queue()
         self.position_getter = get_position
         if get_position:
@@ -32,11 +35,16 @@ class ThreadedInProcessEngine(Engine):
             self.targets.put(position)
 
     def measure_loop(self):
-        while True:
-            target = tuple(self.targets.get())
-            self.position = target
-            value, variance = self.measure_target(target)
-            self.new_measurements.append((self.position, value, variance, {'timestamp': time.time()}))
+        while not self.exiting:
+            logger.critical('looking for target')
+            try:
+                target = tuple(self.targets.get(timeout=.1))
+            except Empty:
+                continue
+            else:
+                self.position = target
+                measurement = self.measure_target(target)
+                self.new_measurements.append(measurement)
 
     def get_position(self):
         return self.position or self.position_getter()
