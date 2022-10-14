@@ -401,7 +401,7 @@ class MainWindow(QMainWindow):
         if not name:
             return
         state = self.configuration_widget.parameter.saveState(filter='user')
-        dump(state, open(name, 'r'), Dumper=Dumper)
+        dump(state, open(name, 'w'), Dumper=Dumper)
 
     def new_data(self):
         if len(self.data):
