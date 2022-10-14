@@ -3,12 +3,13 @@ import os
 from threading import Thread
 import inspect
 
+from pytest import fixture
 from qtpy.QtWidgets import QMessageBox
 from pytestqt import qtbot
 from qtpy import QtCore
 from loguru import logger
 
-from tsuchinoko.core import ConnectResponse, ZMQCore
+from tsuchinoko.core import ConnectResponse, ZMQCore, CoreState
 from tsuchinoko.widgets.mainwindow import MainWindow
 from .test_core import random_engine, simple_execution_engine, image_data, image_func
 
@@ -18,7 +19,18 @@ from .test_core import random_engine, simple_execution_engine, image_data, image
 # logger.remove()
 
 
-def test_simple(qtbot, monkeypatch, random_engine, simple_execution_engine):
+@fixture
+def client_window():
+    main_window = MainWindow()
+    main_window.show()
+    # qtbot.addWidget(main_window)
+    yield main_window
+
+    client_window.close()
+    qtbot.wait_signal(client_window.update_thread.sigFinished)
+
+
+def test_simple(qtbot, monkeypatch, random_engine, simple_execution_engine, client_window):
 
     core = ZMQCore()
     core.set_execution_engine(simple_execution_engine)
@@ -26,30 +38,23 @@ def test_simple(qtbot, monkeypatch, random_engine, simple_execution_engine):
     server_thread = Thread(target=core.main)
     server_thread.start()
 
-    main_window = MainWindow()
-    main_window.show()
-
-    qtbot.addWidget(main_window)
-
     # Suppress save dialog
     monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.No)
 
-    with qtbot.wait_exposed(main_window):
+    with qtbot.wait_exposed(client_window):
         with qtbot.waitCallback() as cb:
-            main_window.subscribe(cb, ConnectResponse)
+            client_window.subscribe(cb, ConnectResponse)
 
         def button_enabled():
-            assert main_window.state_manager_widget.start_pause_button.isEnabled()
+            assert client_window.state_manager_widget.start_pause_button.isEnabled()
 
         qtbot.waitUntil(button_enabled)
-        qtbot.mouseClick(main_window.state_manager_widget.start_pause_button, QtCore.Qt.LeftButton)
-        qtbot.wait(1000)  # give it time to run a few iterations
+        qtbot.mouseClick(client_window.state_manager_widget.start_pause_button, QtCore.Qt.LeftButton)
+        qtbot.waitUntil(lambda: len(client_window.data) > 0)
 
-    assert len(main_window.data) > 0
+        qtbot.mouseClick(client_window.state_manager_widget.stop_button, QtCore.Qt.LeftButton)
 
-
-    # main_window.close()
-    qtbot.wait_signal(main_window.update_thread.sigFinished)
+        qtbot.waitUntil(lambda: client_window.state_manager_widget.state == CoreState.Inactive)
 
     core.exit()
     server_thread.join()
