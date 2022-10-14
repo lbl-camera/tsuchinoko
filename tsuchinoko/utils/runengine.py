@@ -14,36 +14,6 @@ from qtpy.QtCore import QObject, Signal
 from tsuchinoko.utils import threads
 
 
-def _get_asyncio_queue(loop):
-    class AsyncioQueue(asyncio.Queue):
-        '''
-        Asyncio queue modified for caproto server layer queue API compatibility
-
-        NOTE: This is bound to a single event loop for compatibility with
-        synchronous requests.
-        '''
-
-        def __init__(self, *, loop=loop, **kwargs):
-            super().__init__(loop=loop, **kwargs)
-
-        async def async_get(self):
-            return await super().get()
-
-        async def async_put(self, value):
-            return await super().put(value)
-
-        def get(self):
-            future = asyncio.run_coroutine_threadsafe(self.async_get(), loop)
-            return future.result()
-
-        def put(self, value):
-            future = asyncio.run_coroutine_threadsafe(
-                self.async_put(value), loop)
-            return future.result()
-
-    return AsyncioQueue
-
-
 @dataclass(order=True)
 class PrioritizedPlan:
     priority: int
