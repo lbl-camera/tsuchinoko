@@ -7,7 +7,7 @@ from loguru import logger
 from qtpy.QtCore import QTimer, Signal, QThread, QObject, QEvent, QCoreApplication
 from qtpy.QtWidgets import QApplication
 
-running_coverage = 'coverage' in sys.modules
+from tsuchinoko.utils.coverage import coverage_resolve_trace
 
 
 def log_error(exception: Exception, value=None, tb=None, **kwargs):
@@ -124,16 +124,13 @@ class QThreadFuture(QThread):
         if self.timeout:
             self._timeout_timer = QTimer.singleShot(self.timeout, self.cancel)
 
+    @coverage_resolve_trace
     def run(self, *args, **kwargs):
         """
         Do not call this from the main thread; you're probably looking for start()
         """
         # if self.threadkey:
         #     threading.current_thread().name = self.threadkey
-
-        # Fix coverage reporting in qthreads
-        if running_coverage:
-            sys.settrace(threading._trace_hook)
 
         threading.current_thread().name = self.name
         self.cancelled = False
