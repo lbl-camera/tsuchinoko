@@ -1,13 +1,13 @@
-
 import sys
 import threading
 import time
-import traceback
 from functools import wraps
 
-from qtpy.QtCore import QTimer, Signal, QThread, QObject, QEvent, QCoreApplication, Qt
-from qtpy.QtWidgets import QApplication
 from loguru import logger
+from qtpy.QtCore import QTimer, Signal, QThread, QObject, QEvent, QCoreApplication
+from qtpy.QtWidgets import QApplication
+
+running_coverage = 'coverage' in sys.modules
 
 
 def log_error(exception: Exception, value=None, tb=None, **kwargs):
@@ -130,6 +130,11 @@ class QThreadFuture(QThread):
         """
         # if self.threadkey:
         #     threading.current_thread().name = self.threadkey
+
+        # Fix coverage reporting in qthreads
+        if running_coverage:
+            sys.settrace(threading._trace_hook)
+
         threading.current_thread().name = self.name
         self.cancelled = False
         self.exception = None
@@ -160,9 +165,9 @@ class QThreadFuture(QThread):
             self.exception = ex
             self.sigExcept.emit(ex)
             logger.error(f"Error in thread: "
-                    f'Method: {getattr(self.method, "__name__", "UNKNOWN")}\n'
-                    f"Args: {self.args}\n"
-                    f"Kwargs: {self.kwargs}",)
+                         f'Method: {getattr(self.method, "__name__", "UNKNOWN")}\n'
+                         f"Args: {self.args}\n"
+                         f"Kwargs: {self.kwargs}", )
             log_error(ex)
         else:
             self.sigFinished.emit()
