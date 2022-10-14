@@ -1,6 +1,6 @@
-from queue import Queue
+from queue import Queue, Empty
 
-from bluesky.plan_stubs import open_run
+from bluesky.plan_stubs import open_run, null
 
 from tsuchinoko.utils.runengine import get_run_engine
 from . import Engine
@@ -32,10 +32,14 @@ class BlueskyInProcessEngine(Engine):
         yield from open_run()
         self.position = tuple((yield from get_position()))
         while True:
-            target = tuple(self.targets.get())
-            self.position = target
-            value, variance = (yield from measure_target(target))
-            self.new_measurements.append((self.position, value, variance, {}))  # TODO: Add variance; TODO: add metrics
+            try:
+                target = tuple(self.targets.get(timeout=.1))
+            except Empty:
+                yield from null()
+            else:
+                self.position = target
+                value, variance = (yield from measure_target(target))
+                self.new_measurements.append((self.position, value, variance, {}))  # TODO: Add variance; TODO: add metrics
 
     def get_position(self):
         return self.position
