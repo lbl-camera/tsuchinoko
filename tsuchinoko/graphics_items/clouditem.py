@@ -97,20 +97,10 @@ class CloudItem(pg.GraphicsObject):
 
         if 'compositionMode' in kwargs:
             self.setCompositionMode(kwargs['compositionMode'])
-
-        # if 'colorMap' in kwargs:
-        #     cmap = kwargs.get('colorMap')
-        #     if not isinstance(cmap, colormap.ColorMap):
-        #         raise ValueError('colorMap argument must be a ColorMap instance')
-        #     self.cmap = cmap
-        # else:
-        #     self.cmap = colormap.get('viridis')
         if 'hoverable' in kwargs:
             self.opts['hoverable'] = bool(kwargs['hoverable'])
         if 'tip' in kwargs:
             self.opts['tip'] = kwargs['tip']
-
-        # self._lut = self.cmap.getLookupTable(mode=ColorMap.FLOAT)
 
         data = {'x': x, 'y': y, 'c': c}
 
@@ -559,147 +549,6 @@ class CloudItem(pg.GraphicsObject):
                 data = np.asarray(data)
         return data
 
-    def _try_rescale_float(self, image, levels, lut):
-        augmented_alpha = False
-
-        can_handle = False
-        while True:
-            if levels is None or levels.ndim != 1:
-                # float images always need levels
-                # can't handle multi-channel levels
-                break
-
-            # awkward, but fastest numpy native nan evaluation
-            if np.isnan(image.min()):
-                # don't handle images with nans
-                # this should be an uncommon case
-                break
-
-            can_handle = True
-            break
-
-        if not can_handle:
-            return image, levels, lut, augmented_alpha
-
-        # Decide on maximum scaled value
-        if lut is not None:
-            scale = lut.shape[0]
-            num_colors = lut.shape[0]
-        else:
-            scale = 255.
-            num_colors = 256
-        dtype = np.min_scalar_type(num_colors-1)
-
-        minVal, maxVal = levels
-        if minVal == maxVal:
-            maxVal = np.nextafter(maxVal, 2*maxVal)
-        rng = maxVal - minVal
-        rng = 1 if rng == 0 else rng
-
-        fn_numba = fn.getNumbaFunctions()
-        if image.flags.c_contiguous and dtype == np.uint16 and fn_numba is not None:
-            lut, augmented_alpha = self._convert_2dlut_to_1dlut(lut)
-            image = fn_numba.rescale_and_lookup1d(image, scale/rng, minVal, lut)
-            if image.dtype == np.uint32:
-                image = image[..., np.newaxis].view(np.uint8)
-            return image, None, None, augmented_alpha
-        else:
-            image = fn.rescaleData(image, scale/rng, offset=minVal, dtype=dtype, clip=(0, num_colors-1))
-
-            levels = None
-
-            if image.dtype == np.uint16 and image.ndim == 2:
-                image, augmented_alpha = self._apply_lut_for_uint16_mono(image, lut)
-                lut = None
-
-            # image is now of type uint8
-            return image, levels, lut, augmented_alpha
-
-    def _try_combine_lut(self, image, levels, lut):
-        augmented_alpha = False
-
-        can_handle = False
-        while True:
-            if levels is not None and levels.ndim != 1:
-                # can't handle multi-channel levels
-                break
-            if image.dtype == np.uint16 and levels is None and \
-                    image.ndim == 3 and image.shape[2] == 3:
-                # uint16 rgb can't be directly displayed, so make it
-                # pass through effective lut processing
-                levels = [0, 65535]
-            if levels is None and lut is None:
-                # nothing to combine
-                break
-
-            can_handle = True
-            break
-
-        if not can_handle:
-            return image, levels, lut, augmented_alpha
-
-        # distinguish between lut for levels and colors
-        levels_lut = None
-        colors_lut = lut
-        lut = None
-
-        eflsize = 2**(image.itemsize*8)
-        if levels is None:
-            info = np.iinfo(image.dtype)
-            minlev, maxlev = info.min, info.max
-        else:
-            minlev, maxlev = levels
-        levdiff = maxlev - minlev
-        levdiff = 1 if levdiff == 0 else levdiff  # don't allow division by 0
-
-        if colors_lut is None:
-            if image.dtype == np.ubyte and image.ndim == 2:
-                # uint8 mono image
-                ind = np.arange(eflsize)
-                levels_lut = fn.rescaleData(ind, scale=255./levdiff,
-                                            offset=minlev, dtype=np.ubyte)
-                # image data is not scaled. instead, levels_lut is used
-                # as (grayscale) Indexed8 ColorTable to get the same effect.
-                # due to the small size of the input to rescaleData(), we
-                # do not bother caching the result
-                return image, None, levels_lut, augmented_alpha
-            else:
-                # uint16 mono, uint8 rgb, uint16 rgb
-                # rescale image data by computation instead of by memory lookup
-                image = fn.rescaleData(image, scale=255./levdiff,
-                                       offset=minlev, dtype=np.ubyte)
-                return image, None, colors_lut, augmented_alpha
-        else:
-            num_colors = colors_lut.shape[0]
-            effscale = num_colors / levdiff
-            lutdtype = np.min_scalar_type(num_colors - 1)
-
-            if image.dtype == np.ubyte or lutdtype != np.ubyte:
-                # combine if either:
-                #   1) uint8 mono image
-                #   2) colors_lut has more entries than will fit within 8-bits
-                if self._effectiveLut is None:
-                    ind = np.arange(eflsize)
-                    levels_lut = fn.rescaleData(ind, scale=effscale,
-                                                offset=minlev, dtype=lutdtype, clip=(0, num_colors-1))
-                    efflut = colors_lut[levels_lut]
-                    levels_lut = None
-                    colors_lut = None
-                    self._effectiveLut = efflut
-                efflut = self._effectiveLut
-
-                # apply the effective lut early for the following types:
-                if image.dtype == np.uint16 and image.ndim == 2:
-                    image, augmented_alpha = self._apply_lut_for_uint16_mono(image, efflut)
-                    efflut = None
-                return image, None, efflut, augmented_alpha
-            else:
-                # uint16 image with colors_lut <= 256 entries
-                # don't combine, we will use QImage ColorTable
-                image = fn.rescaleData(image, scale=effscale,
-                                       offset=minlev, dtype=lutdtype, clip=(0, num_colors-1))
-                return image, None, colors_lut, augmented_alpha
-
     def getHistogram(self, bins='auto', step='auto', perChannel=False, targetImageSize=200,
                      targetHistogramSize=500, **kwds):
         """
@@ -771,50 +620,3 @@ class CloudItem(pg.GraphicsObject):
                 return cp.asnumpy(hist[1][:-1]), cp.asnumpy(hist[0])
             else:
                 return hist[1][:-1], hist[0]
-
-
-if __name__ == '__main__':
-    from PIL import Image
-    import time
-
-    pg.setConfigOption('useOpenGL', True)
-    pg.setConfigOption('enableExperimental', True)
-
-
-    app = pg.mkQApp("CloudItem Example")
-
-    ## Create window with GraphicsView widget
-    win = pg.GraphicsLayoutWidget()
-    win.show()  ## show widget alone in its own window
-    win.setWindowTitle('CloudItem Example')
-    view = win.addViewBox()
-
-    image = np.asarray(Image.open('test.jpeg'))
-    x, y = np.random.random((2, 10000))
-    x*=image.shape[1]
-    y*=image.shape[0]
-    c = [np.average(image[-int(yi), int(xi)]) for xi, yi in zip(x, y)]
-    x, y = list(x), list(y)
-
-    fps = 25 # Frame per second of the animation
-    timer = QtCore.QTimer()
-    timer.setSingleShot(True)
-    def update(n=100):
-        t0 = time.perf_counter()
-        try:
-            cloud.extendData([x.pop() for i in range(n)], [y.pop() for i in range(n)], [c.pop() for i in range(n)])
-        except IndexError:
-            pass
-        else:
-            t2 = time.perf_counter()
-            delay = max(1000/fps - (t2 - t0), 0)
-            timer.start(int(delay))
-
-    timer.timeout.connect(update)
-
-    cloud = CloudItem(size=1)
-
-    update(n=4)
-
-    view.addItem(cloud)
-    pg.exec()
