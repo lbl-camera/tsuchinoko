@@ -4,7 +4,7 @@ from threading import Thread
 import inspect
 
 from pytest import fixture
-from qtpy.QtWidgets import QMessageBox
+from qtpy.QtWidgets import QMessageBox, QFileDialog
 from pytestqt import qtbot
 from qtpy import QtCore
 from loguru import logger
@@ -39,19 +39,24 @@ def client_window(qtbot):
 @fixture
 def dialog_response_no(monkeypatch):
     # Suppress save dialog
-    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.No)
+    with monkeypatch.context() as m:
+        m.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.No)
+        yield
 
 
-def test_simple(qtbot, dialog_response_no, random_engine, simple_execution_engine, client_window):
+@fixture
+def client_and_server(qtbot, dialog_response_no, random_engine, simple_execution_engine, client_window):
 
     core = ZMQCore()
     core.set_execution_engine(simple_execution_engine)
     core.set_adaptive_engine(random_engine)
-    server_thread = Thread(target=core.main)
-    server_thread.start()
 
     with qtbot.waitCallback() as cb:
         client_window.subscribe(cb, ConnectResponse)
+        server_thread = Thread(target=core.main)
+        server_thread.start()
+        if client_window.state_manager_widget.state != CoreState.Connecting:
+            cb()
 
     def button_enabled():
         assert client_window.state_manager_widget.start_pause_button.isEnabled()
@@ -60,6 +65,8 @@ def test_simple(qtbot, dialog_response_no, random_engine, simple_execution_engin
     qtbot.mouseClick(client_window.state_manager_widget.start_pause_button, QtCore.Qt.LeftButton)
     qtbot.waitUntil(lambda: len(client_window.data) > 0)
 
+    yield client_window, core
+
     qtbot.mouseClick(client_window.state_manager_widget.stop_button, QtCore.Qt.LeftButton)
 
     qtbot.waitUntil(lambda: client_window.state_manager_widget.state == CoreState.Inactive)
@@ -67,3 +74,32 @@ def test_simple(qtbot, dialog_response_no, random_engine, simple_execution_engin
     core.exit()
     server_thread.join()
 
+
+def test_simple(client_and_server):
+    client_window, core = client_and_server
+    assert len(client_window.data) > 0
+
+
+def test_save_restore(client_and_server, monkeypatch, tmp_path):
+    client_window, core = client_and_server
+
+    with monkeypatch.context() as m:
+        m.setattr(QFileDialog, 'getSaveFileName', lambda filter: (tmp_path / 'test.yml', "YAML (*.yml)"))
+        client_window.save_data()
+
+    with monkeypatch.context() as m:
+        m.setattr(QMessageBox, 'question', lambda *args, **kwargs: QMessageBox.Yes)
+        client_window.new_data()
+
+    with monkeypatch.context() as m:
+        m.setattr(QFileDialog, 'getOpenFileName', lambda filter: (tmp_path / 'test.yml', "YAML (*.yml)"))
+        m.setattr(QMessageBox, 'question', lambda *args, **kwargs: QMessageBox.Yes)
+        client_window.open_data()
+
+    with monkeypatch.context() as m:
+        m.setattr(QFileDialog, 'getSaveFileName', lambda filter: (tmp_path / 'test_params.yml', "YAML (*.yml)"))
+        client_window.save_parameters()
+
+    with monkeypatch.context() as m:
+        m.setattr(QFileDialog, 'getOpenFileName', lambda filter: (tmp_path / 'test_params.yml', "YAML (*.yml)"))
+        client_window.open_parameters()
