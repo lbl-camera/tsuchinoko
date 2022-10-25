@@ -162,3 +162,14 @@ class ConnectRequest(Message):
 class ConnectResponse(Message):
     __slots__ = ('state',)
 
+
+class PushGraphsRequest(Message):
+    __slots__ = ('graphs',)
+
+
+class PullGraphsRequest(Message):
+    __slots__ = ()
+
+
+class GraphsResponse(Message):
+    __slots__ = ('graphs',)

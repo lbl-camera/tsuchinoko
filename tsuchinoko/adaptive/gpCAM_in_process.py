@@ -1,3 +1,4 @@
+import uuid
 from functools import cached_property
 
 import numpy as np
@@ -6,9 +7,8 @@ from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParamet
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
+from ..graphs.common import GPCamVariance, GPCamPosteriorCovariance, GPCamScore, GPCamAcquisitionFunction, GPCamPosteriorMean
 from ..parameters import TrainingParameter
-import uuid
-
 
 acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
 acquisition_functions['explore_target_100'] = explore_target_100
@@ -31,7 +31,7 @@ class GPCAMInProcessEngine(Engine):
         for i in range(dimensionality):
             for j, edge in enumerate(['min', 'max']):
                 self.parameters[('bounds', f'axis_{i}_{edge}')] = parameter_bounds[i][j]
-        for i in range(dimensionality+1):
+        for i in range(dimensionality + 1):
             for j, edge in enumerate(['min', 'max']):
                 self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')] = hyperparameter_bounds[i][j]
             self.parameters.child('hyperparameters', f'hyperparameter_{i}').setValue(hyperparameters[i], blockSignal=self._set_hyperparameter)
@@ -43,12 +43,18 @@ class GPCAMInProcessEngine(Engine):
         self._completed_training = {'global': set(),
                                     'local': set()}
 
+        self.graphs = [GPCamVariance(),
+                       GPCamScore(),
+                       GPCamPosteriorCovariance(),
+                       GPCamAcquisitionFunction(),
+                       GPCamPosteriorMean()]
+
     def reset(self):
         parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                                         for edge in ['min', 'max']]
                                        for i in range(self.dimensionality)])
         hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                      for i in range(self.dimensionality+1)])
+                                      for i in range(self.dimensionality + 1)])
 
         self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
         self.optimizer.tell(np.empty((1, self.dimensionality)), np.empty((1,)), np.empty((1,)))  # we'll wipe this out later; required for initialization
@@ -84,15 +90,15 @@ class GPCAMInProcessEngine(Engine):
             param.sigValueChanged.connect(self._set_hyperparameter)
 
         parameters = func_parameters + [GroupParameter(name='bounds', title='Axis Bounds', children=bounds_parameters),
-                                        GroupParameter(name='hyperparameters', title='Hyperparameter Bounds', children=hyper_parameters+hyper_parameters_bounds),
+                                        GroupParameter(name='hyperparameters', title='Hyperparameter Bounds', children=hyper_parameters + hyper_parameters_bounds),
                                         global_train_parameter,
-                                        local_train_parameter,]
+                                        local_train_parameter, ]
         return GroupParameter(name='top', children=parameters)
 
     def _set_hyperparameter(self, parameter, value):
         self.optimizer.gp_initialized = False  # Force re-initialization
         self.optimizer.init_gp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                           for i in range(self.dimensionality+1)]))
+                                           for i in range(self.dimensionality + 1)]))
 
     @property
     def dimensionality(self):
@@ -106,40 +112,8 @@ class GPCAMInProcessEngine(Engine):
         self.optimizer.tell(positions, scores, variances)
 
     def update_metrics(self, data: Data):
-        with data.r_lock():  # quickly grab positions within lock before passing to optimizer
-            positions = np.asarray(data.positions.copy())
-
-        # compute posterior covariance without lock
-        result_dict = self.optimizer.posterior_covariance(positions)
-
-        bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
-                              for edge in ['min', 'max']]
-                             for i in range(self.dimensionality)])
-
-        num = 50
-
-        grid_positions = np.asarray(np.meshgrid(*(np.linspace(*bound, num=num) for bound in bounds))).T.reshape(-1, 2)
-
-        # calculate acquisition function
-        acquisition_function_value = self.optimizer.evaluate_acquisition_function(grid_positions[::2, ::2],
-                                                     acquisition_function=acquisition_functions[self.parameters['acquisition_function']])
-
-        # calculate acquisition function
-        posterior_mean_value = self.optimizer.posterior_mean(grid_positions)['f(x)'].reshape(num, num)
-
-        try:
-            acquisition_function_value = acquisition_function_value.reshape(num, num)
-        except (ValueError, AttributeError):
-            acquisition_function_value = np.array([[0]])
-
-        # assign to data object with lock
-        with data.w_lock():
-            data.states['Posterior Covariance'] = result_dict['S(x)']
-            data.graphics_items['Posterior Covariance'] = 'imageitem'
-            data.states['Acquisition Function'] = acquisition_function_value
-            data.graphics_items['Acquisition Function'] = 'imageitem'
-            data.states['Posterior Mean'] = posterior_mean_value
-            data.graphics_items['Posterior Mean'] = 'imageitem'
+        for graph in self.graphs:
+            graph.compute(data, self)
 
     def request_targets(self, position, n):
         kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
@@ -156,8 +130,8 @@ class GPCAMInProcessEngine(Engine):
                 if len(self.optimizer.values) > N and N not in self._completed_training[method]:
                     self.optimizer.train(np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
                                                       for edge in ['min', 'max']]
-                                                     for i in range(self.dimensionality+1)]),
+                                                     for i in range(self.dimensionality + 1)]),
                                          np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                                     for i in range(self.dimensionality+1)]), method=method)
+                                                     for i in range(self.dimensionality + 1)]), method=method)
                     self._completed_training[method].add(N)
                     break  # only does global training if specified for both

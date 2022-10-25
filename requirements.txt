@@ -12,3 +12,4 @@ qtpy
 click
 pyopengl
 pyopengl-accelerate
+qtconsole
