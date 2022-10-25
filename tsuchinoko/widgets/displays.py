@@ -59,7 +59,7 @@ class LogHandler(logging.Handler):
 
 class Log(Display, logging.Handler):
     def __init__(self):
-        super(Log, self).__init__('Log', size=(800, 300))
+        super(Log, self).__init__('Log', size=(800, 100))
 
         log = QListWidget()
 
@@ -178,7 +178,7 @@ class GraphManager(Display, metaclass=Singleton):
     def __init__(self):
         self.dock_area = DockArea(parent=self)
 
-        super(GraphManager, self).__init__('Graphs', hideTitle=False, size=(500, 500), widget=self.dock_area)
+        super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500), widget=self.dock_area)
 
         self.graphs = list()
 
