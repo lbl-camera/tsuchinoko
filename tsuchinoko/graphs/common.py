@@ -1,15 +1,47 @@
-from functools import lru_cache, cached_property
-import hashlib
+from functools import lru_cache
+from typing import Tuple
 
 import numpy as np
 from loguru import logger
-from pyqtgraph import HistogramLUTWidget, mkBrush, mkPen, PlotItem
+from pyqtgraph import HistogramLUTWidget, mkBrush, mkPen, PlotItem, PlotWidget, TableWidget
 from qtpy.QtWidgets import QWidget, QHBoxLayout
 
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
 from tsuchinoko.graphics_items.mixins import ClickRequesterPlot, ClickRequester
 from tsuchinoko.graphs import Graph, Location
+
+
+class Table(Graph):
+    def __init__(self, data_keys: Tuple[str] = None, name: str = 'Table'):
+        super(Table, self).__init__(name)
+        self.data_keys = data_keys or tuple()
+
+    def make_widget(self):
+        self.widget = TableWidget(sortable=False)
+        return self.widget
+
+    def update(self, data, update_slice: slice):
+        # data = data[update_slice]
+
+        with data.r_lock():
+            x = data.positions.copy()
+            v = data.variances.copy()
+            y = data.scores.copy()
+
+            extra_fields = {data_key: data[data_key].copy() for data_key in self.data_keys}
+
+        values = np.array([x, y, v, *extra_fields.values()])
+        names = ['Position', 'Value', 'Variance'] + list(extra_fields.keys())
+
+        rows = range(update_slice.start, len(x))
+        table = [{name: value[i] for name, value in zip(names, values)} for i in rows]
+
+        if update_slice.start == 0:
+            self.widget.setData(table)
+        else:
+            for row, table_row in zip(rows, table):
+                self.widget.setRow(row, list(table_row.values()))
 
 
 class ImageViewBlend(ClickRequester):
@@ -125,6 +157,26 @@ class Cloud(Graph):
         # text.setPos(x[max_index], y[max_index])
 
 
+class Plot(Graph):
+    def __init__(self, data_key, name: str = None, accumulates: bool = False, widget_kwargs=None):
+        self.data_key = data_key
+        self.accumulates = accumulates
+        self.widget_kwargs = widget_kwargs or dict()
+        super(Plot, self).__init__(name=name or data_key)
+
+    def make_widget(self):
+        self.widget = PlotWidget(**self.widget_kwargs)
+        return self.widget
+
+    def update(self, data, update_slice: slice):
+        with data.r_lock():
+            v = data[self.data_key].copy()
+        if self.accumulates:
+            self.widget.plot(np.asarray(v), clear=True)
+        else:
+            self.widget.plot(np.asarray(v), clear=True)
+
+
 class GPCamVariance(Cloud):
     def __init__(self):
         super(GPCamVariance, self).__init__(data_key='variances', name='Variance')
@@ -169,8 +221,8 @@ class GPCamAcquisitionFunction(Image):
         from tsuchinoko.adaptive.gpCAM_in_process import acquisition_functions  # avoid circular import
 
         bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
-                   for edge in ['min', 'max'])
-                  for i in range(engine.dimensionality))
+                             for edge in ['min', 'max'])
+                       for i in range(engine.dimensionality))
 
         grid_positions = image_grid(bounds, self.shape)
 
@@ -197,8 +249,8 @@ class GPCamPosteriorMean(Image):
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
         bounds = ((engine.parameters[('bounds', f'axis_{i}_{edge}')]
-                              for edge in ['min', 'max'])
-                             for i in range(engine.dimensionality))
+                   for edge in ['min', 'max'])
+                  for i in range(engine.dimensionality))
 
         grid_positions = image_grid(bounds, self.shape)
 
