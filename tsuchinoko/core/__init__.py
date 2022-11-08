@@ -123,23 +123,24 @@ class Core:
                 time.sleep(.1)
 
     def experiment_iteration(self):
-        with log_time('getting position', cumulative_key='getting position'):
-            position = tuple(self.execution_engine.get_position() or [0] * self.data.dimensionality)
-        with log_time('getting targets', cumulative_key='getting targets'):
-            targets = self.adaptive_engine.request_targets(position, n=1)
-        with log_time('updating targets', cumulative_key='updating targets'):
-            self.execution_engine.update_targets(targets)
-        with log_time('getting measurements', cumulative_key='getting measurements'):
-            new_measurements = self.execution_engine.get_measurements()
-        if len(new_measurements):
-            with log_time('stashing new measurements', cumulative_key='injecting new measurements'):
-                self.data.inject_new(new_measurements)
-            with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
-                self.adaptive_engine.update_measurements(self.data)
-            with log_time('updating metrics', cumulative_key='updating metrics'):
-                self.adaptive_engine.update_metrics(self.data)
-        with log_time('training', cumulative_key='training'):
-            self.adaptive_engine.train()
+        with self.data.iteration():
+            with log_time('getting position', cumulative_key='getting position'):
+                position = tuple(self.execution_engine.get_position() or [0] * self.data.dimensionality)
+            with log_time('getting targets', cumulative_key='getting targets'):
+                targets = self.adaptive_engine.request_targets(position, n=1)
+            with log_time('updating targets', cumulative_key='updating targets'):
+                self.execution_engine.update_targets(targets)
+            with log_time('getting measurements', cumulative_key='getting measurements'):
+                new_measurements = self.execution_engine.get_measurements()
+            if len(new_measurements):
+                with log_time('stashing new measurements', cumulative_key='injecting new measurements'):
+                    self.data.inject_new(new_measurements)
+                with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
+                    self.adaptive_engine.update_measurements(self.data)
+                with log_time('updating metrics', cumulative_key='updating metrics'):
+                    self.adaptive_engine.update_metrics(self.data)
+            with log_time('training', cumulative_key='training'):
+                self.adaptive_engine.train()
 
     async def notify_clients(self):
         ...

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from contextlib import contextmanager
 from copy import copy
 from dataclasses import dataclass, field, asdict
 from abc import ABC, abstractmethod
@@ -30,6 +31,7 @@ class Data:
         self._lock = RWLock()
         self.w_lock = self._lock.w_locked
         self.r_lock = self._lock.r_locked
+        self._completed_iterations = 0
 
     def inject_new(self, data):
         with self.w_lock():
@@ -58,6 +60,8 @@ class Data:
             elif item.lower() in ['variances', 'scores', 'positions']:
                 return getattr(self, item.lower())
         elif isinstance(item, slice):
+            if item.stop is None or item.stop > self._completed_iterations:
+                item = slice(item.start, self._completed_iterations, item.step)
             return Data(self.dimensionality,
                         self.positions[item],
                         self.scores[item],
@@ -96,6 +100,11 @@ class Data:
 
     def __bool__(self):
         return bool(len(self))
+
+    @contextmanager
+    def iteration(self):
+        yield
+        self._completed_iterations += 1
 
 
 class Engine(ABC):
