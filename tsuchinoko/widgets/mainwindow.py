@@ -3,6 +3,8 @@ from collections import defaultdict
 from queue import Queue, Empty
 from typing import Any, Type, Union
 
+from tsuchinoko.widgets.debugmenubar import DebuggableMenuBar
+
 try:
     from yaml import CLoader as Loader, CDumper as Dumper, dump, load
 except ImportError:
@@ -11,7 +13,7 @@ except ImportError:
 import zmq
 from zmq.error import ZMQError
 import numpy as np
-from PySide2.QtGui import QIcon
+from qtpy.QtGui import QIcon
 from loguru import logger
 from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea
@@ -22,7 +24,7 @@ from tsuchinoko.assets import path
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
 from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest, \
-    ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse
+    ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse, PullGraphsRequest, GraphsResponse
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
 from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
@@ -38,7 +40,7 @@ class MainWindow(QMainWindow):
     def __init__(self, core_address='localhost'):
         super(MainWindow, self).__init__()
 
-        menubar = QMenuBar()
+        menubar = DebuggableMenuBar()
         file_menu = menubar.addMenu("&File")
         file_menu.addAction('&New...', self.new_data)
         open_data_action = QAction(self.style().standardIcon(QStyle.SP_DirOpenIcon), 'Open data...', parent=file_menu)
@@ -104,6 +106,7 @@ class MainWindow(QMainWindow):
         self.subscribe(self._data_callback, PartialDataResponse)
         self.subscribe(self.refresh_state, ConnectResponse)
         self.subscribe(self.log_widget.log_exception, ExceptionResponse)
+        self.subscribe(self.graph_manager_widget.set_graphs, GraphsResponse, invoke_as_event=True)
 
     def init_socket(self):
         if self.socket:
@@ -214,131 +217,10 @@ class MainWindow(QMainWindow):
     def refresh_state(self, _):
         self.message_queue.queue.clear()
         self.message_queue.put(GetParametersRequest())
-
-    def init_graph(self, name, item_key):
-        if name not in self.graph_manager_widget.graphs:
-            if item_key == 'clouditem':
-                name, widget, update_callback = self.init_cloud(name)
-            elif item_key == 'imageitem':
-                name, widget, update_callback = self.init_image(name)
-            else:
-                logger.exception(ValueError(f'Invalid item key: {item_key}'))
-
-        self.graph_manager_widget.register_graph(name, widget, update_callback)
-
-    @staticmethod
-    def init_image(name):
-        graph = PlotItem()
-        widget = ImageViewBlend(view=graph)
-        graph.vb.invertY(False)  # imageview forces invertY; this resets it
-
-        def _update_graph(data, last_data_size):
-            if name in data.states:
-                v = data.states[name]
-                widget.imageItem.setImage(v, autoLevels=widget.imageItem.image is None)
-
-        return name, widget, _update_graph
-
-    @staticmethod
-    def init_cloud(name):
-        graph = ClickRequesterPlot()
-        # scatter = ScatterPlotItem(name='scatter', x=[0], y=[0], size=10, pen=mkPen(None), brush=mkBrush(255, 255, 255, 120))
-        cloud = CloudItem(name='scatter', size=10)
-        histlut = HistogramLUTWidget()
-        histlut.setImageItem(cloud)
-
-        widget = QWidget()
-        widget.setLayout(QHBoxLayout())
-
-        widget.layout().addWidget(graph)
-        widget.layout().addWidget(histlut)
-
-        graph.addItem(cloud)
-
-        # Hard-coded to show max
-        max_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('r'))
-        last_arrow = BetterCurveArrow(cloud.scatter, brush=mkBrush('w'))
-        # text = TextItem()
-        graph.addItem(max_arrow)
-
-        # graph.addItem(text)
-
-        def _update_graph(data, last_data_size, indicator='maxvalue'):
-            require_clear = False
-
-            with data.r_lock():
-                if name == 'Score':
-                    v = data.scores.copy()
-                elif name == 'Variance':
-                    v = data.variances.copy()
-                elif name in data.metrics:
-                    v = data.metrics[name].copy()
-                elif name in data.states:
-                    v = data.states[name].copy()
-                    require_clear = True
-                else:
-                    raise ValueError(f'No value for key: {name}')
-
-                x, y = zip(*data.positions)
-
-            lengths = len(v), len(x), len(y)
-
-            if not np.all(np.array(lengths) == min(lengths)):
-                logger.warning(f'Ragged arrays passed to cloud item with lengths (v, x, y): {lengths}')
-                x = x[:min(lengths)]
-                y = y[:min(lengths)]
-                v = v[:min(lengths)]
-
-            if not len(x):
-                return
-
-            # c = [255 * i / len(x) for i in range(len(x))]
-            max_index = np.argmax(v)
-
-            last_data_size = min(last_data_size, len(cloud.cData))
-
-            if last_data_size == 0:
-                action = cloud.setData
-            elif require_clear:
-                action = cloud.updateData
-            else:
-                action = cloud.extendData
-                x = x[last_data_size + 1:]
-                y = y[last_data_size + 1:]
-                v = v[last_data_size + 1:]
-
-            action(x=x,
-                   y=y,
-                   c=v,
-                   data=v,
-                   # size=5,
-                   hoverable=True,
-                   # hoverSymbol='s',
-                   # hoverSize=6,
-                   hoverPen=mkPen('b', width=2),
-                   # hoverBrush=mkBrush('g'),
-                   )
-            # scatter.setData(
-            #     [{'pos': (xi, yi),
-            #       'size': (vi - min(v)) / (max(v) - min(v)) * 20 + 2 if max(v) != min(v) else 20,
-            #       'brush': mkBrush(color=mkColor(255, 255, 255)) if i == len(x) - 1 else mkBrush(
-            #           color=mkColor(255 - c, c, 0)),
-            #       'symbol': '+' if i == len(x) - 1 else 'o'}
-            #      for i, (xi, yi, vi, c) in enumerate(zip(x, y, v, c))])
-
-            max_arrow.setIndex(max_index)
-            last_arrow.setIndex(len(cloud.cData) - 1)
-            # text.setText(f'Max: {v[max_index]:.2f} ({x[max_index]:.2f}, {y[max_index]:.2f})')
-            # text.setPos(x[max_index], y[max_index])
-
-        return name, widget, _update_graph
+        self.message_queue.put(PullGraphsRequest())
 
     def update_graphs(self, data, last_data_size):
-        for metric_name in ['Variance', 'Score', *data.metrics, *data.states]:
-            if metric_name not in self.graph_manager_widget.graphs:
-                self.init_graph(metric_name, data.graphics_items.get(metric_name, 'clouditem'))
-
-        self.graph_manager_widget.update(data, last_data_size)
+        self.graph_manager_widget.update_graphs(data, last_data_size)
         # x, y = zip(*data.positions)
         #
         # for metric_name in data.metrics:
@@ -369,7 +251,7 @@ class MainWindow(QMainWindow):
 
         self.data = Data(**load(open(name, 'r'), Loader=Loader))
         self.last_data_size = len(self.data)
-        self.graph_manager_widget.clear()
+        self.graph_manager_widget.reset()
         self.update_graphs(self.data, 0)
         if self.state_manager_widget.state == CoreState.Connecting:
             logger.warning('Data has been loaded before connecting to an experiment server. Remember to reload data after a connection is established.')
@@ -414,7 +296,7 @@ class MainWindow(QMainWindow):
                 return
 
         self.data = Data()
-        self.graph_manager_widget.clear()
+        self.graph_manager_widget.reset()
 
     def close_zmq(self):
         if self.update_thread.running:

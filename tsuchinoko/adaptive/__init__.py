@@ -1,12 +1,14 @@
 from collections import defaultdict
+from contextlib import contextmanager
 from copy import copy
 from dataclasses import dataclass, field, asdict
 from abc import ABC, abstractmethod
-from typing import Tuple, Iterable
+from typing import Tuple, Iterable, Set, List, Union
 
 from loguru import logger
 from pyqtgraph.parametertree import Parameter
 
+from tsuchinoko.graphs import Graph
 from tsuchinoko.utils.mutex import RWLock
 
 
@@ -29,6 +31,7 @@ class Data:
         self._lock = RWLock()
         self.w_lock = self._lock.w_locked
         self.r_lock = self._lock.r_locked
+        self._completed_iterations = 0
 
     def inject_new(self, data):
         with self.w_lock():
@@ -46,14 +49,33 @@ class Data:
         self_copy.metrics = dict(self_copy.metrics)
         return asdict(self_copy)
 
-    def __getitem__(self, item: slice):
-        return Data(self.dimensionality,
-                    self.positions[item],
-                    self.scores[item],
-                    self.variances[item],
-                    {key: value[item] for key, value in self.metrics.items()},
-                    self.states,
-                    self.graphics_items)
+    def __getitem__(self, item: Union[slice, str]):
+        if isinstance(item, str):
+            if item in self.metrics and item in self.states:
+                raise ValueError(f'{item} exists in both states and metrics.')
+            elif item in self.metrics:
+                return self.metrics[item]
+            elif item in self.states:
+                return self.states[item]
+            elif item.lower() in ['variances', 'scores', 'positions']:
+                return getattr(self, item.lower())
+        elif isinstance(item, slice):
+            if item.stop is None or item.stop > self._completed_iterations:
+                item = slice(item.start, self._completed_iterations, item.step)
+            return Data(self.dimensionality,
+                        self.positions[item],
+                        self.scores[item],
+                        self.variances[item],
+                        {key: value[item] for key, value in self.metrics.items()},
+                        self.states,
+                        self.graphics_items)
+        raise ValueError(f'Unknown item: {item}')
+
+    def __setitem__(self, key, value):
+        if isinstance(key, str):
+            self.metrics[key] = value
+        else:
+            raise ValueError()
 
     def __len__(self):
         return len(self.positions)
@@ -79,6 +101,11 @@ class Data:
     def __bool__(self):
         return bool(len(self))
 
+    @contextmanager
+    def iteration(self):
+        yield
+        self._completed_iterations += 1
+
 
 class Engine(ABC):
     """
@@ -87,6 +114,7 @@ class Engine(ABC):
 
     dimensionality: int = None
     parameters: Parameter = None
+    graphs: List['Graph'] = None
 
     @abstractmethod
     def update_measurements(self, data: Data):

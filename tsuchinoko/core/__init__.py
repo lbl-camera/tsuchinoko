@@ -7,7 +7,7 @@ from queue import Queue
 from loguru import logger
 
 from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse, MeasureRequest, \
-    MeasureResponse, ConnectRequest, ConnectResponse, ExceptionResponse, PushDataRequest, PushDataResponse
+    MeasureResponse, ConnectRequest, ConnectResponse, ExceptionResponse, PushDataRequest, PushDataResponse, GraphsResponse
 from ..adaptive import Engine as AdaptiveEngine, Data
 from ..execution import Engine as ExecutionEngine
 from ..utils.logging import log_time
@@ -27,16 +27,20 @@ class CoreState(Enum):
 
 
 class Core:
-    def __init__(self):
-        self.execution_engine: ExecutionEngine = None
-        self.adaptive_engine: AdaptiveEngine = None
+    def __init__(self,
+                 execution_engine: ExecutionEngine = None,
+                 adaptive_engine: AdaptiveEngine = None):
+        self.execution_engine = execution_engine
+        self.adaptive_engine = adaptive_engine
 
         self.iteration = 0
 
         self._state = CoreState.Inactive
         self._exception_queue = Queue()
+        self._forced_position_queue = Queue()
 
         self.data = Data()
+        self._graphs = []
 
         self.experiment_thread = None
 
@@ -120,31 +124,45 @@ class Core:
                 time.sleep(.1)
 
     def experiment_iteration(self):
-        with log_time('getting position', cumulative_key='getting position'):
-            position = tuple(self.execution_engine.get_position() or [0]*self.data.dimensionality)
-        with log_time('getting targets', cumulative_key='getting targets'):
-            targets = self.adaptive_engine.request_targets(position, n=1)
-        with log_time('updating targets', cumulative_key='updating targets'):
-            self.execution_engine.update_targets(targets)
-        with log_time('getting measurements', cumulative_key='getting measurements'):
-            new_measurements = self.execution_engine.get_measurements()
-        if len(new_measurements):
-            with log_time('stashing new measurements', cumulative_key='injecting new measurements'):
-                self.data.inject_new(new_measurements)
-            with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
-                self.adaptive_engine.update_measurements(self.data)
-            with log_time('updating metrics', cumulative_key='updating metrics'):
-                self.adaptive_engine.update_metrics(self.data)
-        with log_time('training', cumulative_key='training'):
-            self.adaptive_engine.train()
+        with self.data.iteration():
+            with log_time('getting position', cumulative_key='getting position'):
+                position = tuple(self.execution_engine.get_position() or [0] * self.data.dimensionality)
+            if self._forced_position_queue.empty():
+                with log_time('getting targets', cumulative_key='getting targets'):
+                    targets = self.adaptive_engine.request_targets(position, n=1)
+            else:
+                targets = [self._forced_position_queue.get()]
+            with log_time('updating targets', cumulative_key='updating targets'):
+                self.execution_engine.update_targets(targets)
+            with log_time('getting measurements', cumulative_key='getting measurements'):
+                new_measurements = self.execution_engine.get_measurements()
+            if len(new_measurements):
+                with log_time('stashing new measurements', cumulative_key='injecting new measurements'):
+                    self.data.inject_new(new_measurements)
+                with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
+                    self.adaptive_engine.update_measurements(self.data)
+                with log_time('updating metrics', cumulative_key='updating metrics'):
+                    self.adaptive_engine.update_metrics(self.data)
+            with log_time('training', cumulative_key='training'):
+                self.adaptive_engine.train()
 
     async def notify_clients(self):
         ...
 
+    @property
+    def graphs(self):
+        execution_graphs = getattr(self.execution_engine, 'graphs', []) or []
+        adaptive_graphs = getattr(self.adaptive_engine, 'graphs', []) or []
+        return execution_graphs + adaptive_graphs + self._graphs
+
+    @graphs.setter
+    def graphs(self, graphs):
+        raise NotImplementedError('Updating graphs on server not supported yet.')
+
 
 class ZMQCore(Core):
-    def __init__(self):
-        super(ZMQCore, self).__init__()
+    def __init__(self, *args, **kwargs):
+        super(ZMQCore, self).__init__(*args, **kwargs)
         # self.start_server()
         self.context = None
         self.poller = None
@@ -157,6 +175,64 @@ class ZMQCore(Core):
         socket = self.context.socket(zmq.REP)
         socket.bind("tcp://*:5555")
         self.poller.register(socket, zmq.POLLIN)
+
+    def respond_FullDataRequest(self, request):
+        with self.data.r_lock():
+            return FullDataResponse(self.data.as_dict())
+
+    def respond_PartialDataRequest(self, request):
+        if self.data and request.iteration <= len(self.data) and self.state == CoreState.Running:
+            with self.data.r_lock():
+                partial_data = self.data[request.iteration:]
+            return PartialDataResponse(partial_data.as_dict(), request.iteration)
+        else:
+            return StateResponse(self.state)
+
+    def respond_PushDataRequest(self, request):
+        self.data = Data(**request.data)
+        return PushDataResponse()
+
+    def respond_StartRequest(self, request):
+        if self.state == CoreState.Paused:
+            self.state = CoreState.Resuming
+        elif self.state == CoreState.Inactive:
+            self.state = CoreState.Starting
+        return StateResponse(self.state)
+
+    def respond_StopRequest(self, request):
+        self.state = CoreState.Stopping
+        return StateResponse(self.state)
+
+    def respond_PauseRequest(self, request):
+        self.state = CoreState.Pausing
+        return StateResponse(self.state)
+
+    def respond_StateRequest(self, request):
+        if not self._exception_queue.empty():
+            return ExceptionResponse(self._exception_queue.get())
+        else:
+            return StateResponse(self.state)
+
+    def respond_GetParametersRequest(self, request):
+        return GetParametersResponse(self.adaptive_engine.parameters.saveState())
+
+    def respond_SetParameterRequest(self, request):
+        self.adaptive_engine.parameters.child(*request.child_path).setValue(request.value)
+        return SetParameterResponse(True)
+
+    def respond_MeasureRequest(self, request):
+        self._forced_position_queue.put(request.position)
+        return MeasureResponse(True)
+
+    def respond_ConnectRequest(self, request):
+        return ConnectResponse(self.state)
+
+    def respond_PullGraphsRequest(self, request):
+        return GraphsResponse(self.graphs)
+
+    def respond_PushGraphsRequest(self, request):
+        self.graphs = request.graphs
+        return GraphsResponse(self.graphs)
 
     async def notify_clients(self):
         import zmq
@@ -176,47 +252,9 @@ class ZMQCore(Core):
 
                 logger.info(f"Received request: {request}")
                 with log_time('preparing response', cumulative_key='preparing response'):
-
-                    if isinstance(request, FullDataRequest):
-                        with self.data.r_lock():
-                            response = FullDataResponse(self.data.as_dict())
-                    elif isinstance(request, PartialDataRequest):
-                        if self.data and request.iteration <= len(self.data) and self.state == CoreState.Running:
-                            with self.data.r_lock():
-                                partial_data = self.data[request.iteration:]
-                            response = PartialDataResponse(partial_data.as_dict(), request.iteration)
-                        else:
-                            response = StateResponse(self.state)
-                    elif isinstance(request, PushDataRequest):
-                        self.data = Data(**request.data)
-                        response = PushDataResponse()
-                    elif isinstance(request, StartRequest):
-                        if self.state == CoreState.Paused:
-                            self.state = CoreState.Resuming
-                        elif self.state == CoreState.Inactive:
-                            self.state = CoreState.Starting
-                        response = StateResponse(self.state)
-                    elif isinstance(request, StopRequest):
-                        self.state = CoreState.Stopping
-                        response = StateResponse(self.state)
-                    elif isinstance(request, PauseRequest):
-                        self.state = CoreState.Pausing
-                        response = StateResponse(self.state)
-                    elif isinstance(request, StateRequest):
-                        if not self._exception_queue.empty():
-                            response = ExceptionResponse(self._exception_queue.get())
-                        else:
-                            response = StateResponse(self.state)
-                    elif isinstance(request, GetParametersRequest):
-                        response = GetParametersResponse(self.adaptive_engine.parameters.saveState())
-                    elif isinstance(request, SetParameterRequest):
-                        self.adaptive_engine.parameters.child(*request.child_path).setValue(request.value)
-                        response = SetParameterResponse(True)
-                    elif isinstance(request, MeasureRequest):
-                        self.execution_engine.update_targets([request.position])
-                        response = MeasureResponse(True)
-                    elif isinstance(request, ConnectRequest):
-                        response = ConnectResponse(self.state)
+                    responder = getattr(self, f'respond_{request.__class__.__name__}', None)
+                    if responder:
+                        response = responder(request)
                     else:
                         response = UnknownResponse()
 
@@ -225,6 +263,7 @@ class ZMQCore(Core):
 
                 if isinstance(response, UnknownResponse):
                     logger.exception(ValueError(f'Unknown request received: {request}'))
+                    time.sleep(.1)
 
     def exit_later(self):
         self.state = CoreState.Exiting

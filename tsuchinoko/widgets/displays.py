@@ -2,8 +2,8 @@ import logging
 from typing import List, Any, Tuple
 from os import environ
 
-from PySide2.QtCore import QObject, Signal
-from PySide2.QtGui import QBrush, Qt
+from qtpy.QtCore import QObject, Signal, Qt
+from qtpy.QtGui import QBrush
 from pyqtgraph.dockarea import Dock, DockArea
 from pyqtgraph.parametertree import ParameterTree, Parameter
 from pyqtgraph.parametertree.parameterTypes import GroupParameter
@@ -12,7 +12,7 @@ from loguru import logger
 
 from tsuchinoko.core import CoreState, ExceptionResponse
 from tsuchinoko.utils import runengine
-from tsuchinoko.utils.threads import invoke_as_event
+from tsuchinoko.utils.threads import invoke_as_event, invoke_in_main_thread
 
 
 class Singleton(type(QObject)):
@@ -59,7 +59,7 @@ class LogHandler(logging.Handler):
 
 class Log(Display, logging.Handler):
     def __init__(self):
-        super(Log, self).__init__('Log', size=(800, 300))
+        super(Log, self).__init__('Log', size=(800, 100))
 
         log = QListWidget()
 
@@ -176,31 +176,39 @@ class StateManager(Display, metaclass=Singleton):
 
 class GraphManager(Display, metaclass=Singleton):
     def __init__(self):
-        super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500))
         self.dock_area = DockArea()
-        self.addWidget(self.dock_area)
 
-        self.graphs = dict()
-        self.update_callbacks = dict()
+        super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500), widget=self.dock_area)
 
-    def register_graph(self, name, widget, update_callback):
-        display = Display(name)
-        display.addWidget(widget)
-        self.dock_area.addDock(display, 'below')
+        self.graphs = list()
 
-        self.graphs[name] = widget
-        self.update_callbacks[name] = update_callback
+    def set_graphs(self, graphs):
+        self.clear()
+        self.graphs.clear()
+        for graph in graphs:
+            self.register_graph(graph)
 
-    def update(self, data, last_data_size):
-        for update_callback in self.update_callbacks.values():
-            update_callback(data, last_data_size)
+    def register_graph(self, graph):
+        graph.widget = graph.make_widget()
+        display = Dock(graph.name, area=self.dock_area, widget=graph.widget)
+        graph.display = display
+        self.dock_area.addDock(display, position='below')
+        self.graphs.append(graph)
+
+    def update_graphs(self, data, last_data_size):
+        for graph in self.graphs:
+            try:
+                graph.update(data, slice(last_data_size, None))
+            except Exception as ex:
+                logging.exception(ex)
 
     def clear(self):
-        for graph in self.graphs.values():
+        for graph in self.graphs:
             # NOTE: the parent's parent is always a Display instance containing only that graph
-            graph.parent().parent().setParent(None)
-            graph.parent().parent().close()
-            graph.parent().parent().deleteLater()
+            graph.widget.parent().parent().setParent(None)
+            graph.widget.parent().parent().close()
+            graph.widget.parent().parent().deleteLater()
 
-        self.update_callbacks.clear()
-        self.graphs.clear()
+    def reset(self):
+        self.clear()
+        self.set_graphs(self.graphs)
