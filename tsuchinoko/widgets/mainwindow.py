@@ -106,7 +106,7 @@ class MainWindow(QMainWindow):
         self.subscribe(self._data_callback, PartialDataResponse)
         self.subscribe(self.refresh_state, ConnectResponse)
         self.subscribe(self.log_widget.log_exception, ExceptionResponse)
-        self.subscribe(self.graph_manager_widget.set_graphs, GraphsResponse)
+        self.subscribe(self.graph_manager_widget.set_graphs, GraphsResponse, invoke_as_event=True)
 
     def init_socket(self):
         if self.socket:
@@ -251,7 +251,7 @@ class MainWindow(QMainWindow):
 
         self.data = Data(**load(open(name, 'r'), Loader=Loader))
         self.last_data_size = len(self.data)
-        self.graph_manager_widget.clear()
+        self.graph_manager_widget.reset()
         self.update_graphs(self.data, 0)
         if self.state_manager_widget.state == CoreState.Connecting:
             logger.warning('Data has been loaded before connecting to an experiment server. Remember to reload data after a connection is established.')
@@ -296,7 +296,7 @@ class MainWindow(QMainWindow):
                 return
 
         self.data = Data()
-        self.graph_manager_widget.clear()
+        self.graph_manager_widget.reset()
 
     def close_zmq(self):
         if self.update_thread.running:

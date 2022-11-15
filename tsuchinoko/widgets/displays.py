@@ -176,15 +176,17 @@ class StateManager(Display, metaclass=Singleton):
 
 class GraphManager(Display, metaclass=Singleton):
     def __init__(self):
-        self.dock_area = DockArea(parent=self)
+        self.dock_area = DockArea()
 
         super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500), widget=self.dock_area)
 
         self.graphs = list()
 
     def set_graphs(self, graphs):
+        self.clear()
+        self.graphs.clear()
         for graph in graphs:
-            invoke_in_main_thread(self.register_graph, graph)
+            self.register_graph(graph)
 
     def register_graph(self, graph):
         graph.widget = graph.make_widget()
@@ -203,8 +205,10 @@ class GraphManager(Display, metaclass=Singleton):
     def clear(self):
         for graph in self.graphs:
             # NOTE: the parent's parent is always a Display instance containing only that graph
-            graph.parent().parent().setParent(None)
-            graph.parent().parent().close()
-            graph.parent().parent().deleteLater()
+            graph.widget.parent().parent().setParent(None)
+            graph.widget.parent().parent().close()
+            graph.widget.parent().parent().deleteLater()
 
+    def reset(self):
+        self.clear()
         self.set_graphs(self.graphs)
