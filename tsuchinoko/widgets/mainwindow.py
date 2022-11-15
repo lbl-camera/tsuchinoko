@@ -13,7 +13,7 @@ except ImportError:
 import zmq
 from zmq.error import ZMQError
 import numpy as np
-from PySide2.QtGui import QIcon
+from qtpy.QtGui import QIcon
 from loguru import logger
 from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea

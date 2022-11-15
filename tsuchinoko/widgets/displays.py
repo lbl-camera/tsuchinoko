@@ -2,8 +2,8 @@ import logging
 from typing import List, Any, Tuple
 from os import environ
 
-from PySide2.QtCore import QObject, Signal
-from PySide2.QtGui import QBrush, Qt
+from qtpy.QtCore import QObject, Signal, Qt
+from qtpy.QtGui import QBrush
 from pyqtgraph.dockarea import Dock, DockArea
 from pyqtgraph.parametertree import ParameterTree, Parameter
 from pyqtgraph.parametertree.parameterTypes import GroupParameter
