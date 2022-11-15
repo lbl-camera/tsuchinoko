@@ -7,7 +7,7 @@ from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParamet
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
-from ..graphs.common import GPCamVariance, GPCamPosteriorCovariance, GPCamScore, GPCamAcquisitionFunction, GPCamPosteriorMean
+from ..graphs.common import GPCamVariance, GPCamPosteriorCovariance, GPCamScore, GPCamAcquisitionFunction, GPCamPosteriorMean, GPCamAverageCovariance, Table
 from ..parameters import TrainingParameter
 
 acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
@@ -24,9 +24,7 @@ class GPCAMInProcessEngine(Engine):
 
     def __init__(self, dimensionality, parameter_bounds, hyperparameters, hyperparameter_bounds, **kwargs):
         self.kwargs = kwargs
-        self.optimizer = GPOptimizer(dimensionality, parameter_bounds)
-        self.optimizer.tell(np.empty((1, dimensionality)), np.empty((1,)), np.empty((1,)))  # we'll wipe this out later; required for initialization
-        self.optimizer.init_gp(hyperparameters)
+        self.dimensionality = dimensionality
 
         for i in range(dimensionality):
             for j, edge in enumerate(['min', 'max']):
@@ -36,6 +34,8 @@ class GPCAMInProcessEngine(Engine):
                 self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')] = hyperparameter_bounds[i][j]
             self.parameters.child('hyperparameters', f'hyperparameter_{i}').setValue(hyperparameters[i], blockSignal=self._set_hyperparameter)
 
+        self.init_optimizer()
+
         self.optimizer.points = np.array([])
         self.optimizer.values = np.array([])
         self.optimizer.variances = np.array([])
@@ -43,13 +43,20 @@ class GPCAMInProcessEngine(Engine):
         self._completed_training = {'global': set(),
                                     'local': set()}
 
-        self.graphs = [GPCamVariance(),
-                       GPCamScore(),
-                       GPCamPosteriorCovariance(),
-                       GPCamAcquisitionFunction(),
-                       GPCamPosteriorMean()]
+        if dimensionality == 2:
+            self.graphs = [GPCamVariance(),
+                           GPCamScore(),
+                           GPCamPosteriorCovariance(),
+                           GPCamAcquisitionFunction(),
+                           GPCamPosteriorMean(),
+                           # GPCamAverageCovariance(),
+                           Table()]
+        elif dimensionality > 2:
+            self.graphs = [GPCamPosteriorCovariance(),
+                           # GPCamAverageCovariance(),
+                           Table()]
 
-    def reset(self):
+    def init_optimizer(self):
         parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                                         for edge in ['min', 'max']]
                                        for i in range(self.dimensionality)])
@@ -59,6 +66,9 @@ class GPCAMInProcessEngine(Engine):
         self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
         self.optimizer.tell(np.empty((1, self.dimensionality)), np.empty((1,)), np.empty((1,)))  # we'll wipe this out later; required for initialization
         self.optimizer.init_gp(hyperparameters)
+
+    def reset(self):
+        self.init_optimizer()
 
         self.optimizer.points = np.array([])
         self.optimizer.values = np.array([])
@@ -99,10 +109,6 @@ class GPCAMInProcessEngine(Engine):
         self.optimizer.gp_initialized = False  # Force re-initialization
         self.optimizer.init_gp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                            for i in range(self.dimensionality + 1)]))
-
-    @property
-    def dimensionality(self):
-        return self.optimizer.iput_dim
 
     def update_measurements(self, data: Data):
         with data.r_lock():  # quickly grab values within lock before passing to optimizer
