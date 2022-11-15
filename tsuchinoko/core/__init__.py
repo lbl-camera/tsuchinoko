@@ -37,6 +37,7 @@ class Core:
 
         self._state = CoreState.Inactive
         self._exception_queue = Queue()
+        self._forced_position_queue = Queue()
 
         self.data = Data()
         self._graphs = []
@@ -126,8 +127,11 @@ class Core:
         with self.data.iteration():
             with log_time('getting position', cumulative_key='getting position'):
                 position = tuple(self.execution_engine.get_position() or [0] * self.data.dimensionality)
-            with log_time('getting targets', cumulative_key='getting targets'):
-                targets = self.adaptive_engine.request_targets(position, n=1)
+            if self._forced_position_queue.empty():
+                with log_time('getting targets', cumulative_key='getting targets'):
+                    targets = self.adaptive_engine.request_targets(position, n=1)
+            else:
+                targets = [self._forced_position_queue.get()]
             with log_time('updating targets', cumulative_key='updating targets'):
                 self.execution_engine.update_targets(targets)
             with log_time('getting measurements', cumulative_key='getting measurements'):
@@ -147,8 +151,8 @@ class Core:
 
     @property
     def graphs(self):
-        execution_graphs = getattr(self.execution_engine, 'graphs', [])
-        adaptive_graphs = getattr(self.adaptive_engine, 'graphs', [])
+        execution_graphs = getattr(self.execution_engine, 'graphs', []) or []
+        adaptive_graphs = getattr(self.adaptive_engine, 'graphs', []) or []
         return execution_graphs + adaptive_graphs + self._graphs
 
     @graphs.setter
@@ -217,7 +221,7 @@ class ZMQCore(Core):
         return SetParameterResponse(True)
 
     def respond_MeasureRequest(self, request):
-        self.execution_engine.update_targets([request.position])
+        self._forced_position_queue.put(request.position)
         return MeasureResponse(True)
 
     def respond_ConnectRequest(self, request):
