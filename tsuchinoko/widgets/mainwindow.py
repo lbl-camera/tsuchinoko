@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
         self.subscribe(self._data_callback, PartialDataResponse)
         self.subscribe(self.refresh_state, ConnectResponse)
         self.subscribe(self.log_widget.log_exception, ExceptionResponse)
-        self.subscribe(self.graph_manager_widget.set_graphs, GraphsResponse, invoke_as_event=True)
+        self.subscribe(self.set_graphs, GraphsResponse, invoke_as_event=True)
 
     def init_socket(self):
         if self.socket:
@@ -239,6 +239,9 @@ class MainWindow(QMainWindow):
         # self._update_graph('score', x, y, data.scores)
         # self._update_graph('variance', x, y, data.variances)
 
+    def set_graphs(self, graphs):
+        self.graph_manager_widget.set_graphs(graphs, self.data)
+
     def subscribe(self, callback, response_type: Union[Type[Message], None] = None, invoke_as_event: bool = False):
         self.callbacks[response_type].append((callback, invoke_as_event))
 
@@ -261,8 +264,9 @@ class MainWindow(QMainWindow):
 
         self.data = Data(**load(open(name, 'r'), Loader=Loader))
         self.last_data_size = len(self.data)
-        self.graph_manager_widget.reset()
-        self.update_graphs(self.data, 0)
+        # self.graph_manager_widget.reset()
+        self.message_queue.put(PullGraphsRequest())
+        # self.update_graphs(self.data, 0)
         if self.state_manager_widget.state == CoreState.Connecting:
             logger.warning('Data has been loaded before connecting to an experiment server. Remember to reload data after a connection is established.')
         else:
