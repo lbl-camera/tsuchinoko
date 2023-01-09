@@ -173,3 +173,11 @@ class PullGraphsRequest(Message):
 
 class GraphsResponse(Message):
     __slots__ = ('graphs',)
+
+
+class ReplayRequest(Message):
+    __slots__ = ('positions', 'measurements')
+
+
+class ReplayResponse(Message):
+    __slots__ = ('enable',)

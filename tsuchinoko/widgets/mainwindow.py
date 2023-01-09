@@ -23,8 +23,11 @@ from qtpy.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMen
 from tsuchinoko.assets import path
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
-from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, FullDataResponse, PartialDataResponse, MeasureRequest, \
-    ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse, PullGraphsRequest, GraphsResponse
+from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, \
+    PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, \
+    FullDataResponse, PartialDataResponse, MeasureRequest, \
+    ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse, PullGraphsRequest, GraphsResponse, \
+    ReplayRequest
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
 from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
@@ -88,6 +91,7 @@ class MainWindow(QMainWindow):
         self.state_manager_widget.sigPause.connect(self.pause)
         self.state_manager_widget.sigStart.connect(self.start)
         self.state_manager_widget.sigStop.connect(self.stop)
+        self.state_manager_widget.sigReplay.connect(self.replay)
         self.configuration_widget.sigPushParameter.connect(self.set_parameter)
         self.configuration_widget.sigRequestParameters.connect(self.request_parameters)
         request_relay.sigRequestMeasure.connect(self.request_measure)
@@ -135,6 +139,12 @@ class MainWindow(QMainWindow):
 
     def stop(self):
         self.message_queue.put(StopRequest())
+
+    def replay(self):
+        message = ReplayRequest(self.data.positions, self.data.measurements)
+        self.message_queue.put(StopRequest())
+        self.message_queue.put(message)
+        self.message_queue.put(StartRequest())
 
     def request_measure(self, pos):
         self.message_queue.put(MeasureRequest(pos))

@@ -6,8 +6,11 @@ from queue import Queue
 
 from loguru import logger
 
-from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse, MeasureRequest, \
-    MeasureResponse, ConnectRequest, ConnectResponse, ExceptionResponse, PushDataRequest, PushDataResponse, GraphsResponse
+from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, \
+    UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, \
+    SetParameterResponse, StopRequest, StateResponse, MeasureRequest, \
+    MeasureResponse, ConnectRequest, ConnectResponse, ExceptionResponse, PushDataRequest, PushDataResponse, \
+    GraphsResponse, ReplayResponse
 from ..adaptive import Engine as AdaptiveEngine, Data
 from ..execution import Engine as ExecutionEngine
 from ..utils.logging import log_time
@@ -38,6 +41,7 @@ class Core:
         self._state = CoreState.Inactive
         self._exception_queue = Queue()
         self._forced_position_queue = Queue()
+        self._forced_measurement_queue = Queue()
 
         self.data = Data()
         self._graphs = []
@@ -106,10 +110,11 @@ class Core:
                 self.data = Data()
                 # await sleep(min_response_sleep)
 
-            await self.notify_clients()
+            if self.state not in [CoreState.Stopping, CoreState.Exiting, CoreState.Resuming, CoreState.Restarting]:
+                await self.notify_clients()
 
     def experiment_loop(self):
-        while self.state != CoreState.Exiting:
+        while True:
             if self.state == CoreState.Running:
                 logger.info(f'Iteration: {len(self.data)}')
                 try:
@@ -118,7 +123,7 @@ class Core:
                     self._exception_queue.put(ex)
                     self.state = CoreState.Pausing
                     logger.exception(ex)
-            elif self.state in [CoreState.Stopping, CoreState.Inactive]:
+            elif self.state in [CoreState.Stopping, CoreState.Inactive, CoreState.Exiting]:
                 return
             else:
                 time.sleep(.1)
@@ -133,9 +138,12 @@ class Core:
             else:
                 targets = [self._forced_position_queue.get()]
             with log_time('updating targets', cumulative_key='updating targets'):
-                self.execution_engine.update_targets(targets)
-            with log_time('getting measurements', cumulative_key='getting measurements'):
-                new_measurements = self.execution_engine.get_measurements()
+                if self._forced_measurement_queue.empty():
+                    self.execution_engine.update_targets(targets)
+                    with log_time('getting measurements', cumulative_key='getting measurements'):
+                        new_measurements = self.execution_engine.get_measurements()
+                else:
+                    new_measurements = [self._forced_measurement_queue.get()]
             if len(new_measurements):
                 with log_time('stashing new measurements', cumulative_key='injecting new measurements'):
                     self.data.inject_new(new_measurements)
@@ -201,6 +209,7 @@ class ZMQCore(Core):
 
     def respond_StopRequest(self, request):
         self.state = CoreState.Stopping
+        self.experiment_thread.join()
         return StateResponse(self.state)
 
     def respond_PauseRequest(self, request):
@@ -233,6 +242,17 @@ class ZMQCore(Core):
     def respond_PushGraphsRequest(self, request):
         self.graphs = request.graphs
         return GraphsResponse(self.graphs)
+
+    def respond_ReplayRequest(self, request):
+        self._forced_measurement_queue.queue.clear()
+        self._forced_position_queue.queue.clear()
+
+        for position in request.positions:
+            self._forced_position_queue.put(position)
+        for measurement in request.measurements:
+            self._forced_measurement_queue.put(measurement)
+        logger.critical(f'Queue lengths: {len(self._forced_measurement_queue.queue)} {len(self._forced_position_queue.queue)}')
+        return ReplayResponse(True)
 
     async def notify_clients(self):
         import zmq

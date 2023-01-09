@@ -108,25 +108,30 @@ class StateManager(Display, metaclass=Singleton):
     sigStart = Signal()
     sigStop = Signal()
     sigPause = Signal()
+    sigReplay = Signal()
 
     def __init__(self):
         super(StateManager, self).__init__('Status', size=(300, 50))
 
         self.stop_button = QToolButton()
         self.start_pause_button = QToolButton()
+        self.replay_button = QToolButton()
         self.state_label = QLabel('...')
 
         self.stop_button.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
         self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.replay_button.setIcon(self.style().standardIcon(QStyle.SP_MediaSkipBackward))
 
         self.start_pause_button.clicked.connect(self._start_or_pause)
         self.stop_button.clicked.connect(self.sigStop)
+        self.replay_button.clicked.connect(self.sigReplay)
 
         layout_widget = QWidget()
         layout_widget.setLayout(QHBoxLayout())
 
         layout_widget.layout().addWidget(self.stop_button)
         layout_widget.layout().addWidget(self.start_pause_button)
+        layout_widget.layout().addWidget(self.replay_button)
         layout_widget.layout().addWidget(self.state_label)
 
         self.addWidget(layout_widget)
