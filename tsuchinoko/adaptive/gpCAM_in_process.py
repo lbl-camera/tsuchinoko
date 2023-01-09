@@ -7,7 +7,7 @@ from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParamet
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
-from ..graphs.common import GPCamVariance, GPCamPosteriorCovariance, GPCamScore, GPCamAcquisitionFunction, GPCamPosteriorMean, Table
+from ..graphs.common import Variance, GPCamPosteriorCovariance, Score, GPCamAcquisitionFunction, GPCamPosteriorMean, Table
 from ..parameters import TrainingParameter
 
 acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
@@ -34,18 +34,11 @@ class GPCAMInProcessEngine(Engine):
                 self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')] = hyperparameter_bounds[i][j]
             self.parameters.child('hyperparameters', f'hyperparameter_{i}').setValue(hyperparameters[i], blockSignal=self._set_hyperparameter)
 
-        self.init_optimizer()
-
-        self.optimizer.points = np.array([])
-        self.optimizer.values = np.array([])
-        self.optimizer.variances = np.array([])
-
-        self._completed_training = {'global': set(),
-                                    'local': set()}
+        self.reset()
 
         if dimensionality == 2:
-            self.graphs = [GPCamVariance(),
-                           GPCamScore(),
+            self.graphs = [Variance(),
+                           Score(),
                            GPCamPosteriorCovariance(),
                            GPCamAcquisitionFunction(),
                            GPCamPosteriorMean(),
@@ -68,6 +61,8 @@ class GPCAMInProcessEngine(Engine):
         self.optimizer.init_gp(hyperparameters)
 
     def reset(self):
+        self._completed_training = {'global': set(),
+                                    'local': set()}
         self.init_optimizer()
 
         self.optimizer.points = np.array([])
