@@ -3,13 +3,11 @@ from typing import Tuple
 
 import numpy as np
 from loguru import logger
-from pyqtgraph import HistogramLUTWidget, mkBrush, mkPen, PlotItem, PlotWidget, TableWidget
-from qtpy.QtWidgets import QWidget, QHBoxLayout
+from pyqtgraph import PlotItem, PlotWidget, TableWidget
 
-from tsuchinoko.graphics_items.clouditem import CloudItem
-from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
-from tsuchinoko.graphics_items.mixins import ClickRequesterPlot, ClickRequester
+from tsuchinoko.graphics_items.mixins import ClickRequester
 from tsuchinoko.graphs import Graph, Location
+from tsuchinoko.widgets.graph_widgets import CloudWidget
 
 
 class Table(Graph):
@@ -31,7 +29,17 @@ class Table(Graph):
 
             extra_fields = {data_key: data[data_key].copy() for data_key in self.data_keys}
 
+        lengths = len(v), len(x), len(y), *map(len, extra_fields.values())
+        min_length = min(lengths)
+        if not np.all(np.array(lengths) == min_length):
+            logger.warning(f'Ragged arrays passed to cloud item with lengths (v, x, y): {lengths}')
+            x = x[:min_length]
+            y = y[:min_length]
+            v = v[:min_length]
+            extra_fields = {k: v[:min_length] for k, v in extra_fields.items()}
+
         values = np.array([x, y, v, *extra_fields.values()])
+
         names = ['Position', 'Value', 'Variance'] + list(extra_fields.keys())
 
         rows = range(update_slice.start, len(x))
@@ -49,15 +57,21 @@ class ImageViewBlend(ClickRequester):
 
 
 class Image(Graph):
-    def __init__(self, data_key, name: str = None, accumulates: bool = False):
+    def __init__(self,
+                 data_key, name: str = None,
+                 accumulates: bool = False,
+                 invert_y=False,
+                 widget_kwargs: dict = None):
         self.data_key = data_key
         self.accumulates = accumulates
+        self.widget_kwargs = widget_kwargs or dict()
+        self.invert_y = invert_y
         super(Image, self).__init__(name=name or data_key)
 
     def make_widget(self):
         graph = PlotItem()
-        self.widget = ImageViewBlend(view=graph)
-        graph.vb.invertY(False)  # imageview forces invertY; this resets it
+        self.widget = ImageViewBlend(view=graph, **self.widget_kwargs)
+        graph.vb.invertY(self.invert_y)  # imageview forces invertY; this resets it
         return self.widget
 
     def update(self, data, update_slice: slice):
@@ -78,83 +92,11 @@ class Cloud(Graph):
         super(Cloud, self).__init__(name=name)
 
     def make_widget(self):
-        graph = ClickRequesterPlot()
-        # scatter = ScatterPlotItem(name='scatter', x=[0], y=[0], size=10, pen=mkPen(None), brush=mkBrush(255, 255, 255, 120))
-        self.cloud = CloudItem(name='scatter', size=10)
-        histlut = HistogramLUTWidget()
-        histlut.setImageItem(self.cloud)
-
-        self.widget = QWidget()
-        self.widget.setLayout(QHBoxLayout())
-
-        self.widget.layout().addWidget(graph)
-        self.widget.layout().addWidget(histlut)
-
-        graph.addItem(self.cloud)
-
-        # Hard-coded to show max
-        self.max_arrow = BetterCurveArrow(self.cloud.scatter, brush=mkBrush('r'))
-        self.last_arrow = BetterCurveArrow(self.cloud.scatter, brush=mkBrush('w'))
-        # text = TextItem()
-
+        self.widget = CloudWidget(self.data_key, accumulates=self.accumulates)
         return self.widget
 
     def update(self, data, update_slice: slice):
-        # require_clear = False
-
-        with data.r_lock():
-            v = data[self.data_key].copy()
-
-            x, y = zip(*data.positions)
-
-        lengths = len(v), len(x), len(y)
-
-        if not np.all(np.array(lengths) == min(lengths)):
-            logger.warning(f'Ragged arrays passed to cloud item with lengths (v, x, y): {lengths}')
-            x = x[:min(lengths)]
-            y = y[:min(lengths)]
-            v = v[:min(lengths)]
-
-        if not len(x):
-            return
-
-        # c = [255 * i / len(x) for i in range(len(x))]
-        max_index = np.argmax(v)
-        last_data_size = min(update_slice.start, len(self.cloud.cData))
-
-        if last_data_size == 0:
-            action = self.cloud.setData
-        elif not self.accumulates:
-            action = self.cloud.updateData
-        else:
-            action = self.cloud.extendData
-            x = x[last_data_size + 1:]
-            y = y[last_data_size + 1:]
-            v = v[last_data_size + 1:]
-
-        action(x=x,
-               y=y,
-               c=v,
-               data=v,
-               # size=5,
-               hoverable=True,
-               # hoverSymbol='s',
-               # hoverSize=6,
-               hoverPen=mkPen('b', width=2),
-               # hoverBrush=mkBrush('g'),
-               )
-        # scatter.setData(
-        #     [{'pos': (xi, yi),
-        #       'size': (vi - min(v)) / (max(v) - min(v)) * 20 + 2 if max(v) != min(v) else 20,
-        #       'brush': mkBrush(color=mkColor(255, 255, 255)) if i == len(x) - 1 else mkBrush(
-        #           color=mkColor(255 - c, c, 0)),
-        #       'symbol': '+' if i == len(x) - 1 else 'o'}
-        #      for i, (xi, yi, vi, c) in enumerate(zip(x, y, v, c))])
-
-        self.max_arrow.setIndex(max_index)
-        self.last_arrow.setIndex(len(self.cloud.cData) - 1)
-        # text.setText(f'Max: {v[max_index]:.2f} ({x[max_index]:.2f}, {y[max_index]:.2f})')
-        # text.setPos(x[max_index], y[max_index])
+        self.widget.update_data(data, update_slice)
 
 
 class Plot(Graph):
@@ -177,26 +119,26 @@ class Plot(Graph):
             self.widget.plot(np.asarray(v), clear=True)
 
 
-class GPCamVariance(Cloud):
+class Variance(Cloud):
     def __init__(self):
-        super(GPCamVariance, self).__init__(data_key='variances', name='Variance')
+        super(Variance, self).__init__(data_key='variances', name='Variance')
 
     def compute(self, data, engine):
-        pass  # This is free from gpCAM
+        pass  # This is free
 
 
-class GPCamScore(Cloud):
+class Score(Cloud):
     def __init__(self):
-        super(GPCamScore, self).__init__(data_key='scores', name='Score')
+        super(Score, self).__init__(data_key='scores', name='Score')
 
     def compute(self, data, engine):
-        pass  # This is free from gpCAM
+        pass  # This is free
 
 
 class GPCamPosteriorCovariance(Image):
     def __init__(self, shape=(50, 50)):
         self.shape = shape
-        super(GPCamPosteriorCovariance, self).__init__(data_key='Posterior Covariance')
+        super(GPCamPosteriorCovariance, self).__init__(data_key='Posterior Covariance', invert_y=True)
 
     def compute(self, data, engine: 'GPCamInProcessEngine'):
         with data.r_lock():  # quickly grab positions within lock before passing to optimizer
