@@ -21,7 +21,7 @@ class RenderMode(Enum):
     Background = auto()
 
 
-@dataclass
+@dataclass(eq=False)
 class Graph:
     name: str
     compute_with: Location = Location.Client
