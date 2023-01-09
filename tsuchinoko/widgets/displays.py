@@ -126,6 +126,10 @@ class StateManager(Display, metaclass=Singleton):
         self.stop_button.clicked.connect(self.sigStop)
         self.replay_button.clicked.connect(self.sigReplay)
 
+        self.start_pause_button.setToolTip('Start/Pause Experiment')
+        self.stop_button.setToolTip('Stop Experiment')
+        self.replay_button.setToolTip('Replay Experiment')
+
         layout_widget = QWidget()
         layout_widget.setLayout(QHBoxLayout())
 
@@ -187,11 +191,13 @@ class GraphManager(Display, metaclass=Singleton):
 
         self.graphs = list()
 
-    def set_graphs(self, graphs):
+    def set_graphs(self, graphs, data=None):
         self.clear()
         self.graphs.clear()
         for graph in graphs:
             self.register_graph(graph)
+        if data:
+            self.update_graphs(data, 0)
 
     def register_graph(self, graph):
         graph.widget = graph.make_widget()
