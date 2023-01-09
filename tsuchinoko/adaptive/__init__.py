@@ -27,6 +27,10 @@ class Data:
     states: dict = field(default_factory=dict)
     graphics_items: dict = field(default_factory=dict)
 
+    @property
+    def measurements(self):
+        return list(zip(self.positions, self.scores, self.variances, [{key: values[i] for key, values in self.metrics.items()} for i in range(len(self))]))
+
     def __post_init__(self):
         self._lock = RWLock()
         self.w_lock = self._lock.w_locked
