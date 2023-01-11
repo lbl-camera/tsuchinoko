@@ -13,3 +13,4 @@ click
 pyopengl
 pyopengl-accelerate
 qtconsole
+static-ffmpeg
