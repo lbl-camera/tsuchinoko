@@ -49,7 +49,7 @@ class Adaptive2D(Engine):
     def update_measurements(self, data: Data):
         _adaptive.measurements.put(data.scores[-1])
 
-    def request_targets(self, position, n, **kwargs):
+    def request_targets(self, position, **kwargs):
         if not self.thread.isRunning():
             self.thread.start()
         return [_adaptive.targets.get()]

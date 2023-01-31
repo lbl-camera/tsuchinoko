@@ -116,11 +116,12 @@ class GPCAMInProcessEngine(Engine):
         for graph in self.graphs:
             graph.compute(data, self)
 
-    def request_targets(self, position, n):
+    def request_targets(self, position):
         kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
         kwargs.update({'bounds': np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                                               for edge in ['min', 'max']]
                                              for i in range(self.dimensionality)])})
+        n = self.parameters['n']
         return self.optimizer.ask(position, n, acquisition_function=acquisition_functions[kwargs.pop('acquisition_function')], **kwargs)['x']
 
     def train(self):

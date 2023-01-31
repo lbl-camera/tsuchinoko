@@ -134,7 +134,7 @@ class Core:
                 position = tuple(self.execution_engine.get_position() or [0] * self.data.dimensionality)
             if self._forced_position_queue.empty():
                 with log_time('getting targets', cumulative_key='getting targets'):
-                    targets = self.adaptive_engine.request_targets(position, n=1)
+                    targets = self.adaptive_engine.request_targets(position)
             else:
                 targets = [self._forced_position_queue.get()]
             with log_time('updating targets', cumulative_key='updating targets'):

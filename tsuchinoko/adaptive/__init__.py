@@ -128,16 +128,14 @@ class Engine(ABC):
         ...
 
     @abstractmethod
-    def request_targets(self, position: Tuple, n: int) -> Iterable[Tuple]:
+    def request_targets(self, position: Tuple) -> Iterable[Tuple]:
         """
-        Determine `n` new targets to be measured
+        Determine new targets to be measured
 
         Parameters
         ----------
         position: tuple
             The current 'position' of the experiment in the target domain.
-        n: int
-            The number of targets requested to be returned
 
         Returns
         -------
