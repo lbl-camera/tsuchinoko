@@ -73,7 +73,7 @@ class Grid(Engine):
     def update_measurements(self, data: Data):
         ...
 
-    def request_targets(self, position, n, **kwargs):
+    def request_targets(self, position, **kwargs):
         bounds = [[self.parameters[('bounds', f'axis_{i}_{edge}')]
                    for edge in ['min', 'max']]
                   for i in range(self.dimensionality)]

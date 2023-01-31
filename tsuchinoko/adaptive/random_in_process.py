@@ -30,7 +30,7 @@ class RandomInProcess(Engine):
     def update_measurements(self, data: Data):
         ...
 
-    def request_targets(self, position, n, **kwargs):
+    def request_targets(self, position, **kwargs):
         if self._max_targets and self._target_count > self._max_targets:
             return []
 
