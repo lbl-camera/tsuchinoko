@@ -3,7 +3,7 @@ from typing import Tuple
 
 import numpy as np
 from loguru import logger
-from pyqtgraph import PlotItem, PlotWidget, TableWidget
+from pyqtgraph import PlotItem, PlotWidget, TableWidget, mkColor, intColor, PlotDataItem, mkPen
 
 from tsuchinoko.graphics_items.mixins import ClickRequester
 from tsuchinoko.graphs import Graph, Location
@@ -100,23 +100,67 @@ class Cloud(Graph):
 
 
 class Plot(Graph):
-    def __init__(self, data_key, name: str = None, accumulates: bool = False, widget_kwargs=None):
+    def __init__(self, data_key, name: str = None, label_key=None, accumulates: bool = False, widget_kwargs=None):
         self.data_key = data_key
         self.accumulates = accumulates
         self.widget_kwargs = widget_kwargs or dict()
+        self.label_key = label_key
         super(Plot, self).__init__(name=name or data_key)
 
     def make_widget(self):
         self.widget = PlotWidget(**self.widget_kwargs)
+        if self.label_key:
+            self.widget.getPlotItem().addLegend()
         return self.widget
 
     def update(self, data, update_slice: slice):
         with data.r_lock():
             v = data[self.data_key].copy()
         if self.accumulates:
-            self.widget.plot(np.asarray(v), clear=True)
+            self.widget.plot(np.asarray(v), clear=True, label=self.label_key)
         else:
-            self.widget.plot(np.asarray(v), clear=True)
+            self.widget.plot(np.asarray(v), clear=True, label=self.label_key)
+            
+
+class MultiPlot(Plot):
+    def __init__(self, *args, pen_key=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pen_key = pen_key
+
+    @staticmethod
+    def get_color(i, count):
+        if count < 9:
+            color = mkColor(i)
+        else:
+            color = intColor(i, hues=count, minHue=180, maxHue=300)
+        return color
+
+    def colorize(self):
+        plot_data_items = list(filter(lambda item: isinstance(item, PlotDataItem), self.widget.getPlotItem().items))
+        count = len(plot_data_items)
+
+        for i, item in enumerate(plot_data_items):
+            if isinstance(item, PlotDataItem):
+                color = self.get_color(i, count)
+                item.setPen(color)
+                item.setSymbolBrush(color)
+                item.setSymbolPen('w')
+
+    def update(self, data: 'Data', update_slice:slice):
+        if update_slice.start == 0:
+            self.widget.getPlotItem().clear()
+
+        with data.r_lock():
+            v = data[self.data_key].copy()
+            labels = data[self.label_key].copy()
+            pens = data[self.pen_key].copy()
+
+        for label, plot_data, pen in zip(labels[update_slice], v[update_slice], pens[update_slice]):
+            self.widget.plot(plot_data, name=label, pen=mkPen(pen))
+
+        if self.pen_key is None:
+            self.colorize()
+
 
 
 class Variance(Cloud):
