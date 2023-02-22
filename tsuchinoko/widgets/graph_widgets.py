@@ -71,10 +71,6 @@ class CloudWidget(QWidget):
         self.last_play_time = 0
         self.play_timer.timeout.connect(self.timeout)
 
-        self.export_video_action = QAction('Export Video...')
-        self.export_video_action.triggered.connect(self.export_video)
-        graph._scene().contextMenu.append(self.export_video_action)
-
     def timeline_changed(self):
         if not self.cache:
             return
