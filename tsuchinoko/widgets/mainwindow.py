@@ -1,8 +1,14 @@
 import time
 from collections import defaultdict
+from functools import partial
 from queue import Queue, Empty
+import subprocess
+from signal import SIGINT
 from typing import Any, Type, Union
+import sys
+from pathlib import Path
 
+from tsuchinoko.utils.dependencies import check_dependencies
 from tsuchinoko.widgets.debugmenubar import DebuggableMenuBar
 
 try:
@@ -27,7 +33,7 @@ from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRe
     PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, \
     FullDataResponse, PartialDataResponse, MeasureRequest, \
     ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse, PullGraphsRequest, GraphsResponse, \
-    ReplayRequest
+    ReplayRequest, ExitRequest
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
 from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
@@ -56,6 +62,15 @@ class MainWindow(QMainWindow):
         file_menu.addAction(save_parameters_action)
         file_menu.addAction('E&xit', self.close)
         self.setMenuBar(menubar)
+
+        demo_menu = menubar.addMenu("&Demo")
+        demo_menu.addAction('Start &Simple Demo', partial(self.start_demo, 'server_demo'))
+        demo_menu.addAction('Start &Adaptive Demo', partial(self.start_demo, 'adaptive_demo')).setEnabled(check_dependencies(['adaptive']))
+        demo_menu.addAction('Start &Grid Scan Demo', partial(self.start_demo, 'grid_demo'))
+        demo_menu.addAction('Start &High Dimensionality Demo',  partial(self.start_demo, 'high_dimensionality_server_demo')).setEnabled(check_dependencies(['perlin-noise']))
+        demo_menu.addAction('Start &Multi Task Demo',  partial(self.start_demo, 'multi_task_server_demo'))
+        demo_menu.addAction('Start &Quad Tree Demo',  partial(self.start_demo, 'quadtree_demo'))
+        demo_menu.addAction('Start &Bluesky Demo',  partial(self.start_demo, 'server_demo_bluesky'))
 
         save_data_action.triggered.connect(self.save_data)
         open_data_action.triggered.connect(self.open_data)
@@ -111,6 +126,8 @@ class MainWindow(QMainWindow):
         self.subscribe(self.refresh_state, ConnectResponse)
         self.subscribe(self.log_widget.log_exception, ExceptionResponse)
         self.subscribe(self.set_graphs, GraphsResponse, invoke_as_event=True)
+
+        self._server = None
 
     def init_socket(self):
         if self.socket:
@@ -343,3 +360,31 @@ class MainWindow(QMainWindow):
         else:
             event.accept()
             self.close_zmq()
+
+    def start_demo(self, demo_key):
+        # If not communicating with localhost, dump connection to server
+        if self.core_address != 'localhost':
+            self.core_address = 'localhost'
+            self.init_socket()
+
+        # if there's a child process server, exit it
+        if self._server:
+            self.message_queue.put(ExitRequest())
+            try:
+                self._server.wait(3)
+
+            except subprocess.TimeoutExpired:
+                result = QMessageBox.question(self,
+                                              'Server not responding.',
+                                              "The currently running demo server is not responding. Would you like to terminate it?",
+                                              buttons=QMessageBox.StandardButtons(
+                                                  QMessageBox.Yes | QMessageBox.Cancel),
+                                              defaultButton=QMessageBox.Yes)
+                if result == QMessageBox.Yes:
+                    self._server.kill()
+                if result == QMessageBox.Cancel:
+                    return
+
+        demo_exe = (Path(sys.executable).parent/'tsuchinoko_demo').with_suffix(Path(sys.executable).suffix)
+        print(demo_exe)
+        self._server = subprocess.Popen([demo_exe, demo_key])
