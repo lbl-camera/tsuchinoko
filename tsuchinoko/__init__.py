@@ -13,7 +13,6 @@ __version__ = get_versions()['version']
 
 from .utils import runengine
 from . import parameters  # registers parameter types
-from . import exporters  # registers exporters
 
 del get_versions
 
