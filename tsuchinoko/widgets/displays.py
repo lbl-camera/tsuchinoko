@@ -1,6 +1,5 @@
-import logging
 from typing import List, Any, Tuple
-from os import environ
+import logging
 
 from qtpy.QtCore import QObject, Signal, Qt
 from qtpy.QtGui import QBrush
