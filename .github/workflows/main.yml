@@ -77,7 +77,7 @@ jobs:
 
   winbuild:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    needs: deploy
+    needs: test
     runs-on: windows-latest
     strategy:
       matrix:
