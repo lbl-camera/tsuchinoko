@@ -27,7 +27,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
           pip install -e .[tests]
 
       - name: Run tests
@@ -75,3 +74,38 @@ jobs:
           GHR_COMPRESS: xz
           GHR_PATH: build/
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  winbuild:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: deploy
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: [ '3.9' ]
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e .[dev]
+
+      - name: pyinstaller
+        run: |
+          pyinstaller --noconfirm --clean tsuchinoko.spec
+
+      - name: Github Release
+        uses: fnkr/github-action-ghr@v1
+        env:
+          GHR_COMPRESS: xz
+          GHR_PATH: dist/
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create installer
+        uses: joncloud/makensis-action@v4
+        with:
+          arguments: "/V3"
