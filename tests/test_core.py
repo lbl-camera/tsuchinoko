@@ -32,7 +32,7 @@ from tsuchinoko.utils.runengine import get_run_engine
 @fixture
 def image_data():
     # Load data from a jpg image to be used as a luminosity map
-    image = np.flipud(np.asarray(Image.open(Path(__file__).parent.parent / 'examples' / 'sombrero_pug.jpg')))
+    image = np.flipud(np.asarray(Image.open(Path(__file__).parent.parent / 'tsuchinoko' / 'examples' / 'sombrero_pug.jpg')))
     luminosity = np.average(image, axis=2)
     return luminosity
 
