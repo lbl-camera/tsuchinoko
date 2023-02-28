@@ -3,7 +3,7 @@ import numpy as np
 from gpcam.gp_optimizer import  fvGPOptimizer
 from .acquisition_functions import explore_target_100, radical_gradient
 from .gpCAM_in_process import GPCAMInProcessEngine
-from ..graphs.common import GPCamPosteriorCovariance, GPCamAcquisitionFunction, GPCamPosteriorMean, GPCamAverageCovariance, Table
+from ..graphs.common import GPCamPosteriorCovariance, GPCamAcquisitionFunction, GPCamPosteriorMean, Table
 
 acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
 acquisition_functions['explore_target_100'] = explore_target_100
@@ -25,11 +25,9 @@ class FvgpGPCAMInProcessEngine(GPCAMInProcessEngine):
             self.graphs = [GPCamPosteriorCovariance(),
                            GPCamAcquisitionFunction(),
                            GPCamPosteriorMean(),
-                           GPCamAverageCovariance(),
                            Table()]
         elif dimensionality > 2:
             self.graphs = [GPCamPosteriorCovariance(),
-                           GPCamAverageCovariance(),
                            Table()]
 
     def init_optimizer(self):
