@@ -135,7 +135,7 @@ class MultiPlot(Plot):
             color = intColor(i, hues=count, minHue=180, maxHue=300)
         return color
 
-    def colorize(self):
+    def colorize(self, data):
         plot_data_items = list(filter(lambda item: isinstance(item, PlotDataItem), self.widget.getPlotItem().items))
         count = len(plot_data_items)
 
@@ -153,14 +153,38 @@ class MultiPlot(Plot):
         with data.r_lock():
             v = data[self.data_key].copy()
             labels = data[self.label_key].copy()
-            pens = data[self.pen_key].copy()
+            if self.pen_key is not None:
+                pens = data[self.pen_key].copy()
 
-        for label, plot_data, pen in zip(labels[update_slice], v[update_slice], pens[update_slice]):
-            self.widget.plot(plot_data, name=label, pen=mkPen(pen))
+        for i, label, plot_data in zip(count(update_slice.start), labels[update_slice], v[update_slice]):
+            kwargs = {}
+            if self.pen_key is not None:
+                kwargs['pen'] = mkPen(pens[i])
+            self.widget.plot(plot_data, name=label, **kwargs)
 
         if self.pen_key is None:
-            self.colorize()
+            self.colorize(data)
 
+
+class DynamicColorMultiPlot(MultiPlot):
+    def __init__(self, color_scalar_key, *args, colormap_name='CET-L17', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.colormap = colormap.get(colormap_name)
+        self.color_scalar_key = color_scalar_key
+        self.item_colors = []
+
+    def update(self, data: 'Data', update_slice:slice):
+        with data.r_lock():
+            c = data[self.color_scalar_key].copy()
+        c_min = np.min(c)
+        c_max = np.max(c)
+        scaled_c = np.interp(c, (c_min, c_max), (0, 1))
+        self.item_colors = list(map(self.colormap.map, scaled_c))
+
+        super().update(data, update_slice)
+
+    def get_color(self, i, count):
+        return self.item_colors[i]
 
 
 class Variance(Cloud):
