@@ -2,7 +2,6 @@
 ; Start
   !include MUI2.nsh
   !include x64.nsh
-  !define VERSION "2.1.1"
   !define MUI_PRODUCT "Tsuchinoko"
   !define MUI_FILE "Tsuchinoko"
   !define MUI_VERSION ""
