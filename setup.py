@@ -49,6 +49,9 @@ setup(
         "gui_scripts": [
             'tsuchinoko = tsuchinoko:launch_client',
         ],
+        "console_scripts": [
+            'tsuchinoko_demo = tsuchinoko:launch_server',
+        ],
     },
     include_package_data=True,
     package_data={
@@ -67,6 +70,7 @@ setup(
         'Programming Language :: Python :: 3',
     ],
     extras_require={
+        "dev": ["pyinstaller"],
         "docs": ["sphinx", "sphinx-markdown-tables", "numpydoc", "sphinx_copybutton", "myst_parser", "sphinx_rtd_theme", "sphinx_rtd_dark_mode"],
         "tests": ["pytest", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixture"],
     },

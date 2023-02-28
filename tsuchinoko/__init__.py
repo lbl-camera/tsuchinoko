@@ -1,7 +1,11 @@
 import click
+from qtpy.QtCore import QEventLoop
 from pyqtgraph import mkQApp
 import ctypes
 import os
+import asyncio
+import importlib
+import sys
 
 from ._version import get_versions
 
@@ -9,7 +13,7 @@ __version__ = get_versions()['version']
 
 from .utils import runengine
 from . import parameters  # registers parameter types
-
+from . import exporters  # registers exporters
 
 del get_versions
 
@@ -29,5 +33,11 @@ def launch_client(core_address='localhost'):
     main_window = MainWindow(core_address)
     main_window.show()
 
-    exit(qapp.exec_())
+    sys.exit(qapp.exec_())
 
+
+@click.command()
+@click.argument('demo_name', required=False, default='server_demo')
+def launch_server(demo_name='server_demo'):
+    demo_module = importlib.import_module(f'tsuchinoko.examples.{demo_name}')
+    demo_module.core.main()
