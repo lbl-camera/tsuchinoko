@@ -210,7 +210,7 @@ class GraphManager(Display, metaclass=Singleton):
             try:
                 graph.update(data, slice(last_data_size, None))
             except Exception as ex:
-                logging.exception(ex)
+                logger.exception(ex)
 
     def clear(self):
         for graph in self.graphs:
