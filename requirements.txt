@@ -13,4 +13,4 @@ click
 pyopengl
 pyopengl-accelerate
 qtconsole
-sklearn
+scikit-learn
