@@ -17,6 +17,10 @@ luminosity = np.average(image, axis=2)
 # A counter to track measurement number
 counter = count(1)
 
+# rosenbrock?
+# "pos" is 'annealing curve'
+# scalar_color is 'grain size' and derived from ackley function of curve values
+
 def objective(x, y):
     return -20.0 * np.exp(-0.2 * np.sqrt(0.5 * (x ** 2 + y ** 2))) - np.exp(0.5 * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y))) + np.e + 20
 
@@ -25,13 +29,14 @@ def objective(x, y):
 def bilinear_sample(pos):
     i = next(counter)
     v = objective(pos[0], np.arange(-20, 20))
+    grain_size = np.random.random()
     return pos, \
         ndimage.map_coordinates(luminosity, [[pos[1]], [pos[0]]], order=1)[0], \
         1, \
         {'plot_data': v,
          'plot_label': f'Measurement #{i}',
          # 'pen': {'width': int(np.max(v)), 'color': np.min(v)}
-         'scalar_color': np.min(v)
+         'scalar_color': grain_size
          }
 
 

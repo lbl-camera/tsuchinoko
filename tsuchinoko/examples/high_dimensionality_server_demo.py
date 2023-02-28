@@ -21,7 +21,7 @@ except ImportError:
     response = input('Would you like to install perlin-noise [y/(n)]? ')
     if response != 'y':
         print('Aborting...')
-        exit(1)
+        sys.exit(1)
     subprocess.check_call([sys.executable, "-m", "pip", "install", 'perlin-noise'])
     from perlin_noise import PerlinNoise
 

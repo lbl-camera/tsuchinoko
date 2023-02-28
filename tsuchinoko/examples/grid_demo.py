@@ -4,8 +4,6 @@ from PIL import Image
 from scipy import ndimage
 import numpy as np
 
-from tsuchinoko.adaptive.adaptive import Adaptive2D
-from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
 from tsuchinoko.adaptive.grid import Grid
 from tsuchinoko.core import ZMQCore
 from tsuchinoko.execution.simple import SimpleEngine
