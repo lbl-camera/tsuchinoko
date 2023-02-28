@@ -98,13 +98,6 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean tsuchinoko.spec
 
-      - name: Github Release
-        uses: fnkr/github-action-ghr@v1
-        env:
-          GHR_COMPRESS: xz
-          GHR_PATH: dist/
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Capture tag
         id: vars
         run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
@@ -113,3 +106,15 @@ jobs:
         uses: joncloud/makensis-action@v4
         with:
           arguments: "/V3 /DVERSION=${{steps.vars.outputs.tag}}"
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: ${{ github.workspace }}-CHANGELOG.txt
+          # note you'll typically need to create a personal access token
+          # with permissions to create releases in the other repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: true
+          files: dist/*
+        env:
+          GITHUB_REPOSITORY: my_gh_org/my_gh_repo
