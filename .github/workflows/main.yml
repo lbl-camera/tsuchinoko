@@ -98,14 +98,10 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean tsuchinoko.spec
 
-      - name: Capture tag
-        id: vars
-        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
-
       - name: Create installer
         uses: joncloud/makensis-action@v4
         with:
-          arguments: "/V3 /DVERSION=${{steps.vars.outputs.tag}}"
+          arguments: "/V3 /DVERSION=${{github.ref_name}}"
 
       - name: Release
         uses: softprops/action-gh-release@v1
