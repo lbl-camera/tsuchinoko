@@ -37,13 +37,13 @@ class GPCAMInProcessEngine(Engine):
         self.reset()
 
         if dimensionality == 2:
-            self.graphs = [Variance(),
-                           Score(),
-                           GPCamPosteriorCovariance(),
+            self.graphs = [GPCamPosteriorCovariance(),
                            GPCamAcquisitionFunction(),
                            GPCamPosteriorMean(),
                            # GPCamAverageCovariance(),
-                           Table()]
+                           Table(),
+                           Variance(),
+                           Score()]
         elif dimensionality > 2:
             self.graphs = [GPCamPosteriorCovariance(),
                            # GPCamAverageCovariance(),
@@ -136,4 +136,5 @@ class GPCAMInProcessEngine(Engine):
                                          np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                                      for i in range(self.dimensionality + 1)]), method=method)
                     self._completed_training[method].add(N)
-                    break  # only does global training if specified for both
+                    # return  # only does global training if specified for both
+        return True
