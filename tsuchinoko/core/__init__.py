@@ -212,6 +212,10 @@ class ZMQCore(Core):
         self.experiment_thread.join()
         return StateResponse(self.state)
 
+    def respond_ExitRequest(self, request):
+        self.state = CoreState.Exiting
+        return StateResponse(self.state)
+
     def respond_PauseRequest(self, request):
         self.state = CoreState.Pausing
         return StateResponse(self.state)

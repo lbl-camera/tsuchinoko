@@ -115,6 +115,10 @@ class PauseRequest(Message):
     __slots__ = ()
 
 
+class ExitRequest(Message):
+    __slots__ = ()
+
+
 class StateRequest(Message):
     __slots__ = ()
 
