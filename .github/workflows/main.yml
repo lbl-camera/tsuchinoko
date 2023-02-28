@@ -110,11 +110,6 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          body_path: ${{ github.workspace }}-CHANGELOG.txt
-          # note you'll typically need to create a personal access token
-          # with permissions to create releases in the other repo
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
-          files: dist/*
-        env:
-          GITHUB_REPOSITORY: my_gh_org/my_gh_repo
+          files: Tsuchinoko*.exe
