@@ -5,6 +5,7 @@ import glob
 import dask
 import distributed
 import event_model
+import torch
 
 from tsuchinoko import assets, examples
 import tsuchinoko
@@ -36,11 +37,16 @@ datas_dst.append('tsuchinoko/examples')
 datas_src.append(os.path.join(examples.__path__[0], 'peak2.png'))
 datas_dst.append('tsuchinoko/examples')
 
+# functorch
+datas_src.append(os.path.join(torch.__path__[0],'lib','libiomp5.dylib'))
+datas_dst.append('functools/.dylibs')
+
+
 print('extras:')
 print(list(zip(datas_src, datas_dst)))
 
 a = Analysis(
-    ['tsuchinoko\\examples\\client_demo.py'],
+    [os.path.join('tsuchinoko','examples','client_demo.py')],
     pathex=[],
     binaries=[],
     datas=zip(datas_src, datas_dst),
@@ -52,7 +58,7 @@ a = Analysis(
                    'tsuchinoko.examples.quadtree_demo',
                    'tsuchinoko.examples.server_demo',
                    'tsuchinoko.examples.server_demo_bluesky',
-                   'tsuchinoko.examples.vector_metric_demo'],
+                   'tsuchinoko.examples.vector_metric_demo',],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -64,7 +70,7 @@ a = Analysis(
 )
 
 a2 = Analysis(
-    ['tsuchinoko\\examples\\_launch_demo.py'],
+    [os.path.join('tsuchinoko','examples','_launch_demo.py')],
     pathex=[],
     binaries=[],
     datas=zip(datas_src, datas_dst),
@@ -76,7 +82,7 @@ a2 = Analysis(
                    'tsuchinoko.examples.quadtree_demo',
                    'tsuchinoko.examples.server_demo',
                    'tsuchinoko.examples.server_demo_bluesky',
-                   'tsuchinoko.examples.vector_metric_demo'],
+                   'tsuchinoko.examples.vector_metric_demo',],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -96,12 +102,12 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Tsuchinoko',
+    name='tsuchinoko_client',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -120,7 +126,7 @@ exe2 = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -129,13 +135,22 @@ exe2 = EXE(
     icon=assets.path('tsuchinoko.png')
 )
 
-coll = COLLECT(
-    exe, exe2,
-    a.binaries, a2.binaries,
-    a.zipfiles, a2.zipfiles,
-    a.datas, a2.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
+#coll = COLLECT(
+#    exe, exe2,
+#    a.binaries, a2.binaries,
+#    a.zipfiles, a2.zipfiles,
+#    a.datas, a2.datas,
+#    strip=False,
+#    upx=True,
+#    upx_exclude=[],
+#    name='Tsuchinoko',
+#)
+
+app = BUNDLE(
+    exe, exe2, a.binaries, a2.binaries, a.zipfiles, a2.zipfiles, a.datas, a2.datas,
     name='Tsuchinoko',
+    icon=assets.path('tsuchinoko.png'),
+    bundle_identifier=None,
 )
+
+

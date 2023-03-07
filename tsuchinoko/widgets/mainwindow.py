@@ -385,6 +385,7 @@ class MainWindow(QMainWindow):
                 if result == QMessageBox.Cancel:
                     return
 
-        demo_exe = (Path(sys.executable).parent/'tsuchinoko_demo').with_suffix(Path(sys.executable).suffix)
+        suffix = Path(sys.executable).suffix 
+        demo_exe = (Path(sys.executable).parent/'tsuchinoko_demo').with_suffix(suffix if suffix=='.exe' else '')
         print(demo_exe)
         self._server = subprocess.Popen([demo_exe, demo_key])
