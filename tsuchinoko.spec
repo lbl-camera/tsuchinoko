@@ -38,9 +38,10 @@ datas_dst.append('tsuchinoko/examples')
 datas_src.append(os.path.join(examples.__path__[0], 'peak2.png'))
 datas_dst.append('tsuchinoko/examples')
 
-# functorch
-datas_src.append(os.path.join(torch.__path__[0],'lib','libiomp5.dylib'))
-datas_dst.append('functools/.dylibs')
+# functorch (mac only)
+if sys.platform == 'darwin':
+    datas_src.append(os.path.join(torch.__path__[0],'lib','libiomp5.dylib'))
+    datas_dst.append('functools/.dylibs')
 
 
 print('extras:')
