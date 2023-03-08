@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import glob
+import sys
 
 import dask
 import distributed
@@ -135,22 +136,24 @@ exe2 = EXE(
     icon=assets.path('tsuchinoko.png')
 )
 
-#coll = COLLECT(
-#    exe, exe2,
-#    a.binaries, a2.binaries,
-#    a.zipfiles, a2.zipfiles,
-#    a.datas, a2.datas,
-#    strip=False,
-#    upx=True,
-#    upx_exclude=[],
-#    name='Tsuchinoko',
-#)
-
-app = BUNDLE(
-    exe, exe2, a.binaries, a2.binaries, a.zipfiles, a2.zipfiles, a.datas, a2.datas,
-    name='Tsuchinoko',
-    icon=assets.path('tsuchinoko.png'),
-    bundle_identifier=None,
-)
+print(f'platform: {sys.platform}')
+if sys.platform == 'win32':
+    coll = COLLECT(
+        exe, exe2,
+        a.binaries, a2.binaries,
+        a.zipfiles, a2.zipfiles,
+        a.datas, a2.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name='Tsuchinoko',
+    )
+elif sys.platform == 'darwin':
+    app = BUNDLE(
+        exe, exe2, a.binaries, a2.binaries, a.zipfiles, a2.zipfiles, a.datas, a2.datas,
+        name='Tsuchinoko',
+        icon=assets.path('tsuchinoko.png'),
+        bundle_identifier=None,
+    )
 
 
