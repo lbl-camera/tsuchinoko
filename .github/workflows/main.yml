@@ -109,3 +109,36 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
           files: Tsuchinoko*.exe
+  macbuild:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: [ '3.9' ]
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e .[dev]
+
+      - name: pyinstaller
+        run: |
+          pyinstaller --noconfirm --clean tsuchinoko.spec
+
+      - name: rename to .app
+        run: |
+          mv dist/Tsuchinoko dist/Tsuchinoko.app
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: true
+          files: dist/Tsuchinoko.app
