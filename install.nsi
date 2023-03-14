@@ -5,7 +5,7 @@
   !include "x64.nsh"
   !define MUI_BRANDINGTEXT "Tsuchinoko ${VERSION}"
   !define MUI_PRODUCT "Tsuchinoko"
-  !define MUI_FILE "Tsuchinoko"
+  !define MUI_FILE "tsuchinoko_client"
   CRCCheck On
 
 ;---------------------------------
