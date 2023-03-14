@@ -136,13 +136,13 @@ jobs:
         run: |
           mv dist/Tsuchinoko dist/Tsuchinoko.app
 
-      - uses: montudor/action-zip@v1
-        with:
-          args: zip -qq -r Tsuchinoko.app.zip Tsuchinoko.app
+      - name: zip
+        run: |
+          tar -czf dist/Tsuchinoko.app.tgz dist/Tsuchinoko.app 
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
-          files: dist/*.zip
+          files: dist/*.tgz
