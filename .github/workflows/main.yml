@@ -134,7 +134,7 @@ jobs:
 
       - name: rename to .app
         run: |
-          mv dist/Tsuchinoko dist/Tsuchinoko.app
+          ls dist/ && ls dist/Tsuchinoko && mv dist/Tsuchinoko dist/Tsuchinoko.app
 
       - name: Release
         uses: softprops/action-gh-release@v1
