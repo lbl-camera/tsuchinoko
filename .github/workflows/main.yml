@@ -134,11 +134,15 @@ jobs:
 
       - name: rename to .app
         run: |
-          ls dist/ && ls dist/Tsuchinoko && mv dist/Tsuchinoko dist/Tsuchinoko.app
+          mv dist/Tsuchinoko dist/Tsuchinoko.app
+
+      - uses: montudor/action-zip@v1
+        with:
+          args: zip -qq -r Tsuchinoko.app.zip Tsuchinoko.app
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
-          files: dist/Tsuchinoko.app
+          files: dist/*.zip
