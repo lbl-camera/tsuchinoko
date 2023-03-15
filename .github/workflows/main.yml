@@ -137,8 +137,9 @@ jobs:
           mv dist/Tsuchinoko dist/Tsuchinoko.app
 
       - name: zip
+        working-directory: ./dist
         run: |
-          tar -czf dist/Tsuchinoko.app.tgz dist/Tsuchinoko.app 
+          cd dist tar -czf Tsuchinoko.app.tgz Tsuchinoko.app 
 
       - name: Release
         uses: softprops/action-gh-release@v1
