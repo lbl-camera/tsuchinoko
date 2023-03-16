@@ -344,6 +344,9 @@ class MainWindow(QMainWindow):
             self.context = None
 
     def closeEvent(self, event):
+        if not self.close_demo():
+            event.ignore()
+            return
         if self.data and len(self.data):
             result = QMessageBox.question(self,
                                       'Save data?',
@@ -361,6 +364,7 @@ class MainWindow(QMainWindow):
             event.accept()
             self.close_zmq()
 
+
     def start_demo(self, demo_key):
         # If not communicating with localhost, dump connection to server
         if self.core_address != 'localhost':
@@ -368,6 +372,15 @@ class MainWindow(QMainWindow):
             self.init_socket()
 
         # if there's a child process server, exit it
+        if not self.close_demo():
+            return
+
+        suffix = Path(sys.executable).suffix 
+        demo_exe = (Path(sys.executable).parent/'tsuchinoko_demo').with_suffix(suffix if suffix=='.exe' else '')
+        print(demo_exe)
+        self._server = subprocess.Popen([demo_exe, demo_key])
+
+    def close_demo(self):
         if self._server:
             self.message_queue.put(ExitRequest())
             try:
@@ -382,10 +395,7 @@ class MainWindow(QMainWindow):
                                               defaultButton=QMessageBox.Yes)
                 if result == QMessageBox.Yes:
                     self._server.kill()
-                if result == QMessageBox.Cancel:
-                    return
-
-        suffix = Path(sys.executable).suffix 
-        demo_exe = (Path(sys.executable).parent/'tsuchinoko_demo').with_suffix(suffix if suffix=='.exe' else '')
-        print(demo_exe)
-        self._server = subprocess.Popen([demo_exe, demo_key])
+                    return True
+                elif result == QMessageBox.Cancel:
+                    return False
+        return True
