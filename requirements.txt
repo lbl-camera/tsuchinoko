@@ -14,3 +14,4 @@ pyopengl
 pyopengl-accelerate
 qtconsole
 scikit-learn
+torch<2.0.0  # conflict with pyinstaller

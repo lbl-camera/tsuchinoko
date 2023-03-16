@@ -364,7 +364,6 @@ class MainWindow(QMainWindow):
             event.accept()
             self.close_zmq()
 
-
     def start_demo(self, demo_key):
         # If not communicating with localhost, dump connection to server
         if self.core_address != 'localhost':
