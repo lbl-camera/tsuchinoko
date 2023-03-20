@@ -33,7 +33,7 @@ from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRe
     PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, \
     FullDataResponse, PartialDataResponse, MeasureRequest, \
     ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse, PullGraphsRequest, GraphsResponse, \
-    ReplayRequest, ExitRequest
+    ReplayRequest, ExitRequest, PushGraphsRequest
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
 from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
@@ -109,6 +109,7 @@ class MainWindow(QMainWindow):
         self.state_manager_widget.sigReplay.connect(self.replay)
         self.configuration_widget.sigPushParameter.connect(self.set_parameter)
         self.configuration_widget.sigRequestParameters.connect(self.request_parameters)
+        self.graph_manager_widget.sigPush.connect(self.push_graph)
         request_relay.sigRequestMeasure.connect(self.request_measure)
 
         self.update_thread = QThreadFutureIterator(self.update, finished_slot=self.close_zmq, name='tsuchinoko-update')
@@ -168,6 +169,9 @@ class MainWindow(QMainWindow):
 
     def request_parameters(self):
         self.message_queue.put(GetParametersRequest())
+
+    def push_graph(self, graph):
+        self.message_queue.put(PushGraphsRequest([graph]))
 
     def set_parameter(self, child_path: str, value: Any):
         if child_path:
