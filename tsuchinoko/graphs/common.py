@@ -8,10 +8,11 @@ from loguru import logger
 from pyqtgraph import PlotItem, PlotWidget, TableWidget, mkColor, intColor, PlotDataItem, mkPen, mkBrush, colormap, \
     ScatterPlotItem
 from qtpy.QtWidgets import QFormLayout, QWidget, QComboBox, QLabel, QVBoxLayout
-from qtpy.QtCore import Qt, QSignalBlocker, Signal
+from qtpy.QtCore import Qt, QSignalBlocker, Signal, QRectF
 
-from tsuchinoko.graphics_items.mixins import ClickRequester
+from tsuchinoko.graphics_items.mixins import ClickRequester, DomainROI
 from tsuchinoko.graphs import Graph, Location, graph_signal_relay
+from tsuchinoko.widgets.displays import Configuration
 from tsuchinoko.widgets.graph_widgets import CloudWidget
 import sklearn
 
@@ -85,8 +86,8 @@ class Table(Graph):
                 widget.setRow(row, list(table_row.values()))
 
 
-@dataclass(eq=False)
-class ImageViewBlend(ClickRequester):
+@dataclass(eq=False)  # TODO: Should this be a dataclass?
+class ImageViewBlend(DomainROI, ClickRequester):
     def __init__(self, *args, invert_y=False, **kwargs):
         graph = PlotItem()
         super().__init__(*args, view=graph, **kwargs)
@@ -111,14 +112,18 @@ class Image(Graph):
             raise NotImplemented('Accumulation in Image graphs not implemented yet')
         else:
             if getattr(v, 'ndim', None) in [2, 3]:
-                widget.imageItem.setImage(v, autoLevels=widget.imageItem.image is None)
+                bounds = [tuple(Configuration().parameter.child('bounds')[f'axis_{i}_{limit}']
+                                for limit in ['min', 'max'])
+                          for i in range(2)]
+                rect = QRectF(bounds[0][0], bounds[1][0], bounds[0][1]-bounds[0][0], bounds[1][1]-bounds[1][0])
+                widget.imageItem.setImage(v, autoLevels=widget.imageItem.image is None, rect=rect)
 
 
 @dataclass(eq=False)
 class Cloud(Graph):
     data_key: ClassVar[str] = None
     accumulates: ClassVar[bool] = True
-    widget_class = CloudWidget
+    widget_class = type('CloudBlend', (CloudWidget, DomainROI), {})
     widget_args: Tuple = tuple()
 
     def __post_init__(self):

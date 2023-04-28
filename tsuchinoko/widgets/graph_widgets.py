@@ -30,10 +30,10 @@ class CloudWidget(QWidget):
     ]
 
     def __init__(self, data_key:str, accumulates:bool):
+        self.graph = ClickRequesterPlot()
         super().__init__()
         self.data_key = data_key
         self.accumulates = accumulates
-        graph = ClickRequesterPlot()
         # scatter = ScatterPlotItem(name='scatter', x=[0], y=[0], size=10, pen=mkPen(None), brush=mkBrush(255, 255, 255, 120))
         self.timeline = InfiniteLine(0, pen=mkPen(width=3), movable=True)
         self.timeline.sigPositionChanged.connect(self.timeline_changed)
@@ -51,10 +51,10 @@ class CloudWidget(QWidget):
         self.layout().addLayout(hlayout)
         self.layout().addWidget(self.timeline_plot)
 
-        hlayout.addWidget(graph)
+        hlayout.addWidget(self.graph)
         hlayout.addWidget(histlut)
 
-        graph.addItem(self.cloud)
+        self.graph.addItem(self.cloud)
 
         # Hard-coded to show max
         self.max_arrow = BetterCurveArrow(self.cloud.scatter, brush=mkBrush('r'))
@@ -264,3 +264,6 @@ class CloudWidget(QWidget):
 
         # text.setText(f'Max: {v[max_index]:.2f} ({x[max_index]:.2f}, {y[max_index]:.2f})')
         # text.setPos(x[max_index], y[max_index])
+
+    def getView(self):
+        return self.graph
