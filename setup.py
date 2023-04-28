@@ -51,6 +51,7 @@ setup(
         ],
         "console_scripts": [
             'tsuchinoko_demo = tsuchinoko:launch_server',
+            'tsuchinoko_bootstrap = tsuchinoko:bootstrap'
         ],
     },
     include_package_data=True,
