@@ -11,6 +11,7 @@ from ._version import get_versions
 
 __version__ = get_versions()['version']
 
+from . import patches
 from .utils import runengine
 from . import parameters  # registers parameter types
 
@@ -40,3 +41,12 @@ def launch_client(core_address='localhost'):
 def launch_server(demo_name='server_demo'):
     demo_module = importlib.import_module(f'tsuchinoko.examples.{demo_name}')
     demo_module.core.main()
+
+
+@click.command()
+@click.argument('path', required=True)
+def bootstrap(path):
+    """A pyinstaller trick to allow launch of python scripts from built exes"""
+    print(path)
+    exec(f"""__name__='__main__'; {open(path).read()}""")
+

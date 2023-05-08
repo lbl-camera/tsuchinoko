@@ -28,7 +28,7 @@ except ImportError:
 
 
 # More useful for display purposes; PerlinNoise interpolates internally and accepts float positions in range [0,1)
-noise = PerlinNoise(octaves=3)
+noise = PerlinNoise(octaves=8)
 # size = 10
 # shape = (size, size, size)
 # indices = np.transpose(np.indices(shape)/size,(3,2,1,0)).reshape((np.prod(shape), 3))
@@ -40,16 +40,12 @@ noise = PerlinNoise(octaves=3)
 execution = SimpleEngine(measure_func=lambda position: (position, noise(position), 1, {}))
 
 
+dimensionality = 5
 # Define a gpCAM adaptive engine with initial parameters
-adaptive = GPCAMInProcessEngine(dimensionality=3,
-                                parameter_bounds=[(0, 1),
-                                                  (0, 1),
-                                                  (0, 1)],
-                                hyperparameters=[255, 100, 100, 100],
-                                hyperparameter_bounds=[(0, 1e5),
-                                                       (0, 1e5),
-                                                       (0, 1e5),
-                                                       (0, 1e5)])
+adaptive = GPCAMInProcessEngine(dimensionality=dimensionality,
+                                parameter_bounds=[(0, 10)] * dimensionality,
+                                hyperparameters=[255] + [100] * dimensionality,
+                                hyperparameter_bounds=[(0, 1e5)] * (dimensionality+1))
 
 # Construct a core server
 core = ZMQCore()
