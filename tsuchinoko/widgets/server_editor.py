@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from qtpy.QtGui import QIcon, QKeySequence
@@ -25,7 +26,10 @@ class PythonEditor(widgets.PyCodeEditBase):
 
         # starts the default pyqode.python server (which enable the jedi code
         # completion worker).
-        self.backend.start(server.__file__)
+        suffix = Path(sys.executable).suffix
+        bootstrap_exe = (Path(sys.executable).parent / 'tsuchinoko_bootstrap').with_suffix(
+            suffix if suffix == '.exe' else '')
+        self.backend.start(server.__file__, interpreter=str(bootstrap_exe))
 
         # some other modes/panels require the analyser mode, the best is to
         # install it first
