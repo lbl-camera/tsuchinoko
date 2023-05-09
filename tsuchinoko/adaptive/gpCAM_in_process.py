@@ -7,7 +7,7 @@ from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParamet
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
-from ..graphs.common import Variance, GPCamPosteriorCovariance, Score, GPCamAcquisitionFunction, GPCamPosteriorMean, Table
+from ..graphs.common import Variance, GPCamPosteriorCovariance, Score, GPCamAcquisitionFunction, GPCamPosteriorMean, Table, HighDimensionalityGPCamPosteriorMean
 from ..parameters import TrainingParameter
 
 acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
@@ -46,6 +46,7 @@ class GPCAMInProcessEngine(Engine):
                            Score()]
         elif dimensionality > 2:
             self.graphs = [GPCamPosteriorCovariance(),
+                           HighDimensionalityGPCamPosteriorMean(dimensions=dimensionality, bounds=parameter_bounds),
                            # GPCamAverageCovariance(),
                            Table()]
 

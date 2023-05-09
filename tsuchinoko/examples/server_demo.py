@@ -3,12 +3,13 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
+from tsuchinoko import examples
 from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
 from tsuchinoko.core import ZMQCore
 from tsuchinoko.execution.simple import SimpleEngine
 
 # Load data from a jpg image to be used as a luminosity map
-image = np.flipud(np.asarray(Image.open(Path(__file__).parent/'sombrero_pug.jpg')))
+image = np.flipud(np.asarray(Image.open(Path(examples.__file__).parent/'sombrero_pug.jpg')))
 luminosity = np.average(image, axis=2)
 
 

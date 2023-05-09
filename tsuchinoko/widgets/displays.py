@@ -10,6 +10,7 @@ from qtpy.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, Q
 from loguru import logger
 
 from tsuchinoko.core import CoreState, ExceptionResponse
+from tsuchinoko.graphs import graph_signal_relay
 from tsuchinoko.utils import runengine
 from tsuchinoko.utils.threads import invoke_as_event, invoke_in_main_thread
 
@@ -183,12 +184,15 @@ class StateManager(Display, metaclass=Singleton):
 
 
 class GraphManager(Display, metaclass=Singleton):
+    sigPush = Signal(object)
+
     def __init__(self):
         self.dock_area = DockArea()
 
         super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500), widget=self.dock_area)
 
-        self.graphs = list()
+        self.graphs = dict()  # graph: widget
+        graph_signal_relay.sigPush.connect(self.sigPush)
 
     def set_graphs(self, graphs, data=None):
         self.clear()
@@ -199,25 +203,25 @@ class GraphManager(Display, metaclass=Singleton):
             self.update_graphs(data, 0)
 
     def register_graph(self, graph):
-        graph.widget = graph.make_widget()
-        display = Dock(graph.name, area=self.dock_area, widget=graph.widget)
-        graph.display = display
+        widget = graph.make_widget()
+        display = Dock(graph.name, area=self.dock_area, widget=widget)
+        # graph.display = display
         self.dock_area.addDock(display, position='below')
-        self.graphs.append(graph)
+        self.graphs[graph] = widget
 
     def update_graphs(self, data, last_data_size):
-        for graph in self.graphs:
+        for graph, widget in self.graphs.items():
             try:
-                graph.update(data, slice(last_data_size, None))
+                graph.update(widget, data, slice(last_data_size, None))
             except Exception as ex:
                 logger.exception(ex)
 
     def clear(self):
         for graph in self.graphs:
             # NOTE: the parent's parent is always a Display instance containing only that graph
-            graph.widget.parent().parent().setParent(None)
-            graph.widget.parent().parent().close()
-            graph.widget.parent().parent().deleteLater()
+            self.graphs[graph].parent().parent().setParent(None)
+            self.graphs[graph].parent().parent().close()
+            self.graphs[graph].parent().parent().deleteLater()
 
     def reset(self):
         self.clear()

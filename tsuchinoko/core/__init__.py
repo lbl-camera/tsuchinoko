@@ -167,6 +167,21 @@ class Core:
     def graphs(self, graphs):
         raise NotImplementedError('Updating graphs on server not supported yet.')
 
+    def update_graph(self, new_graph):
+        execution_graphs = getattr(self.execution_engine, 'graphs', []) or []
+        adaptive_graphs = getattr(self.adaptive_engine, 'graphs', []) or []
+        self_graphs = self._graphs
+
+        for graph_list in [execution_graphs, adaptive_graphs, self_graphs]:
+            for i, old_graph in enumerate(graph_list):
+                if old_graph.id == new_graph.id:
+                    graph_list[i] = new_graph
+                    return
+        else:
+            raise ValueError('Graph not found in graphs lists.')
+
+
+
 
 class ZMQCore(Core):
     def __init__(self, *args, **kwargs):
@@ -244,8 +259,13 @@ class ZMQCore(Core):
         return GraphsResponse(self.graphs)
 
     def respond_PushGraphsRequest(self, request):
-        self.graphs = request.graphs
-        return GraphsResponse(self.graphs)
+        for graph in request.graphs:
+            try:
+                self.update_graph(graph)
+            except ValueError as ex:
+                return ExceptionResponse("Graph ID not found in server's graphs.")
+        # self.graphs = request.graphs
+        return StateResponse(self.state)
 
     def respond_ReplayRequest(self, request):
         self._forced_measurement_queue.queue.clear()
