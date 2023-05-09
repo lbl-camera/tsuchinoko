@@ -205,3 +205,5 @@ intersphinx_mapping = {
     'matplotlib': ('https://matplotlib.org/stable', None),
     'pyqtgraph': ("https://pyqtgraph.readthedocs.io/en/latest/", None),
 }
+
+autoclass_content = 'both'
