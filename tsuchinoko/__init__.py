@@ -43,10 +43,11 @@ def launch_server(demo_name='server_demo'):
     demo_module.core.main()
 
 
-@click.command()
+@click.command(context_settings=dict(ignore_unknown_options=True))
 @click.argument('path', required=True)
-def bootstrap(path):
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def bootstrap(path, args):
     """A pyinstaller trick to allow launch of python scripts from built exes"""
     print(path)
-    exec(f"""__name__='__main__'; {open(path).read()}""")
-
+    sys.argv.pop(0)
+    exec(f"""__name__='__main__'; print(sys.argv); {open(path).read()}""",)
