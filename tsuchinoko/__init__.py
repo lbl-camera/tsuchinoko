@@ -6,6 +6,7 @@ import os
 import asyncio
 import importlib
 import sys
+import runpy
 
 from ._version import get_versions
 
@@ -50,4 +51,4 @@ def bootstrap(path, args):
     """A pyinstaller trick to allow launch of python scripts from built exes"""
     print(path)
     sys.argv.pop(0)
-    exec(f"""__name__='__main__'; print(sys.argv); {open(path).read()}""",)
+    runpy.run_path(path, {}, "__main__")
