@@ -111,7 +111,7 @@ class GPCAMInProcessEngine(Engine):
             positions = data.positions.copy()
             scores = data.scores.copy()
             variances = data.variances.copy()
-        self.optimizer.tell(positions, scores, variances)
+        self.optimizer.tell(np.asarray(positions), scores, variances)
 
     def update_metrics(self, data: Data):
         for graph in self.graphs:
