@@ -298,7 +298,10 @@ class ZMQCore(Core):
                 with log_time('preparing response', cumulative_key='preparing response'):
                     responder = getattr(self, f'respond_{request.__class__.__name__}', None)
                     if responder:
-                        response = responder(request)
+                        try:
+                            response = responder(request)
+                        except Exception as ex:
+                            response = ExceptionResponse(ex)
                     else:
                         response = UnknownResponse()
 
