@@ -1,3 +1,4 @@
+import sys
 import uuid
 from functools import cached_property
 
@@ -59,7 +60,11 @@ class GPCAMInProcessEngine(Engine):
 
         self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
         self.optimizer.tell(np.empty((1, self.dimensionality)), np.empty((1,)), np.empty((1,)))  # we'll wipe this out later; required for initialization
-        self.optimizer.init_gp(hyperparameters)
+        opts = dict()
+        # TODO: only fallback to numpy when packaged as an app
+        if sys.platform == 'darwin':
+            opts['compute_device'] = 'numpy'
+        self.optimizer.init_gp(hyperparameters, **opts)
 
     def reset(self):
         self._completed_training = {'global': set(),
@@ -103,8 +108,12 @@ class GPCAMInProcessEngine(Engine):
 
     def _set_hyperparameter(self, parameter, value):
         self.optimizer.gp_initialized = False  # Force re-initialization
+        opts = dict()
+        # TODO: only fallback to numpy when packaged as an app
+        if sys.platform == 'darwin':
+            opts['compute_device'] = 'numpy'
         self.optimizer.init_gp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                           for i in range(self.dimensionality + 1)]))
+                                           for i in range(self.dimensionality + 1)]), **opts)
 
     def update_measurements(self, data: Data):
         with data.r_lock():  # quickly grab values within lock before passing to optimizer
