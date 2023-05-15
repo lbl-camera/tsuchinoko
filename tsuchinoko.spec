@@ -7,6 +7,7 @@ import dask
 import distributed
 import event_model
 import torch
+import functorch
 import debugpy
 import pyqode.python.backend
 
@@ -51,11 +52,15 @@ datas_dst.append("debugpy")
 datas_src.append(os.path.join(pyqode.python.backend.__path__[0], '*.py'))
 datas_dst.append("pyqode/python/backend/")
 
-# functorch (mac only)
+# functorch and torch (mac only)
 if sys.platform == 'darwin':
-    datas_src.append(os.path.join(torch.__path__[0],'lib','libiomp5.dylib'))
-    datas_dst.append('functools/.dylibs')
+    functorch = glob.glob(os.path.join(functorch.__path__[0], '.dylibs', '*.dylib'))
+    datas_src.extend(functorch)
+    datas_dst.extend('functorch/.dylibs' for dylib in functorch)
 
+    torch = glob.glob(os.path.join(torch.__path__[0], 'lib', '*.dylib'))
+    datas_src.extend(torch)
+    datas_dst.extend('torch/lib' for dylib in torch)
 
 print('extras:')
 print(list(zip(datas_src, datas_dst)))
