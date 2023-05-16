@@ -6,5 +6,9 @@ import sys
 import faulthandler
 
 if __name__ == '__main__':
-    faulthandler.enable()
+    try:
+        faulthandler.enable()
+    except AttributeError:
+        pass
+
     tsuchinoko.launch_server(sys.argv[1:])
