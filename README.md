@@ -19,7 +19,7 @@ core service. These components are separable to allow flexibility with a variety
 
 ![Tsuchinoko running simulated measurements](docs/source/_static/running-score.PNG)
 
-## Installation
+## Standard Installation
 
 The latest stable Tsuchinoko version is available on PyPI, and is installable with `pip`. It is recommended that you
 use Python 3.9 for this installation.
@@ -29,6 +29,13 @@ pip install tsuchinoko
 ```
 
 For more information, see the [installation documentation](https://tsuchinoko.readthedocs.io/en/latest/quickstart.html).
+
+## Easy Installation
+
+For Mac OSX and Windows, pre-packaged installers are available. These do not require a base Python installation. See the [installation documentation](https://tsuchinoko.readthedocs.io/en/latest/installers.html) for more details.
+
+- [Latest Windows Installer](https://github.com/lbl-camera/tsuchinoko/releases/latest/download/Tsuchinoko-amd64.exe)
+- [Latest Mac OSX Installer](https://github.com/lbl-camera/tsuchinoko/releases/latest/download/Tsuchinoko.app.tgz)
 
 ## Resources
 

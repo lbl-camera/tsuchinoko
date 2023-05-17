@@ -30,7 +30,14 @@ pip install tsuchinoko
 
 For more information, see the [installation documentation](quickstart.md).
 
-## Getting started
+## Easy Installation
+
+For Mac OSX and Windows, pre-packaged installers are available. These do not require a base Python installation. See the [installation documentation](https://tsuchinoko.readthedocs.io/en/latest/installers.html) for more details.
+
+- [Latest Windows Installer](https://github.com/lbl-camera/tsuchinoko/releases/latest/download/Tsuchinoko-amd64.exe)
+- [Latest Mac OSX Installer](https://github.com/lbl-camera/tsuchinoko/releases/latest/download/Tsuchinoko.app.tgz)
+
+## Getting started with your own adaptive experiments
 
 You can find demos in the Tsuchinoko Github repository's [examples folder](https://github.com/lbl-camera/tsuchinoko/tree/master/examples).
 It is suggested to first try running both `server_demo.py` and `client_demo.py` simultaneously. This demo performs a
@@ -48,6 +55,7 @@ non-convex function, its elusive nature is infamous.
 hidden: true
 maxdepth: 1
 ---
+installers.md
 quickstart.md
 server_experiment.md
 bluesky.md
