@@ -11,7 +11,7 @@
 ;---------------------------------
 ;General
   Name "Tsuchinoko ${VERSION}"
-  OutFile "Tsuchinoko-${VERSION}-amd64.exe"
+  OutFile "Tsuchinoko-amd64.exe"
   ;ShowInstDetails "nevershow"
   ;ShowUninstDetails "nevershow"
   ;SetCompressor "bzip2"
