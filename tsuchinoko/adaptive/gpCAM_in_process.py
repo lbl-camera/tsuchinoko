@@ -59,7 +59,7 @@ class GPCAMInProcessEngine(Engine):
                                       for i in range(self.dimensionality + 1)])
 
         self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
-
+        self.optimizer.tell(np.empty((1, self.dimensionality)), np.empty((1,)), np.empty((1,)))  # we'll wipe this out later; required for initialization
         opts = dict()
         # TODO: only fallback to numpy when packaged as an app
         if sys.platform == 'darwin':
