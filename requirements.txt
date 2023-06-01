@@ -3,8 +3,8 @@ pyside2
 bluesky
 ophyd
 pyqtgraph
-gpCAM==7.4.4  # pinned to moderate release cycle
-fvgp==3.3.3
+gpCAM<7.5  # pinned to moderate release cycle
+fvgp<3.4   # pinned to moderate release cycle
 numpy
 scipy
 qtmodern
