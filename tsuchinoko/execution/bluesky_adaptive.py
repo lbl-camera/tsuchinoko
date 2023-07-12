@@ -1,9 +1,7 @@
 import pickle
-import socket
+import time
 from queue import Queue
 from typing import Callable, Tuple, List, Sequence, Dict
-from threading import Thread
-import time
 
 import zmq
 from loguru import logger
