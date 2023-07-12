@@ -55,7 +55,7 @@ class BlueskyAdaptiveEngine(Engine):
             else:
                 assert 'target_measured' in payload
                 x, y = payload['target_measured']
-                new_measurements.append((x,y,1,{}))
+                new_measurements.append((x, y, 1, {}))
         return new_measurements
 
     def get_position(self) -> Tuple:
@@ -70,7 +70,6 @@ class BlueskyAdaptiveEngine(Engine):
         payload_response = pickle.loads(self.socket.recv(flags=flags))
         logger.info(f'response: {payload_response}')
         return payload_response
-
 
 
 # ----------------------------------------------------------------------------------------------------------------------
