@@ -2,7 +2,9 @@ from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
 from tsuchinoko.core import ZMQCore
 from tsuchinoko.execution.bluesky_adaptive import BlueskyAdaptiveEngine
 
-# NOTE: REQUIRES UNRELEASED DATABROKER AND TILED VERSIONS, AS WELL AS MISSING DEP FASTAPI AND CAPROTO
+# NOTE: REQUIRES UNRELEASED DATABROKER VERSIONS
+# NOTE: To run this demo, you must also start a TsuchinokoAgent with Bluesky-Adaptive.
+#       See tsuchinoko.execution.bluesky_adaptive for a primitive mocked demo.
 
 bounds = [(0, 100)] * 2
 
@@ -24,11 +26,3 @@ core.set_execution_engine(execution)
 if __name__ == '__main__':
     # Start the core server
     core.main()
-
-    # from tsuchinoko.execution.bluesky_adaptive import TsuchinokoAgent
-    #
-    # agent = TsuchinokoAgent()
-    # while True:
-    #     _, targets = agent.ask(0)
-    #     agent.tell(targets[0], 1)
-    #
