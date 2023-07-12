@@ -53,6 +53,8 @@ According to your preferences, components of Tsuchinoko can also be distributed 
 distributed design which leverages different hardware resources. If you plan to do this, you'll need a Tsuchinoko 
 installation on each system.
 
+Did something go wrong? See [Installation Troubleshooting](installation_troubleshooting).
+
 ## Running Tsuchinoko with a Simulated Experiment
 
 Let's try out a simulated adaptive experiment now! In this example, Tsuchinoko will adaptively sample data from a source image to create a
@@ -98,3 +100,13 @@ Now have fun!
 ## Next Steps
 
 Now that you've seen Tsuchinoko in action, let's take a look at the server script that [describes the experiment](server_experiment.md).
+
+(installation_troubleshooting)=
+## Installation Troubleshooting
+
+Some environments may need extra steps to install Tsuchinoko. Solutions are provided for these unusual cases below.
+
+### libGL.so.1: cannot open shared object file: No such file or directory
+
+You may be missing libgl on your system, for example if you are installing on a headless server. Look for a package 
+that provides libgl in your package manager (i.e. for Ubuntu, install `libgl1-mesa-glx`)
