@@ -1,10 +1,16 @@
+import os
+
 import numpy as np
 import pyqtgraph as pg
+import pytest
 import scipy.misc
 
 from tsuchinoko.graphics_items.clouditem import CloudItem
 
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
+
+@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test doesn't work in Github Actions.")
 def test_cloud(qtbot, monkeypatch):
     pg.setConfigOption('useOpenGL', True)
     pg.setConfigOption('enableExperimental', True)
