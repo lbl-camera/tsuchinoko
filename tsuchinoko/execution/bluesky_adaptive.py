@@ -79,7 +79,7 @@ class BlueskyAdaptiveEngine(Engine):
 from bluesky_adaptive.agents.base import Agent
 
 
-class TsuchinokoAgent(object):
+class TsuchinokoAgent(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.outbound_measurements = []
@@ -124,3 +124,11 @@ class TsuchinokoAgent(object):
     @staticmethod
     def unpack_run(*_):
         pass
+
+
+if __name__ == '__main__':
+    # NOTE: change TsuchinokoAgent's base class to `object` to run this primitive mocking of its processes
+    agent = TsuchinokoAgent()
+    while True:
+        _, targets = agent.ask(0)
+        agent.tell(targets[0], 1)
