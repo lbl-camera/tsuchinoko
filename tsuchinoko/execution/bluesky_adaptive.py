@@ -1,8 +1,10 @@
 import pickle
 import time
-from typing import Tuple, List, Sequence, Dict
+from abc import ABC, abstractmethod
+from typing import Tuple, List, Sequence, Dict, Union
 
 import zmq
+from databroker.client import BlueskyRun
 from loguru import logger
 from numpy._typing import ArrayLike
 
@@ -79,12 +81,14 @@ class BlueskyAdaptiveEngine(Engine):
 from bluesky_adaptive.agents.base import Agent
 
 
-class TsuchinokoAgent(Agent):
+class TsuchinokoAgent(Agent, ABC):
     def __init__(self, *args, host='127.0.0.1', port=5557, **kwargs):
         super().__init__(*args, **kwargs)
         self.host = host
         self.port = port
         self.outbound_measurements = []
+        self.context = None
+        self.socket = None
         self.setup_socket()
 
     def setup_socket(self):
@@ -105,10 +109,11 @@ class TsuchinokoAgent(Agent):
         # Limit number of buffered messages to 1; dumps any earlier targets if new ones come in before payloads are received
         self.socket.setsockopt(zmq.CONFLATE, 1)
 
-    def tell(self, x, y):
+    def tell(self, x, y) -> Dict[str, ArrayLike]:
         # Send measurement to BlueskyAdaptiveEngine
         payload = {'target_measured': (x, y)}
         self.send_payload(payload)
+        return {}
 
     def ask(self, batch_size: int) -> Tuple[Sequence[Dict[str, ArrayLike]], Sequence[ArrayLike]]:
         # Get targets from BlueskyAdaptiveEngine
@@ -125,12 +130,14 @@ class TsuchinokoAgent(Agent):
         logger.info(f'response: {payload_response}')
         return payload_response
 
-    def measurement_plan(*_):
-        pass
+    @abstractmethod
+    def measurement_plan(self, point: ArrayLike) -> Tuple[str, List, dict]:
+        ...
 
     @staticmethod
-    def unpack_run(*_):
-        pass
+    @abstractmethod
+    def unpack_run(run: BlueskyRun) -> Tuple[Union[float, ArrayLike], Union[float, ArrayLike]]:
+        ...
 
 
 if __name__ == '__main__':
