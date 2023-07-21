@@ -128,11 +128,10 @@ class TsuchinokoBase(ABC):
                 logger.info(f'Connected to tcp://{self.host}:{self.port}.')
                 break
 
-    def tell(self, x, y) -> Dict[str, ArrayLike]:
+    def tell(self, x, y):
         # Send measurement to BlueskyAdaptiveEngine
         payload = {'target_measured': (x, y)}
         self.send_payload(payload)
-        return {}
 
     def ask(self, batch_size: int) -> Tuple[Sequence[Dict[str, ArrayLike]], Sequence[ArrayLike]]:
         # Wait until at least one target is received, also exhaust the queue of received targets, overwriting old ones
@@ -146,7 +145,7 @@ class TsuchinokoBase(ABC):
                 else:
                     time.sleep(SLEEP_FOR_TSUCHINOKO_TIME)
         assert 'targets' in payload
-        return [{}], payload['targets']
+        return payload['targets']
 
     def send_payload(self, payload: dict):
         logger.info(f'message: {payload}')
@@ -159,6 +158,22 @@ class TsuchinokoBase(ABC):
 
 
 class TsuchinokoAgent(TsuchinokoBase, ABC):
+
+    def tell(self, x, y) -> Dict[str, ArrayLike]:
+        super().tell(x, y)
+        return self.get_tell_document(x, y)
+
+    def ask(self, batch_size: int) -> Tuple[Sequence[Dict[str, ArrayLike]], Sequence[ArrayLike]]:
+        targets = super().ask(batch_size)
+        return self.get_ask_documents(targets), targets
+
+    @abstractmethod
+    def get_tell_document(self, x, y) -> Dict[str, ArrayLike]:
+        ...
+
+    @abstractmethod
+    def get_ask_documents(self, targets: List[Tuple]) -> Sequence[Dict[str, ArrayLike]]:
+        ...
 
     @abstractmethod
     def measurement_plan(self, point: ArrayLike) -> Tuple[str, List, dict]:
@@ -174,5 +189,5 @@ if __name__ == '__main__':
     # NOTE: This usage is a primitive mocking of Bluesky-Adaptive's processes
     agent = TsuchinokoBase()
     while True:
-        _, targets = agent.ask(0)
+        targets = agent.ask(0)
         agent.tell(targets[0], 1)
