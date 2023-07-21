@@ -94,6 +94,8 @@ class ImageViewBlend(DomainROI, ClickRequester):
         graph.vb.invertY(invert_y)
 
 
+# TODO: add option for transforming into parameter space or not
+
 @dataclass(eq=False)
 class Image(Graph):
     widget_class = ImageViewBlend
@@ -106,6 +108,8 @@ class Image(Graph):
             self.name = self.data_key
 
     def update(self, widget, data, update_slice: slice):
+        widget.view.invertY(self.invert_y)
+
         with data.r_lock():
             try:
                 v = data[self.data_key].copy()
@@ -135,7 +139,9 @@ class Image(Graph):
                         axes = {'t': 2, 'x': 0, 'y': 1}
 
                 widget.setImage(v,
+                                autoRange=widget.imageItem.image is None,
                                 autoLevels=widget.imageItem.image is None,
+                                autoHistogramRange=widget.imageItem.image is None,
                                 pos=(bounds[0][0], bounds[1][0]),
                                 scale=((bounds[0][1]-bounds[0][0])/v.shape[0], (bounds[1][1]-bounds[1][0])/v.shape[1]),
                                 axes=axes)
