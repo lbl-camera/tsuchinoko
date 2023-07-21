@@ -115,8 +115,21 @@ class Image(Graph):
                 bounds = [tuple(Configuration().parameter.child('bounds')[f'axis_{i}_{limit}']
                                 for limit in ['min', 'max'])
                           for i in range(2)]
-                rect = QRectF(bounds[0][0], bounds[1][0], bounds[0][1]-bounds[0][0], bounds[1][1]-bounds[1][0])
-                widget.imageItem.setImage(v, autoLevels=widget.imageItem.image is None, rect=rect)
+                axes = None
+                if v.ndim == 2:
+                    axes = {'x': 0, 'y': 1}
+                elif v.ndim == 3:
+                    # if shape is 3d and #3 is 3, use color, otherwise use t for dimensions
+                    if v.shape[2] == 3:
+                        axes = {'x': 0, 'y': 1, 'c': 2}
+                    else:
+                        axes = {'t': 2, 'x': 0, 'y': 1}
+
+                widget.setImage(v,
+                                autoLevels=widget.imageItem.image is None,
+                                pos=(bounds[0][0], bounds[1][0]),
+                                scale=((bounds[0][1]-bounds[0][0])/v.shape[0], (bounds[1][1]-bounds[1][0])/v.shape[1]),
+                                axes=axes)
 
 
 @dataclass(eq=False)
@@ -267,7 +280,7 @@ class GPCamAcquisitionFunction(Image):
     data_key = 'Acquisition Function'
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
-        from tsuchinoko.adaptive.gpCAM_in_process import acquisition_functions  # avoid circular import
+        from tsuchinoko.adaptive.gpCAM_in_process import gpcam_acquisition_functions  # avoid circular import
 
         bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
                              for edge in ['min', 'max'])
@@ -275,10 +288,15 @@ class GPCamAcquisitionFunction(Image):
 
         grid_positions = image_grid(bounds, self.shape)
 
+        # check if acquisition function is accessible
+        if engine.parameters['acquisition_function'] not in gpcam_acquisition_functions:
+            logger.exception(ValueError('The selected acquisition_function is not available for display.'))
+            return
+
         # calculate acquisition function
         acquisition_function_value = engine.optimizer.evaluate_acquisition_function(grid_positions,
                                                                                     acquisition_function=
-                                                                                    acquisition_functions[
+                                                                                    gpcam_acquisition_functions[
                                                                                         engine.parameters[
                                                                                             'acquisition_function']])
 
@@ -304,9 +322,15 @@ class GPCamPosteriorMean(Image):
                   for i in range(engine.dimensionality))
 
         grid_positions = image_grid(bounds, self.shape)
+        shape = self.shape
+
+        # if multi-task, extend the grid_positions to include the task dimension
+        if hasattr(engine, 'output_number'):
+            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+            shape = (*self.shape, engine.output_number)
 
         # calculate acquisition function
-        posterior_mean_value = engine.optimizer.posterior_mean(grid_positions)['f(x)'].reshape(*self.shape)
+        posterior_mean_value = engine.optimizer.posterior_mean(grid_positions)['f(x)'].reshape(*shape)
 
         # assign to data object with lock
         with data.w_lock():
