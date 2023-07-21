@@ -107,7 +107,16 @@ class Image(Graph):
 
     def update(self, widget, data, update_slice: slice):
         with data.r_lock():
-            v = data[self.data_key].copy()
+            try:
+                v = data[self.data_key].copy()
+            except ValueError:
+                if getattr(self, '_has_value_errors', False):
+                    logger.warning(f'The {self.name} graph hasn\'t received data more than once. This is not normal.')
+                else:
+                    logger.info(f'The {self.name} graph hasn\'t received data once. This is normal for graphs computed by the adaptive engine.')
+                self._has_value_errors = True
+                return
+
         if self.accumulates:
             raise NotImplemented('Accumulation in Image graphs not implemented yet')
         else:
