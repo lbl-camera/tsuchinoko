@@ -168,6 +168,8 @@ class Core:
             if self._has_fresh_data:
                 with log_time('training', cumulative_key='training'):
                     self.adaptive_engine.train()
+            else:
+                logger.info('Current data is stale. Waiting for an update with fresh data.')
 
     async def notify_clients(self):
         ...
