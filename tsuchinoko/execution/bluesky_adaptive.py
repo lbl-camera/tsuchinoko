@@ -10,6 +10,9 @@ from numpy._typing import ArrayLike
 
 from . import Engine
 
+SLEEP_FOR_AGENT_TIME = .1
+SLEEP_FOR_TSUCHINOKO_TIME = .1
+
 
 class BlueskyAdaptiveEngine(Engine):
     def __init__(self, host='127.0.0.1', port=5557):
@@ -21,6 +24,9 @@ class BlueskyAdaptiveEngine(Engine):
         self.host = host
         self.port = port
         self.setup_socket()
+        self._last_targets_sent = None
+        # Lock sending new points until at least one from the previous list is measured
+        self.has_fresh_points_on_server = False
 
     def setup_socket(self):
         self.context = zmq.Context()
@@ -39,8 +45,12 @@ class BlueskyAdaptiveEngine(Engine):
                 break
 
     def update_targets(self, targets: List[Tuple]):
-        # send targets to TsuchinokoAgent
-        self.send_payload({'targets': targets})
+        if self.has_fresh_points_on_server:
+            time.sleep(SLEEP_FOR_AGENT_TIME)  # chill if the Agent hasn't measured any points from the previous list
+        else:
+            # send targets to TsuchinokoAgent
+            self.has_fresh_points_on_server = self.send_payload({'targets': targets})
+            self._last_targets_sent = targets
 
     def get_measurements(self) -> List[Tuple]:
         new_measurements = []
@@ -56,9 +66,11 @@ class BlueskyAdaptiveEngine(Engine):
                 # TODO: Its highly recommended to extract a variance for y; we might piggyback on y,
                 #       s.t. y = [y1, y2, ..., yn, y1variance, y2variance, ..., ynvariance]
                 # TODO: Any additional quantities to be interrogated in Tsuchinoko can be included in the trailing dict
-                new_measurements.append((x, y, 1, {}))
+                new_measurements.append((x, y, [1]*len(y), {}))
                 # stash the last position measured as the 'current' position of the instrument
                 self.position = x
+        if new_measurements:
+            self.has_fresh_points_on_server = False
         return new_measurements
 
     def get_position(self) -> Tuple:
@@ -67,11 +79,20 @@ class BlueskyAdaptiveEngine(Engine):
 
     def send_payload(self, payload: dict):
         logger.info(f'message: {payload}')
-        self.socket.send(pickle.dumps(payload))
+        try:
+            self.socket.send(pickle.dumps(payload), flags=zmq.NOBLOCK)
+        except zmq.error.Again:
+            return False
+        return True
 
     def recv_payload(self, flags=0) -> dict:
         payload_response = pickle.loads(self.socket.recv(flags=flags))
         logger.info(f'response: {payload_response}')
+        # if the returned message is the kickstart message, resend the last targets sent and check for more payloads
+        if payload_response == {'send_targets': True}:
+            self.has_fresh_points_on_server = False
+            self.update_targets(self._last_targets_sent)
+            payload_response = self.recv_payload(flags)
         return payload_response
 
 
@@ -81,7 +102,7 @@ class BlueskyAdaptiveEngine(Engine):
 from bluesky_adaptive.agents.base import Agent
 
 
-class TsuchinokoAgent(Agent, ABC):
+class TsuchinokoBase(ABC):
     def __init__(self, *args, host='127.0.0.1', port=5557, **kwargs):
         super().__init__(*args, **kwargs)
         self.host = host
@@ -90,6 +111,7 @@ class TsuchinokoAgent(Agent, ABC):
         self.context = None
         self.socket = None
         self.setup_socket()
+        self.send_payload({'send_targets': True})  # kickstart to recover from shutdowns
 
     def setup_socket(self):
         self.context = zmq.Context()
@@ -106,9 +128,6 @@ class TsuchinokoAgent(Agent, ABC):
                 logger.info(f'Connected to tcp://{self.host}:{self.port}.')
                 break
 
-        # Limit number of buffered messages to 1; dumps any earlier targets if new ones come in before payloads are received
-        self.socket.setsockopt(zmq.CONFLATE, 1)
-
     def tell(self, x, y) -> Dict[str, ArrayLike]:
         # Send measurement to BlueskyAdaptiveEngine
         payload = {'target_measured': (x, y)}
@@ -116,8 +135,16 @@ class TsuchinokoAgent(Agent, ABC):
         return {}
 
     def ask(self, batch_size: int) -> Tuple[Sequence[Dict[str, ArrayLike]], Sequence[ArrayLike]]:
-        # Get targets from BlueskyAdaptiveEngine
-        payload = self.recv_payload()
+        # Wait until at least one target is received, also exhaust the queue of received targets, overwriting old ones
+        payload = None
+        while True:
+            try:
+                payload = self.recv_payload(flags=zmq.NOBLOCK)
+            except zmq.ZMQError:
+                if payload is not None:
+                    break
+                else:
+                    time.sleep(SLEEP_FOR_TSUCHINOKO_TIME)
         assert 'targets' in payload
         return [{}], payload['targets']
 
@@ -125,10 +152,13 @@ class TsuchinokoAgent(Agent, ABC):
         logger.info(f'message: {payload}')
         self.socket.send(pickle.dumps(payload))
 
-    def recv_payload(self) -> dict:
-        payload_response = pickle.loads(self.socket.recv())
+    def recv_payload(self, flags=0) -> dict:
+        payload_response = pickle.loads(self.socket.recv(flags=flags))
         logger.info(f'response: {payload_response}')
         return payload_response
+
+
+class TsuchinokoAgent(TsuchinokoBase, ABC):
 
     @abstractmethod
     def measurement_plan(self, point: ArrayLike) -> Tuple[str, List, dict]:
@@ -141,8 +171,8 @@ class TsuchinokoAgent(Agent, ABC):
 
 
 if __name__ == '__main__':
-    # NOTE: change TsuchinokoAgent's base class to `object` to run this primitive mocking of its processes
-    agent = TsuchinokoAgent()
+    # NOTE: This usage is a primitive mocking of Bluesky-Adaptive's processes
+    agent = TsuchinokoBase()
     while True:
         _, targets = agent.ask(0)
         agent.tell(targets[0], 1)
