@@ -231,6 +231,8 @@ class MainWindow(QMainWindow):
                 if not response:
                     self.get_state()
                 else:
+                    if self.state_manager_widget.state == CoreState.Connecting:
+                        logger.critical(f'Successfully connected to server at {self.core_address}.')
                     for callback, as_event in self.callbacks[type(response)]:
                         if as_event:
                             invoke_as_event(callback, *response.payload)
