@@ -246,8 +246,9 @@ class MainWindow(QMainWindow):
 
         self.data.extend(Data(**data_payload))
         if len(data_payload['positions']):
-            invoke_as_event(self.update_graphs, self.data, self.last_data_size)
-        self.last_data_size = len(self.data)
+            # stash the length of new data early to avoid events getting confused when pausing this thread
+            old_last_data_size, self.last_data_size = self.last_data_size, len(self.data)
+            invoke_as_event(self.update_graphs, self.data, old_last_data_size)
 
     def refresh_state(self, _):
         self.message_queue.queue.clear()
