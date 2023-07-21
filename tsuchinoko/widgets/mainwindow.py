@@ -231,6 +231,8 @@ class MainWindow(QMainWindow):
                 if not response:
                     self.get_state()
                 else:
+                    if self.state_manager_widget.state == CoreState.Connecting:
+                        logger.critical(f'Successfully connected to server at {self.core_address}.')
                     for callback, as_event in self.callbacks[type(response)]:
                         if as_event:
                             invoke_as_event(callback, *response.payload)
@@ -246,8 +248,9 @@ class MainWindow(QMainWindow):
 
         self.data.extend(Data(**data_payload))
         if len(data_payload['positions']):
-            invoke_as_event(self.update_graphs, self.data, self.last_data_size)
-        self.last_data_size = len(self.data)
+            # stash the length of new data early to avoid events getting confused when pausing this thread
+            old_last_data_size, self.last_data_size = self.last_data_size, len(self.data)
+            invoke_as_event(self.update_graphs, self.data, old_last_data_size)
 
     def refresh_state(self, _):
         self.message_queue.queue.clear()

@@ -35,6 +35,7 @@ class ClickRequesterBase:
         if ev.type() == QEvent.Type.MouseButtonPress:
             if ev.button() == Qt.MouseButton.RightButton:
                 self._last_mouse_event_pos = ev.pos()
+        ev.ignore()
 
         return False
 

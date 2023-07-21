@@ -29,6 +29,9 @@ class CoreState(Enum):
     Exiting = auto()
 
 
+SLEEP_FOR_FRESH_DATA_TIME = .1
+
+
 class Core:
     def __init__(self,
                  execution_engine: ExecutionEngine = None,
@@ -42,6 +45,7 @@ class Core:
         self._exception_queue = Queue()
         self._forced_position_queue = Queue()
         self._forced_measurement_queue = Queue()
+        self._has_fresh_data = True
 
         self.data = Data()
         self._graphs = []
@@ -116,7 +120,7 @@ class Core:
     def experiment_loop(self):
         while True:
             if self.state == CoreState.Running:
-                logger.info(f'Iteration: {len(self.data)}')
+                logger.info(f'Iteration: {self.data._completed_iterations}, Data count: {len(self.data)}')
                 try:
                     self.experiment_iteration()
                 except Exception as ex:
@@ -130,29 +134,42 @@ class Core:
 
     def experiment_iteration(self):
         with self.data.iteration():
-            with log_time('getting position', cumulative_key='getting position'):
-                position = tuple(self.execution_engine.get_position() or [0] * self.data.dimensionality)
-            if self._forced_position_queue.empty():
-                with log_time('getting targets', cumulative_key='getting targets'):
-                    targets = self.adaptive_engine.request_targets(position)
-            else:
-                targets = [self._forced_position_queue.get()]
-            with log_time('updating targets', cumulative_key='updating targets'):
-                if self._forced_measurement_queue.empty():
-                    self.execution_engine.update_targets(targets)
-                    with log_time('getting measurements', cumulative_key='getting measurements'):
-                        new_measurements = self.execution_engine.get_measurements()
+            if self._has_fresh_data:
+                with log_time('getting position', cumulative_key='getting position'):
+                    position = self.execution_engine.get_position()
+                    if position is None:
+                        position = [0] * self.data.dimensionality
+                    position = tuple(position)
+                if self._forced_position_queue.empty():
+                    with log_time('getting targets', cumulative_key='getting targets'):
+                        targets = self.adaptive_engine.request_targets(position)
                 else:
-                    new_measurements = [self._forced_measurement_queue.get()]
+                    targets = [self._forced_position_queue.get()]
+
+            if self._forced_measurement_queue.empty():
+                if self._has_fresh_data:
+                    with log_time('updating targets', cumulative_key='updating targets'):
+                        self.execution_engine.update_targets(targets)
+                    self._has_fresh_data = False
+                with log_time('getting measurements', cumulative_key='getting measurements'):
+                    new_measurements = self.execution_engine.get_measurements()
+            else:
+                new_measurements = [self._forced_measurement_queue.get()]
             if len(new_measurements):
+                self._has_fresh_data = True
                 with log_time('stashing new measurements', cumulative_key='injecting new measurements'):
                     self.data.inject_new(new_measurements)
                 with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
                     self.adaptive_engine.update_measurements(self.data)
                 with log_time('updating metrics', cumulative_key='updating metrics'):
                     self.adaptive_engine.update_metrics(self.data)
-            with log_time('training', cumulative_key='training'):
-                self.adaptive_engine.train()
+            else:
+                time.sleep(SLEEP_FOR_FRESH_DATA_TIME)
+            if self._has_fresh_data:
+                with log_time('training', cumulative_key='training'):
+                    self.adaptive_engine.train()
+            else:
+                logger.info('Current data is stale. Waiting for an update with fresh data.')
 
     async def notify_clients(self):
         ...

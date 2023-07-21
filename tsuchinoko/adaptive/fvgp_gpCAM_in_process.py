@@ -1,13 +1,11 @@
+import sys
+
 import numpy as np
 
 from gpcam.gp_optimizer import  fvGPOptimizer
-from .acquisition_functions import explore_target_100, radical_gradient
 from .gpCAM_in_process import GPCAMInProcessEngine
 from ..graphs.common import GPCamPosteriorCovariance, GPCamAcquisitionFunction, GPCamPosteriorMean, Table
 
-acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
-acquisition_functions['explore_target_100'] = explore_target_100
-acquisition_functions['radical_gradient'] = radical_gradient
 
 
 class FvgpGPCAMInProcessEngine(GPCAMInProcessEngine):
@@ -30,18 +28,30 @@ class FvgpGPCAMInProcessEngine(GPCAMInProcessEngine):
             self.graphs = [GPCamPosteriorCovariance(),
                            Table()]
 
+    # TODO: refactor this into base
     def init_optimizer(self):
         parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                                         for edge in ['min', 'max']]
                                        for i in range(self.dimensionality)])
         hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                      for i in range(self.dimensionality + 1)])
+                                      for i in range(self.num_hyperparameters)])
 
         self.optimizer = fvGPOptimizer(self.dimensionality, self.output_dim, self.output_number, parameter_bounds)
-        self.optimizer.tell(np.empty((1, self.dimensionality)), np.empty((1, self.output_number)))  # we'll wipe this out later; required for initialization
-        self.optimizer.init_fvgp(hyperparameters)
+
+        if self.initial_x_data is not None and self.initial_y_data is not None:
+            variance_kwargs = {}
+            if self.initial_v_data is not None:
+                variance_kwargs['variances'] = self.initial_v_data
+            self.optimizer.tell(self.initial_x_data, self.initial_y_data, **variance_kwargs)
+
+        opts = self.gp_opts.copy()
+        # TODO: only fallback to numpy when packaged as an app
+        if sys.platform == 'darwin':
+            opts['compute_device'] = 'numpy'
+
+        self.optimizer.init_fvgp(hyperparameters, **opts)
 
     def _set_hyperparameter(self, parameter, value):
         self.optimizer.gp_initialized = False  # Force re-initialization
         self.optimizer.init_fvgp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                           for i in range(self.dimensionality + 1)]))
+                                           for i in range(self.num_hyperparameters)]))
