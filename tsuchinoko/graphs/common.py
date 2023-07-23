@@ -10,7 +10,8 @@ from pyqtgraph import PlotItem, PlotWidget, TableWidget, mkColor, intColor, Plot
 from qtpy.QtWidgets import QFormLayout, QWidget, QComboBox, QLabel, QVBoxLayout
 from qtpy.QtCore import Qt, QSignalBlocker, Signal, QRectF
 
-from tsuchinoko.graphics_items.mixins import ClickRequester, DomainROI
+from tsuchinoko.graphics_items.mixins import ClickRequester, DomainROI, BetterButtons, LogScaleIntensity, \
+    BetterAutoLUTRangeImageView, ViridisImageView
 from tsuchinoko.graphs import Graph, Location, graph_signal_relay
 from tsuchinoko.widgets.displays import Configuration
 from tsuchinoko.widgets.graph_widgets import CloudWidget
@@ -49,7 +50,7 @@ class Scatter(Graph):
 @dataclass(eq=False)
 class Table(Graph):
     widget_class = TableWidget
-    widget_kwargs = {'sortable': False}
+    widget_kwargs: dict = field(default_factory=lambda: dict(sortable=False))
     data_keys: Tuple[str] = tuple()
     name = 'Table'
 
@@ -87,7 +88,12 @@ class Table(Graph):
 
 
 @dataclass(eq=False)  # TODO: Should this be a dataclass?
-class ImageViewBlend(DomainROI, ClickRequester):
+class ImageViewBlend(DomainROI,
+                     ClickRequester,
+                     BetterButtons,
+                     LogScaleIntensity,
+                     BetterAutoLUTRangeImageView,
+                     ViridisImageView):
     def __init__(self, *args, invert_y=False, **kwargs):
         graph = PlotItem()
         super().__init__(*args, view=graph, **kwargs)
@@ -101,15 +107,13 @@ class Image(Graph):
     widget_class = ImageViewBlend
     data_key: ClassVar[str] = None
     accumulates: ClassVar[bool] = False
-    invert_y = False
+    widget_kwargs: dict = field(default_factory=lambda: dict(invert_y=False))
 
     def __post_init__(self):
         if not self.name and self.data_key:
             self.name = self.data_key
 
     def update(self, widget, data, update_slice: slice):
-        widget.view.invertY(self.invert_y)
-
         with data.r_lock():
             try:
                 v = data[self.data_key].copy()
@@ -274,7 +278,7 @@ class Score(Cloud):
 class GPCamPosteriorCovariance(Image):
     shape = (50, 50)
     data_key = 'Posterior Covariance'
-    invert_y = True
+    widget_kwargs: dict = field(default_factory=lambda: dict(invert_y=True))
 
     def compute(self, data, engine: 'GPCamInProcessEngine'):
         with data.r_lock():  # quickly grab positions within lock before passing to optimizer
