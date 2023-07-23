@@ -15,6 +15,9 @@ from tsuchinoko.utils import runengine
 from tsuchinoko.utils.threads import invoke_as_event, invoke_in_main_thread
 
 
+log_handler_id = None
+
+
 class Singleton(type(QObject)):
     _instances = {}
 
@@ -28,16 +31,17 @@ class Display(Dock):
     ...
 
 
-class LogHandler(logging.Handler):
+class LogHandler(logging.Handler, metaclass=Singleton):
     colors = {logging.DEBUG: Qt.gray, logging.ERROR: Qt.darkRed, logging.CRITICAL: Qt.red,
               logging.INFO: Qt.white, logging.WARNING: Qt.yellow}
 
     def __init__(self, log_widget, level=logging.WARNING):
+        global log_handler_id
         super(LogHandler, self).__init__(level=level)
         logging.getLogger().addHandler(self)
         self.log_widget = log_widget
 
-        logger.add(logging.getLogger().handlers[-1], level=level)
+        log_handler_id = logger.add(logging.getLogger().handlers[-1], level=level)
 
     # follows same design as vanilla logger emissions
     def emit(self, record, level=logging.INFO, timestamp=None, icon=None, *args):  # We can have icons!
