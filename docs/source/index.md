@@ -60,4 +60,5 @@ quickstart.md
 server_experiment.md
 bluesky.md
 api/index.md
+bluesky-adaptive.md
 ```
