@@ -114,7 +114,7 @@ todo_include_todos = False
 #
 html_theme = "sphinx_rtd_theme"
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-
+html_logo = "_static/tsuchinoko-real.png"
 html_style = 'custom.css'
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -122,7 +122,6 @@ html_style = 'custom.css'
 # documentation.
 #
 html_theme_options = dict(
-    logo_only=True,
     display_version=True,
     collapse_navigation=False,
     titles_only=False
