@@ -1,10 +1,9 @@
 import pickle
 import time
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Sequence, Dict, Union
+from typing import Tuple, List, Sequence, Dict
 
 import zmq
-from databroker.client import BlueskyRun
 from loguru import logger
 from numpy._typing import ArrayLike
 
@@ -15,7 +14,20 @@ SLEEP_FOR_TSUCHINOKO_TIME = .1
 
 
 class BlueskyAdaptiveEngine(Engine):
-    def __init__(self, host='127.0.0.1', port=5557):
+    """
+    A `tsuchinoko.adaptive.Engine` that sends targets to Blueskly-Adaptive and receives back measured data.
+    """
+
+    def __init__(self, host: str = '127.0.0.1', port: int = 5557):
+        """
+
+        Parameters
+        ----------
+        host
+            A host address target for the zmq socket.
+        port
+            The port used for the zmq socket.
+        """
         super(BlueskyAdaptiveEngine, self).__init__()
 
         self.position = None
@@ -66,7 +78,7 @@ class BlueskyAdaptiveEngine(Engine):
                 # TODO: Its highly recommended to extract a variance for y; we might piggyback on y,
                 #       s.t. y = [y1, y2, ..., yn, y1variance, y2variance, ..., ynvariance]
                 # TODO: Any additional quantities to be interrogated in Tsuchinoko can be included in the trailing dict
-                new_measurements.append((x, y, [1]*len(y), {}))
+                new_measurements.append((x, y, [1] * len(y), {}))
                 # stash the last position measured as the 'current' position of the instrument
                 self.position = x
         if new_measurements:
@@ -103,7 +115,21 @@ from bluesky_adaptive.agents.base import Agent
 
 
 class TsuchinokoBase(ABC):
-    def __init__(self, *args, host='127.0.0.1', port=5557, **kwargs):
+    def __init__(self, *args, host: str = '127.0.0.1', port: int = 5557, **kwargs):
+        """
+
+        Parameters
+        ----------
+        args
+            args passed through to `bluesky_adaptive.agents.base.Agent.__init__()`
+        host
+            A host address target for the zmq socket.
+        port
+            The port used for the zmq socket.
+        kwargs
+            kwargs passed through to `bluesky_adaptive.agents.base.Agent.__init__()`
+        """
+
         super().__init__(*args, **kwargs)
         self.host = host
         self.port = port
@@ -129,12 +155,16 @@ class TsuchinokoBase(ABC):
                 break
 
     def tell(self, x, y):
-        # Send measurement to BlueskyAdaptiveEngine
+        """
+        Send measurement to BlueskyAdaptiveEngine
+        """
         payload = {'target_measured': (x, y)}
         self.send_payload(payload)
 
     def ask(self, batch_size: int) -> Tuple[Sequence[Dict[str, ArrayLike]], Sequence[ArrayLike]]:
-        # Wait until at least one target is received, also exhaust the queue of received targets, overwriting old ones
+        """
+        Wait until at least one target is received, also exhaust the queue of received targets, overwriting old ones
+        """
         payload = None
         while True:
             try:
@@ -157,7 +187,14 @@ class TsuchinokoBase(ABC):
         return payload_response
 
 
-class TsuchinokoAgent(TsuchinokoBase, ABC):
+class TsuchinokoAgent(TsuchinokoBase, Agent):
+    """
+    A Bluesky-Adaptive 'Agent'. This Agent communicates with Tsuchinoko over zmq to request new targets and report back
+    measurements. This is an abstract class that must be subclassed.
+
+    A `tsuchinoko.execution.bluesky_adaptive.BlueskyAdaptiveEngine` is required for the Tsuchinoko server to complement
+    one of these `TsuchinokoAgent`.
+    """
 
     def tell(self, x, y) -> Dict[str, ArrayLike]:
         super().tell(x, y)
@@ -169,19 +206,41 @@ class TsuchinokoAgent(TsuchinokoBase, ABC):
 
     @abstractmethod
     def get_tell_document(self, x, y) -> Dict[str, ArrayLike]:
+        """
+        Return any single document corresponding to 'tell'-ing Tsuchinoko about the newly measured `x`, `y` data
+
+        Parameters
+        ----------
+        x :
+            Independent variable for data observed
+        y :
+            Dependent variable for data observed
+
+        Returns
+        -------
+        dict
+            Dictionary to be unpacked or added to a document
+
+        """
         ...
 
     @abstractmethod
     def get_ask_documents(self, targets: List[Tuple]) -> Sequence[Dict[str, ArrayLike]]:
-        ...
+        """
+        Ask the agent for a new batch of points to measure.
 
-    @abstractmethod
-    def measurement_plan(self, point: ArrayLike) -> Tuple[str, List, dict]:
-        ...
+        Parameters
+        ----------
+        targets : List[Tuple]
+            The new target positions to be measured received during this `ask`.
 
-    @staticmethod
-    @abstractmethod
-    def unpack_run(run: BlueskyRun) -> Tuple[Union[float, ArrayLike], Union[float, ArrayLike]]:
+        Returns
+        -------
+        docs : Sequence[dict]
+            Documents of key metadata from the ask approach for each point in next_points.
+            Must be length of batch size.
+
+        """
         ...
 
 
