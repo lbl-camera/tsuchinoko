@@ -203,6 +203,7 @@ intersphinx_mapping = {
     'pandas': ('https://pandas.pydata.org/pandas-docs/stable', None),
     'matplotlib': ('https://matplotlib.org/stable', None),
     'pyqtgraph': ("https://pyqtgraph.readthedocs.io/en/latest/", None),
+    'bluesky-adaptive': ("https://blueskyproject.io/bluesky-adaptive/", None),
 }
 
 autoclass_content = 'both'
