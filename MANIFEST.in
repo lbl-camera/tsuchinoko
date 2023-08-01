@@ -14,6 +14,7 @@ recursive-include tsuchinoko/assets
 
 include versioneer.py
 include tsuchinoko/_version.py
+include tsuchinoko/examples/sombrero_pug.jpg
 
 # If including data files in the package, add them like:
 # include path/to/data_file
