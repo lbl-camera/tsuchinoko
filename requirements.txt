@@ -17,3 +17,4 @@ scikit-learn
 torch<2.0.0  # conflict with pyinstaller
 pyqode.python
 pyqode.core
+loguru
