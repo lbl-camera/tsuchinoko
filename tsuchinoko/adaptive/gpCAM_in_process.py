@@ -164,12 +164,14 @@ class GPCAMInProcessEngine(Engine):
             train_at = set(child.value() for child in self.parameters.child(f'{method}_training').children())
 
             for N in train_at:
-                if len(self.optimizer.values) > N and N not in self._completed_training[method]:
+                if len(self.optimizer.y_data) > N and N not in self._completed_training[method]:
                     self.optimizer.train(np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
                                                       for edge in ['min', 'max']]
                                                      for i in range(self.num_hyperparameters)]),
                                          np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                                      for i in range(self.num_hyperparameters)]), method=method)
                     self._completed_training[method].add(N)
+                    logger.info(f"New hyperparameters: {self.optimizer.hyperparameters}")
                     # return  # only does global training if specified for both
+
         return True
