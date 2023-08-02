@@ -200,7 +200,9 @@ class CloudWidget(QWidget):
         timeline_at_end = not self.cache or self.timeline.getXPos() == len(self.cache['v']) - 1
 
         with data.r_lock():
-            v = data[self.data_key].copy()
+            v = np.asarray(data[self.data_key].copy())
+            if v.ndim == 2:
+                v = np.squeeze(v, 1)
 
             x, y = zip(*data.positions)
 
