@@ -6,7 +6,7 @@ import qtpy
 from loguru import logger
 from qtpy.QtCore import Qt, QObject, QEvent
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QMenuBar, QShortcut, QMenu, QWidget, QAction, QActionGroup
+from qtpy.QtWidgets import QMenuBar, QShortcut, QMenu, QWidget, QAction, QActionGroup, QApplication
 
 if "PySide.QtCore" in sys.modules and qtpy.API != "pyside":
     del sys.modules["PySide.QtCore"]
@@ -90,7 +90,7 @@ class IPythonDebugger(RichJupyterWidget):
 
 
 if __name__ == "__main__":
-    from qtpy.QtWidgets import QApplication, QMainWindow, QLabel
+    from qtpy.QtWidgets import QMainWindow, QLabel
 
     app = QApplication([])
     window = QMainWindow()
