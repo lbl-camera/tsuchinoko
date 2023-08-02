@@ -165,6 +165,7 @@ class GPCAMInProcessEngine(Engine):
 
             for N in train_at:
                 if len(self.optimizer.y_data) > N and N not in self._completed_training[method]:
+                    logger.info('Training in progress. This make take a while...')
                     self.optimizer.train(np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
                                                       for edge in ['min', 'max']]
                                                      for i in range(self.num_hyperparameters)]),
