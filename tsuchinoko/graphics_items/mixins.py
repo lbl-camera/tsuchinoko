@@ -1,7 +1,7 @@
 from typing import Callable
 
 import numpy as np
-from pyqtgraph import ImageView, PlotWidget, RectROI, ImageItem
+from pyqtgraph import ImageView, PlotWidget, RectROI, ImageItem, PlotItem
 from qtpy.QtCore import QPointF, Signal, QObject, QEvent, Qt, QSignalBlocker
 from qtpy.QtWidgets import QAction, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QSizePolicy
 from pyqtgraph import functions as fn, debug, Point
@@ -82,6 +82,21 @@ class BetterButtons(BetterLayout):
         self.ui.right_layout.addWidget(self.resetLUTBtn)
         self.resetLUTBtn.clicked.connect(self.autoLevels)
 
+
+class AspectRatioLock(BetterLayout):
+    def __init__(self, *args, lock_aspect=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._aspect_ratio_button = QPushButton('Lock Aspect')
+        self._aspect_ratio_button.setCheckable(True)
+        self.ui.right_layout.addWidget(self._aspect_ratio_button)
+        self._aspect_ratio_button.setChecked(lock_aspect)
+        self._aspect_ratio_button.toggled.connect(self.toggle_lock_aspect)
+
+    def toggle_lock_aspect(self):
+        if self._aspect_ratio_button.isChecked():
+            self.view.setAspectLocked(True)
+        else:
+            self.view.setAspectLocked(False)
 
 
 class ComposableItemImageView(ImageView):
@@ -268,6 +283,15 @@ class ClickRequesterBase:
         ev.ignore()
 
         return False
+
+
+class YInvert(ImageView):
+    def __init__(self, *args, invert_y=False, **kwargs):
+        if 'view' in kwargs:
+            raise ValueError(f'Setting view is incompatible with this widget ({type(self)}')
+        graph = PlotItem()
+        super().__init__(*args, view=graph, **kwargs)
+        graph.vb.invertY(invert_y)
 
 
 class ClickRequester(ClickRequesterBase, ImageView):

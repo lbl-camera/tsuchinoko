@@ -11,7 +11,7 @@ from qtpy.QtWidgets import QFormLayout, QWidget, QComboBox, QLabel, QVBoxLayout
 from qtpy.QtCore import Qt, QSignalBlocker, Signal, QRectF
 
 from tsuchinoko.graphics_items.mixins import ClickRequester, DomainROI, BetterButtons, LogScaleIntensity, \
-    BetterAutoLUTRangeImageView, ViridisImageView
+    BetterAutoLUTRangeImageView, ViridisImageView, AspectRatioLock, YInvert
 from tsuchinoko.graphs import Graph, Location, graph_signal_relay
 from tsuchinoko.widgets.displays import Configuration
 from tsuchinoko.widgets.graph_widgets import CloudWidget
@@ -87,17 +87,18 @@ class Table(Graph):
                 widget.setRow(row, list(table_row.values()))
 
 
-@dataclass(eq=False)  # TODO: Should this be a dataclass?
-class ImageViewBlend(DomainROI,
+class ImageViewBlend(YInvert,
                      ClickRequester,
                      BetterButtons,
                      LogScaleIntensity,
+                     AspectRatioLock,
                      BetterAutoLUTRangeImageView,
                      ViridisImageView):
-    def __init__(self, *args, invert_y=False, **kwargs):
-        graph = PlotItem()
-        super().__init__(*args, view=graph, **kwargs)
-        graph.vb.invertY(invert_y)
+    pass
+
+
+class ImageViewBlendROI(DomainROI, ImageViewBlend):
+    pass
 
 
 # TODO: add option for transforming into parameter space or not
@@ -107,6 +108,7 @@ class Image(Graph):
     widget_class = ImageViewBlend
     data_key: ClassVar[str] = None
     accumulates: ClassVar[bool] = False
+    transform_to_parameter_space = True
     widget_kwargs: dict = field(default_factory=lambda: dict(invert_y=False))
 
     def __post_init__(self):
@@ -142,13 +144,17 @@ class Image(Graph):
                     else:
                         axes = {'t': 2, 'x': 0, 'y': 1}
 
+                kwargs = {}
+                if self.transform_to_parameter_space:
+                    kwargs['pos'] = (bounds[0][0], bounds[1][0])
+                    kwargs['scale'] = ((bounds[0][1] - bounds[0][0]) / v.shape[0], (bounds[1][1] - bounds[1][0]) / v.shape[1])
+
                 widget.setImage(v,
                                 autoRange=widget.imageItem.image is None,
                                 autoLevels=widget.imageItem.image is None,
                                 autoHistogramRange=widget.imageItem.image is None,
-                                pos=(bounds[0][0], bounds[1][0]),
-                                scale=((bounds[0][1]-bounds[0][0])/v.shape[0], (bounds[1][1]-bounds[1][0])/v.shape[1]),
-                                axes=axes)
+                                axes=axes,
+                                **kwargs)
 
 
 @dataclass(eq=False)
@@ -279,6 +285,7 @@ class GPCamPosteriorCovariance(Image):
     shape = (50, 50)
     data_key = 'Posterior Covariance'
     widget_kwargs: dict = field(default_factory=lambda: dict(invert_y=True))
+    transform_to_parameter_space: ClassVar[bool] = False
 
     def compute(self, data, engine: 'GPCamInProcessEngine'):
         with data.r_lock():  # quickly grab positions within lock before passing to optimizer
@@ -297,6 +304,7 @@ class GPCamAcquisitionFunction(Image):
     compute_with = Location.AdaptiveEngine
     shape = (50, 50)
     data_key = 'Acquisition Function'
+    widget_class = ImageViewBlendROI
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
         from tsuchinoko.adaptive.gpCAM_in_process import gpcam_acquisition_functions  # avoid circular import
@@ -334,6 +342,7 @@ class GPCamPosteriorMean(Image):
     compute_with = Location.AdaptiveEngine
     shape = (50, 50)
     data_key = 'Posterior Mean'
+    widget_class = ImageViewBlendROI
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
         bounds = ((engine.parameters[('bounds', f'axis_{i}_{edge}')]
