@@ -39,7 +39,6 @@ class GPCAMInProcessEngine(Engine):
         self.gp_opts = gp_opts or {}
         self.ask_opts = ask_opts or {}
         self.num_hyperparameters = len(hyperparameters)
-        self._needs_init = True
         if acquisition_functions:
             prepend_update_acquisition_functions(acquisition_functions)
 
@@ -73,8 +72,6 @@ class GPCAMInProcessEngine(Engine):
                                        for i in range(self.dimensionality)])
 
         self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
-
-        self._needs_init = True
 
     def reset(self):
         self._completed_training = {'global': set(),
@@ -127,15 +124,18 @@ class GPCAMInProcessEngine(Engine):
             scores = data.scores.copy()
             variances = data.variances.copy()
         self.optimizer.tell(np.asarray(positions), np.asarray(scores), np.asarray(variances))
-        if self._needs_init:
-            self._needs_init = False
+        if not self.optimizer.gp_initialized:
             hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                           for i in range(self.num_hyperparameters)])
             opts = self.gp_opts.copy()
             # TODO: only fallback to numpy when packaged as an app
             if sys.platform == 'darwin':
                 opts['compute_device'] = 'numpy'
-            self.optimizer.init_gp(hyperparameters, **opts)
+
+            self.init_gp(hyperparameters, **opts)
+
+    def init_gp(self, hyperparameters, **opts):
+        self.optimizer.init_gp(hyperparameters, **opts)
 
     def update_metrics(self, data: Data):
         for graph in self.graphs:
@@ -151,7 +151,7 @@ class GPCAMInProcessEngine(Engine):
         n = self.parameters['n']
 
         # If the GP is not initialized, generate random targets
-        if self._needs_init:
+        if not self.optimizer.gp_initialized:
             return [[np.random.uniform(bounds[i][0], bounds[i][1]) for i in range(self.dimensionality)] for j in range(n)]
         else:
             kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}

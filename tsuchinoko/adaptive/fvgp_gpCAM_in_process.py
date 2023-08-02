@@ -33,22 +33,10 @@ class FvgpGPCAMInProcessEngine(GPCAMInProcessEngine):
         parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                                         for edge in ['min', 'max']]
                                        for i in range(self.dimensionality)])
-        hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                      for i in range(self.num_hyperparameters)])
 
         self.optimizer = fvGPOptimizer(self.dimensionality, self.output_dim, self.output_number, parameter_bounds)
 
-        if self.initial_x_data is not None and self.initial_y_data is not None:
-            variance_kwargs = {}
-            if self.initial_v_data is not None:
-                variance_kwargs['variances'] = self.initial_v_data
-            self.optimizer.tell(self.initial_x_data, self.initial_y_data, **variance_kwargs)
-
-        opts = self.gp_opts.copy()
-        # TODO: only fallback to numpy when packaged as an app
-        if sys.platform == 'darwin':
-            opts['compute_device'] = 'numpy'
-
+    def init_gp(self, hyperparameters, **opts):
         self.optimizer.init_fvgp(hyperparameters, **opts)
 
     def _set_hyperparameter(self, parameter, value):
