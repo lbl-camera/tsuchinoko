@@ -33,13 +33,13 @@ class GPCAMInProcessEngine(Engine):
     default_retrain_locally_at = (20, 40, 60, 80, 100, 200, 400, 1000)
 
     def __init__(self, dimensionality, parameter_bounds, hyperparameters, hyperparameter_bounds,
-                 x_data=None, y_data=None, v_data = None, acquisition_functions:dict[str, Callable]=None, gp_opts: dict = None):
+                 acquisition_functions:dict[str, Callable]=None,
+                 gp_opts: dict = None, ask_opts: dict = None):
         self.dimensionality = dimensionality
         self.gp_opts = gp_opts or {}
-        self.initial_x_data = x_data
-        self.initial_y_data = y_data
-        self.initial_v_data = v_data
+        self.ask_opts = ask_opts or {}
         self.num_hyperparameters = len(hyperparameters)
+        self._needs_init = True
         if acquisition_functions:
             prepend_update_acquisition_functions(acquisition_functions)
 
@@ -71,31 +71,15 @@ class GPCAMInProcessEngine(Engine):
         parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                                         for edge in ['min', 'max']]
                                        for i in range(self.dimensionality)])
-        hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                      for i in range(self.num_hyperparameters)])
 
         self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
 
-        if self.initial_x_data is not None and self.initial_y_data is not None:
-            variance_kwargs = {}
-            if self.initial_v_data is not None:
-                variance_kwargs['variances'] = self.initial_v_data
-            self.optimizer.tell(self.initial_x_data, self.initial_y_data, **variance_kwargs)
-
-        opts = self.gp_opts.copy()
-        # TODO: only fallback to numpy when packaged as an app
-        if sys.platform == 'darwin':
-            opts['compute_device'] = 'numpy'
-        self.optimizer.init_gp(hyperparameters, **opts)
+        self._needs_init = True
 
     def reset(self):
         self._completed_training = {'global': set(),
                                     'local': set()}
         self.init_optimizer()
-
-        self.optimizer.points = np.array([])
-        self.optimizer.values = np.array([])
-        self.optimizer.variances = np.array([])
 
     @cached_property
     def parameters(self):
@@ -142,7 +126,16 @@ class GPCAMInProcessEngine(Engine):
             positions = data.positions.copy()
             scores = data.scores.copy()
             variances = data.variances.copy()
-        self.optimizer.tell(np.asarray(positions), scores, variances)
+        self.optimizer.tell(np.asarray(positions), np.asarray(scores), np.asarray(variances))
+        if self._needs_init:
+            self._needs_init = False
+            hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
+                                          for i in range(self.num_hyperparameters)])
+            opts = self.gp_opts.copy()
+            # TODO: only fallback to numpy when packaged as an app
+            if sys.platform == 'darwin':
+                opts['compute_device'] = 'numpy'
+            self.optimizer.init_gp(hyperparameters, **opts)
 
     def update_metrics(self, data: Data):
         for graph in self.graphs:
@@ -152,12 +145,19 @@ class GPCAMInProcessEngine(Engine):
                 logger.exception(ex)
 
     def request_targets(self, position):
-        kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
-        kwargs.update({'bounds': np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
-                                              for edge in ['min', 'max']]
-                                             for i in range(self.dimensionality)])})
+        bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
+                     for edge in ['min', 'max']]
+                    for i in range(self.dimensionality)])
         n = self.parameters['n']
-        return self.optimizer.ask(position, n, acquisition_function=gpcam_acquisition_functions[kwargs.pop('acquisition_function')], **kwargs)['x']
+
+        # If the GP is not initialized, generate random targets
+        if self._needs_init:
+            return [[np.random.uniform(bounds[i][0], bounds[i][1]) for i in range(self.dimensionality)] for j in range(n)]
+        else:
+            kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
+            kwargs.update({'bounds': bounds})
+            kwargs.update(self.ask_opts)
+            return self.optimizer.ask(position, n, acquisition_function=gpcam_acquisition_functions[kwargs.pop('acquisition_function')], **kwargs)['x']
 
     def train(self):
         for method in ['global', 'local']:

@@ -197,7 +197,10 @@ class Core:
         else:
             raise ValueError('Graph not found in graphs lists.')
 
-
+    def initialize_data(self, x, y, v):
+        with log_time('updating engine with initial measurements'):
+            self.data = Data(dimensionality=len(x[0]), positions=x, scores=y, variances=v)
+            self.adaptive_engine.update_measurements(self.data)
 
 
 class ZMQCore(Core):
