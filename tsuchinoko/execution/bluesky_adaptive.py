@@ -11,6 +11,7 @@ from . import Engine
 
 SLEEP_FOR_AGENT_TIME = .1
 SLEEP_FOR_TSUCHINOKO_TIME = .1
+FORCE_KICKSTART_TIME = 5
 
 
 class BlueskyAdaptiveEngine(Engine):
@@ -74,11 +75,9 @@ class BlueskyAdaptiveEngine(Engine):
                 break
             else:
                 assert 'target_measured' in payload
-                x, y = payload['target_measured']
-                # TODO: Its highly recommended to extract a variance for y; we might piggyback on y,
-                #       s.t. y = [y1, y2, ..., yn, y1variance, y2variance, ..., ynvariance]
+                x, (y, v) = payload['target_measured']
                 # TODO: Any additional quantities to be interrogated in Tsuchinoko can be included in the trailing dict
-                new_measurements.append((x, y, [1] * len(y), {}))
+                new_measurements.append((x, y, v, {}))
                 # stash the last position measured as the 'current' position of the instrument
                 self.position = x
         if new_measurements:
@@ -137,7 +136,12 @@ class TsuchinokoBase(ABC):
         self.context = None
         self.socket = None
         self.setup_socket()
+        self.last_targets_received = time.time()
+        self.kickstart()
+
+    def kickstart(self):
         self.send_payload({'send_targets': True})  # kickstart to recover from shutdowns
+        self.last_targets_received = time.time()  # forgive lack of response until now
 
     def setup_socket(self):
         self.context = zmq.Context()
@@ -154,11 +158,12 @@ class TsuchinokoBase(ABC):
                 logger.info(f'Connected to tcp://{self.host}:{self.port}.')
                 break
 
-    def tell(self, x, y):
+    def tell(self, x, y, v):
         """
         Send measurement to BlueskyAdaptiveEngine
         """
-        payload = {'target_measured': (x, y)}
+        yv = (y, v)
+        payload = {'target_measured': (x, yv)}
         self.send_payload(payload)
 
     def ask(self, batch_size: int) -> Tuple[Sequence[Dict[str, ArrayLike]], Sequence[ArrayLike]]:
@@ -174,7 +179,10 @@ class TsuchinokoBase(ABC):
                     break
                 else:
                     time.sleep(SLEEP_FOR_TSUCHINOKO_TIME)
+                    if time.time() > self.last_targets_received + FORCE_KICKSTART_TIME:
+                        self.kickstart()
         assert 'targets' in payload
+        self.last_targets_received = time.time()
         return payload['targets']
 
     def send_payload(self, payload: dict):
@@ -196,16 +204,16 @@ class TsuchinokoAgent(TsuchinokoBase, Agent):
     one of these `TsuchinokoAgent`.
     """
 
-    def tell(self, x, y) -> Dict[str, ArrayLike]:
-        super().tell(x, y)
-        return self.get_tell_document(x, y)
+    def tell(self, x, y, v) -> Dict[str, ArrayLike]:
+        super().tell(x, y, v)
+        return self.get_tell_document(x, y, v)
 
     def ask(self, batch_size: int) -> Tuple[Sequence[Dict[str, ArrayLike]], Sequence[ArrayLike]]:
         targets = super().ask(batch_size)
         return self.get_ask_documents(targets), targets
 
     @abstractmethod
-    def get_tell_document(self, x, y) -> Dict[str, ArrayLike]:
+    def get_tell_document(self, x, y, v) -> Dict[str, ArrayLike]:
         """
         Return any single document corresponding to 'tell'-ing Tsuchinoko about the newly measured `x`, `y` data
 
@@ -215,6 +223,8 @@ class TsuchinokoAgent(TsuchinokoBase, Agent):
             Independent variable for data observed
         y :
             Dependent variable for data observed
+        v :
+            Variance for measurement of y
 
         Returns
         -------
