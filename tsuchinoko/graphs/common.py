@@ -291,6 +291,10 @@ class GPCamPosteriorCovariance(Image):
         with data.r_lock():  # quickly grab positions within lock before passing to optimizer
             positions = np.asarray(data.positions.copy())
 
+        # if multi-task, extend the grid_positions to include the task dimension
+        if hasattr(engine, 'output_number'):
+            positions = np.vstack([np.hstack([positions, np.full((positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+
         # compute posterior covariance without lock
         result_dict = engine.optimizer.posterior_covariance(positions)
 
