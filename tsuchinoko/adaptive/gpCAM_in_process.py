@@ -10,7 +10,8 @@ from loguru import logger
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
-from ..graphs.common import Variance, GPCamPosteriorCovariance, Score, GPCamAcquisitionFunction, GPCamPosteriorMean, Table, HighDimensionalityGPCamPosteriorMean
+from ..graphs.common import Variance, GPCamPosteriorCovariance, Score, GPCamAcquisitionFunction, GPCamPosteriorMean, \
+    Table, HighDimensionalityGPCamPosteriorMean, GPCamHyperparameterPlot
 from ..parameters import TrainingParameter
 
 gpcam_acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
@@ -57,6 +58,7 @@ class GPCAMInProcessEngine(Engine):
                            GPCamAcquisitionFunction(),
                            GPCamPosteriorMean(),
                            # GPCamAverageCovariance(),
+                           GPCamHyperparameterPlot(),
                            Table(),
                            Variance(),
                            Score()]
@@ -64,6 +66,7 @@ class GPCAMInProcessEngine(Engine):
             self.graphs = [GPCamPosteriorCovariance(),
                            HighDimensionalityGPCamPosteriorMean(dimensions=dimensionality, bounds=parameter_bounds),
                            # GPCamAverageCovariance(),
+                           GPCamHyperparameterPlot(),
                            Table()]
 
     def init_optimizer(self):

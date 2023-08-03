@@ -180,7 +180,7 @@ class PlotGraphWidget(PlotWidget):
 
 @dataclass(eq=False)
 class Plot(Graph):
-    data_key: str = None
+    data_key: ClassVar[str] = None
     widget_class = PlotGraphWidget
     label_key: InitVar[str] = None
     accumulates: bool = False
@@ -200,6 +200,7 @@ class Plot(Graph):
 @dataclass(eq=False)
 class MultiPlot(Plot):
     pen_key:str = None
+    stack_plots: ClassVar[bool] = True
 
     @staticmethod
     def get_color(i, count):
@@ -221,20 +222,34 @@ class MultiPlot(Plot):
                 item.setSymbolPen('w')
 
     def update(self, widget, data: 'Data', update_slice: slice):
-        if update_slice.start == 0:
+        if update_slice.start == 0 or not self.stack_plots:
             widget.getPlotItem().clear()
 
         with data.r_lock():
-            v = data[self.data_key].copy()
+            try:
+                v = data[self.data_key].copy()
+            except ValueError:
+                if getattr(self, '_has_value_errors', False):
+                    logger.warning(f'The {self.name} graph hasn\'t received data more than once. This is not normal.')
+                else:
+                    logger.info(
+                        f'The {self.name} graph hasn\'t received data once. This is normal for graphs computed by the adaptive engine.')
+                self._has_value_errors = True
+                return
             labels = data[self.label_key].copy()
             if self.pen_key is not None:
                 pens = data[self.pen_key].copy()
 
-        for i, label, plot_data in zip(count(update_slice.start), labels[update_slice], v[update_slice]):
+        if self.stack_plots:
+            plots = zip(count(update_slice.start), labels[update_slice], v[update_slice])
+        else:
+            plots = zip(count(len(labels)), labels, v)
+
+        for i, label, plot_data in plots:
             kwargs = {}
             if self.pen_key is not None:
                 kwargs['pen'] = mkPen(pens[i])
-            widget.plot(plot_data, name=label, **kwargs)
+            widget.plot(np.array(plot_data), name=label, **kwargs)
 
         if self.pen_key is None:
             self.colorize(widget, data)
@@ -514,7 +529,26 @@ class HighDimensionalityGPCamPosteriorMean(SliceImageGraph):
 
         # assign to data object with lock
         with data.w_lock():
-            data.states['Posterior Mean'] = posterior_mean_value
+            data.states[self.data_key] = posterior_mean_value
+
+
+@dataclass(eq=False)
+class GPCamHyperparameterPlot(MultiPlot):
+    compute_with = Location.AdaptiveEngine
+    data_key: ClassVar[str] = 'Hyperparameters'
+    name = 'Hyperparameters'
+    label_key: InitVar[str] = 'Hyperparameter Labels'
+    accumulates = True
+    stack_plots: ClassVar[bool] = False
+
+    def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        if data.states.get(self.data_key, None) is None:
+            data.states[self.data_key] = [[] for i in range(len(engine.optimizer.hyperparameters))]
+        # assign to data object with lock
+        with data.w_lock():
+            for i in range(len(engine.optimizer.hyperparameters)):
+                data.states[self.data_key][i].append(engine.optimizer.hyperparameters[i])
+            data.states[self.label_key] = [f"Hyperparameter #{i+1}" for i in range(len(engine.optimizer.hyperparameters))]
 
 
 if __name__ == '__main__':

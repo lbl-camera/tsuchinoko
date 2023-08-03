@@ -19,6 +19,7 @@ from tsuchinoko.graphics_items.mixins import ClickRequesterPlot
 
 last_export_directory = None
 
+
 class CloudWidget(QWidget):
     noRepeatKeys = [
         Qt.Key.Key_Right,
