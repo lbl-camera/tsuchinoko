@@ -166,7 +166,7 @@ class TsuchinokoBase(ABC):
         payload = {'target_measured': (x, yv)}
         self.send_payload(payload)
 
-    def ask(self, batch_size: int) -> Tuple[Sequence[Dict[str, ArrayLike]], Sequence[ArrayLike]]:
+    def ask(self, batch_size: int) -> Sequence[ArrayLike]:
         """
         Wait until at least one target is received, also exhaust the queue of received targets, overwriting old ones
         """
@@ -235,7 +235,7 @@ class TsuchinokoAgent(TsuchinokoBase, Agent):
         ...
 
     @abstractmethod
-    def get_ask_documents(self, targets: List[Tuple]) -> Sequence[Dict[str, ArrayLike]]:
+    def get_ask_documents(self, targets: Sequence[ArrayLike]) -> Sequence[Dict[str, ArrayLike]]:
         """
         Ask the agent for a new batch of points to measure.
 
