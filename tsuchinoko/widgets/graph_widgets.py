@@ -203,7 +203,10 @@ class CloudWidget(QWidget):
         with data.r_lock():
             v = np.asarray(data[self.data_key].copy())
             if v.ndim == 2:
-                v = np.squeeze(v, 1)
+                try:
+                    v = np.squeeze(v, 1)
+                except ValueError:
+                    pass
 
             x, y = zip(*data.positions)
 
