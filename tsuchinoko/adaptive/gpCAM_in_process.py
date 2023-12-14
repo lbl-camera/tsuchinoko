@@ -114,12 +114,15 @@ class GPCAMInProcessEngine(Engine):
 
     def _set_hyperparameter(self, parameter, value):
         self.optimizer.gp_initialized = False  # Force re-initialization
-        opts = dict()
+        opts = self.gp_opts.copy()
         # TODO: only fallback to numpy when packaged as an app
         if sys.platform == 'darwin':
             opts['compute_device'] = 'numpy'
-        self.optimizer.init_gp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                           for i in range(self.num_hyperparameters)]), **opts)
+        # self.optimizer.init_gp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
+        #                                    for i in range(self.num_hyperparameters)]), **opts)
+        hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
+                                           for i in range(self.num_hyperparameters)])
+        self.optimizer.hyperparameters = hyperparameters
 
     def update_measurements(self, data: Data):
         with data.r_lock():  # quickly grab values within lock before passing to optimizer
@@ -148,6 +151,7 @@ class GPCAMInProcessEngine(Engine):
                 logger.exception(ex)
 
     def request_targets(self, position):
+        self.last_position = position
         bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                      for edge in ['min', 'max']]
                     for i in range(self.dimensionality)])
