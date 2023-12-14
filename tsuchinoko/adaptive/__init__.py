@@ -64,8 +64,8 @@ class Data:
             elif item.lower() in ['variances', 'scores', 'positions']:
                 return getattr(self, item.lower())
         elif isinstance(item, slice):
-            if item.stop is None or item.stop > self._completed_iterations:
-                item = slice(item.start, self._completed_iterations, item.step)
+            if item.stop is None or item.stop > len(self):
+                item = slice(item.start, len(self), item.step)
             return Data(self.dimensionality,
                         self.positions[item],
                         self.scores[item],
@@ -119,6 +119,7 @@ class Engine(ABC):
     dimensionality: int = None
     parameters: Parameter = None
     graphs: List['Graph'] = None
+    last_position: tuple = None
 
     @abstractmethod
     def update_measurements(self, data: Data):
