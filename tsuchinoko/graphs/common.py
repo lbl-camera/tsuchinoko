@@ -121,7 +121,8 @@ class Image(Graph):
                 v = data[self.data_key].copy()
             except ValueError:
                 if getattr(self, '_has_value_errors', False):
-                    logger.warning(f'The {self.name} graph hasn\'t received data more than once. This is not normal.')
+                    pass
+                    # logger.warning(f'The {self.name} graph hasn\'t received data more than once. This is not normal.')
                 else:
                     logger.info(f'The {self.name} graph hasn\'t received data once. This is normal for graphs computed by the adaptive engine.')
                 self._has_value_errors = True
@@ -149,9 +150,9 @@ class Image(Graph):
                     kwargs['pos'] = (bounds[0][0], bounds[1][0])
                     kwargs['scale'] = ((bounds[0][1] - bounds[0][0]) / v.shape[0], (bounds[1][1] - bounds[1][0]) / v.shape[1])
 
-                widget.setImage(v,
+                widget.setImage(np.array(v),
                                 autoRange=widget.imageItem.image is None,
-                                autoLevels=widget.imageItem.image is None,
+                                autoLevels=False, #widget.imageItem.image is None,
                                 autoHistogramRange=widget.imageItem.image is None,
                                 axes=axes,
                                 **kwargs)
@@ -321,7 +322,7 @@ class GPCamPosteriorCovariance(Image):
 @dataclass(eq=False)
 class GPCamAcquisitionFunction(Image):
     compute_with = Location.AdaptiveEngine
-    shape = (50, 50)
+    shape:tuple = (50, 50)
     data_key = 'Acquisition Function'
     widget_class = ImageViewBlendROI
 
@@ -344,7 +345,8 @@ class GPCamAcquisitionFunction(Image):
                                                                                     acquisition_function=
                                                                                     gpcam_acquisition_functions[
                                                                                         engine.parameters[
-                                                                                            'acquisition_function']])
+                                                                                            'acquisition_function']],
+                                                                                    origin=engine.last_position)
 
         try:
             acquisition_function_value = acquisition_function_value.reshape(*self.shape)
@@ -386,7 +388,7 @@ class GPCamPosteriorMean(Image):
 
 @lru_cache(maxsize=10)
 def image_grid(bounds, shape):
-    return np.asarray(np.meshgrid(*(np.linspace(*bound, num=bins) for bins, bound in zip(shape, bounds)))).T.reshape(-1,
+    return np.asarray(np.meshgrid(*(np.linspace(bound[0], bound[1]-1, num=bins, endpoint=True) for bins, bound in zip(shape, bounds)))).T.reshape(-1,
                                                                                                                      2)
 
 
