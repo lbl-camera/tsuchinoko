@@ -388,7 +388,7 @@ class GPCamPosteriorMean(Image):
 
 @lru_cache(maxsize=10)
 def image_grid(bounds, shape):
-    return np.asarray(np.meshgrid(*(np.linspace(bound[0], bound[1]-1, num=bins, endpoint=True) for bins, bound in zip(shape, bounds)))).T.reshape(-1,
+    return np.asarray(np.meshgrid(*(np.linspace(list(bounds)[0], list(bounds)[1]-1, num=bins, endpoint=True) for bins, bound in zip(shape, bounds)))).T.reshape(-1,
                                                                                                                      2)
 
 
@@ -551,6 +551,27 @@ class GPCamHyperparameterPlot(MultiPlot):
             for i in range(len(engine.optimizer.hyperparameters)):
                 data.states[self.data_key][i].append(engine.optimizer.hyperparameters[i])
             data.states[self.label_key] = [f"Hyperparameter #{i+1}" for i in range(len(engine.optimizer.hyperparameters))]
+
+
+import glob
+from PIL import Image as pImage
+import numpy as np
+
+raw_path = r"C:\data\raw\*.tif"
+raw_images = glob.glob(raw_path)
+
+
+class RawGraph(Image):
+    # shape = (50, 50)
+    data_key = 'Raw data'
+    widget_kwargs: dict = field(default_factory=lambda: dict(invert_y=False))
+    transform_to_parameter_space: ClassVar[bool] = False
+
+    def compute(self, data, engine: 'GPCamInProcessEngine'):
+        raw_image = np.fliplr(np.asarray(pImage.open(np.random.choice(raw_images))).T)
+        with data.w_lock():
+            data.states[self.data_key] = raw_image
+
 
 
 if __name__ == '__main__':
