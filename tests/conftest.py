@@ -8,7 +8,8 @@ from bluesky.plan_stubs import checkpoint, mov, trigger_and_read
 from loguru import logger
 from ophyd import Device
 from ophyd.sim import SynAxis, SynSignal, Cpt
-from pytest import fixture, lazy_fixture
+from pytest import fixture
+from pytest_lazyfixture import lazy_fixture
 from scipy import ndimage
 
 from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine

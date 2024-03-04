@@ -3,7 +3,7 @@
 codecov
 coverage
 flake8
-pytest
+pytest<8
 sphinx
 twine
 pre-commit
