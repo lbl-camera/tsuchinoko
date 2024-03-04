@@ -366,7 +366,7 @@ class GPCamPosteriorMean(Image):
     widget_class = ImageViewBlendROI
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
-        bounds = ((engine.parameters[('bounds', f'axis_{i}_{edge}')]
+        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
                    for edge in ['min', 'max'])
                   for i in range(engine.dimensionality))
 
