@@ -1,7 +1,4 @@
-import sys
-import os
 from threading import Thread
-import inspect
 
 from pytest import fixture
 from qtpy.QtWidgets import QMessageBox, QFileDialog
@@ -11,7 +8,6 @@ from loguru import logger
 
 from tsuchinoko.core import ConnectResponse, ZMQCore, CoreState
 from tsuchinoko.widgets.mainwindow import MainWindow
-from .test_core import random_engine, simple_execution_engine, image_data, image_func
 
 # Disable logging to console when running tests
 # NOTE: it seems there is a bug between loguru and pytest; pytest tries to log to a tempfile, but closes it when finished
