@@ -388,8 +388,8 @@ class GPCamPosteriorMean(Image):
 
 @lru_cache(maxsize=10)
 def image_grid(bounds, shape):
-    return np.asarray(np.meshgrid(*(np.linspace(list(bounds)[0], list(bounds)[1]-1, num=bins, endpoint=True) for bins, bound in zip(shape, bounds)))).T.reshape(-1,
-                                                                                                                     2)
+    return np.asarray(np.meshgrid(*(np.linspace(bound[0], bound[1]-1, num=bins, endpoint=True)
+                                    for bins, bound in zip(shape, bounds)))).T.reshape(-1, 2)
 
 
 class SliceImageWidget(QWidget):
