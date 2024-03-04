@@ -22,9 +22,9 @@ def is_lazy_fixture(value: object) -> bool:
 
 
 def pytest_make_parametrize_id(
-    config: pytest.Config,
-    val: object,
-    argname: str,
+        config: pytest.Config,
+        val: object,
+        argname: str,
 ) -> str | None:
     """Inject lazy fixture parametrized id.
 
@@ -46,8 +46,8 @@ def pytest_make_parametrize_id(
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_fixture_setup(
-    fixturedef: pytest.FixtureDef,
-    request: pytest.FixtureRequest,
+        fixturedef: pytest.FixtureDef,
+        request: pytest.FixtureRequest,
 ) -> object | None:
     """Lazy fixture setup hook.
 
