@@ -3,8 +3,7 @@
 codecov
 coverage
 flake8
-# pinned to avoid untraced error: 'CallSpec2' object has no attribute 'funcargs'
-pytest==7.3.1
+pytest
 sphinx
 twine
 pre-commit

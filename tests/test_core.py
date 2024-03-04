@@ -13,6 +13,7 @@ from loguru import logger
 from ophyd import Device
 from ophyd.sim import SynAxis, SynSignal, Cpt
 from pytest import fixture
+from .conftest import lazy_fixture
 from scipy import ndimage
 
 from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
@@ -130,24 +131,24 @@ def threaded_execution_engine(image_func):
     execution.measure_thread.join()
 
 
-@fixture(params=[pytest.lazy_fixture('random_engine'),
-                 pytest.lazy_fixture('gpcam_engine')])
+@fixture(params=[lazy_fixture('random_engine'),
+                 lazy_fixture('gpcam_engine')])
 def adaptive_test_engines(simple_execution_engine, request):
     adaptive_engine = request.param
 
     return adaptive_engine, simple_execution_engine
 
 
-@fixture(params=[pytest.lazy_fixture('threaded_execution_engine'),
-                 pytest.lazy_fixture('bluesky_execution_engine')])
+@fixture(params=[lazy_fixture('threaded_execution_engine'),
+                 lazy_fixture('bluesky_execution_engine')])
 def execution_test_engines(random_engine, request):
     execution_engine = request.param
 
     return random_engine, execution_engine
 
 
-@fixture(params=[pytest.lazy_fixture('execution_test_engines'),
-                 pytest.lazy_fixture('adaptive_test_engines')])
+@fixture(params=[lazy_fixture('execution_test_engines'),
+                 lazy_fixture('adaptive_test_engines')])
 def core(request):
     adaptive_engine, execution_engine = request.param
     logger.info('starting setup')
