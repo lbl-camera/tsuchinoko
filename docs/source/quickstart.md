@@ -11,7 +11,7 @@ For more in-depth documentation for developing custom adaptive experiments see:
 
 ## Install Tsuchinoko
 
-To begin, you will need to install [Python 3.9](https://www.python.org/downloads/release/python-390/). It is generally
+To begin, you will need to install [Python 3.10](https://www.python.org/downloads/release/python-31011//). It is generally
 recommended that you next create a [virtual environment](https://docs.python.org/3/library/venv.html) to contain the 
 installation.
 
