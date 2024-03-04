@@ -17,7 +17,7 @@ from tsuchinoko.utils import threads
 class Adaptive2D(Engine):
     dimensionality: int = 2
 
-    def __init__(self, parameter_bounds):
+    def __init__(self, parameter_bounds=None):
         for i in range(self.dimensionality):
             for j, edge in enumerate(['min', 'max']):
                 self.parameters[('bounds', f'axis_{i}_{edge}')] = parameter_bounds[i][j]
