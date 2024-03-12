@@ -1,18 +1,24 @@
 from dataclasses import dataclass
-from functools import partial
+from functools import partial, lru_cache
 import sys
+from loguru import logger
+import fvgp
 
 import numpy as np
 from scipy import sparse, ndimage, fftpack, linalg
 from fvgp.gp import GP
+from gpcam.gp_optimizer import GPOptimizer
 from tsuchinoko.adaptive import Data
 from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
+from tsuchinoko.adaptive.grid import Grid
 from tsuchinoko.core import ZMQCore, CoreState
 from tsuchinoko.execution.simple import SimpleEngine
 from tsuchinoko.graphs import Location
 from tsuchinoko.graphs.common import Table, Image, ImageViewBlendROI, image_grid, GPCamPosteriorMean, \
-    GPCamHyperparameterPlot, Score
-from tsuchinoko.graphs.specialized import DomainGraph
+    GPCamHyperparameterPlot, Score, Variance, GPCamAcquisitionFunction
+from tsuchinoko.utils import threads
+from tsuchinoko.graphs.specialized import ReconstructionGraph, ProjectionOperatorGraph, \
+    SinogramSpaceGPCamAcquisitionFunction, ProjectionMask
 import PIL
 
 
@@ -158,12 +164,13 @@ def projection_operator(x, phi, map_size, center=None, width=1, length=None):
 
     return map_mask
 
+
 def kernel(x1,x2,hps,obj):
+    # print('kernel:', hps, x1, x2)
+    # with log_time('kernel', cumulative_key='kernel'):
     A = obj.A
-    # A = linalg.block_diag([A]*NUM_SINOGRAMS)
-    #st = time.time()
     #this kernel takes elements from the real space the prior covariance in sinogram space
-    d = obj._get_distance_matrix(x1,x2)
+    d = obj._get_distance_matrix(x1, x2)
     k = hps[0] * np.exp(-d**2/hps[1])
     if len(x1) == len(x2) == len(obj.x_data):
         kernel = linalg.block_diag(*[A @ k @ A.T]*n_sinograms)
@@ -173,7 +180,6 @@ def kernel(x1,x2,hps,obj):
     elif len(x1) != len(x2):
         kernel = np.repeat(A @ k,n_sinograms,0)
         # kernel = A @ k
-    #print(time.time()-st)
     return kernel
 
 
@@ -195,29 +201,96 @@ def mean_func(x,hps,obj):
     return m
 
 
+def cost(origin, x, arguments=None):
+    print('cost:', origin, x)
+    cost_x = 1 / 8  # cost is 1/velocity
+    cost_phi = 1 / 30
+    exposure_time = 1
+    estimated_total_experiment_time = 60*60*1  # in seconds
+    x_origin, phi_origin = origin
+    cost = [(exposure_time + max(abs(ix - x_origin) * cost_x, abs(iphi - phi_origin) * cost_phi))/estimated_total_experiment_time for
+            ix, iphi in x]
+    return cost
+
+
 def bilinear_sample(pos, data):
-    print(f'measuring: x={pos[1]:.1f} y={pos[0]:.1f}')
+    # pos = np.random.random((2,)) * np.array([32, 180])
+    # print(f'measuring: x={pos[1]:.1f} y={pos[0]:.1f}')
     return pos, [ndimage.map_coordinates(sino, [[pos[1]], [pos[0]]], order=1)[0] for sino in data.values()], [.001] * n_sinograms, {}
 
 
-class ProjectionOperatorBuilderGPCamEngine(GPCAMInProcessEngine):
+class BackgroundTraining(GPCAMInProcessEngine):
+    def __init__(self, start_training_at:int = 40, *args, **kwargs):
+        self.training_thread = None
+        self.start_training_at = start_training_at
+        super().__init__(*args, **kwargs)
+
+    def train(self):
+        if not self.training_thread or self.training_thread.done:
+            if len(self.optimizer.y_data) >= self.start_training_at:
+                # pull values from optimizer
+                x, y, v, A = self.optimizer.x_data.copy(), self.optimizer.y_data.copy(), self.optimizer.variances.copy(), self.optimizer.A.copy()
+
+                # pull parameters
+                hyperparameters_bounds = np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
+                             for edge in ['min', 'max']]
+                            for i in range(self.num_hyperparameters)])
+                hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
+                                            for i in range(self.num_hyperparameters)])
+                parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
+                                                for edge in ['min', 'max']]
+                                               for i in range(self.dimensionality)])
+
+                self.training_thread = threads.QThreadFuture(self._background_train,
+                                                             x,
+                                                             y,
+                                                             v,
+                                                             A,
+                                                             parameter_bounds,
+                                                             hyperparameters,
+                                                             hyperparameters_bounds,
+                                                             {'method': 'global'})
+                self.training_thread.start()
+
+        return True
+
+    def _background_train(self, x, y, v, A, parameter_bounds, hyperparameters, hyperparameter_bounds, training_kwargs):
+        logger.info('Training asynchronously...')
+
+        optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
+        optimizer.A = A
+        optimizer.tell(x, y, v)
+        optimizer.init_gp(hyperparameters, **self.gp_opts.copy())
+        optimizer.init_cost(cost)
+        optimizer.train(hyperparameter_bounds, hyperparameters, **training_kwargs)
+
+        self.optimizer.hyperparameters = optimizer.hyperparameters
+        logger.info(f'Hyperparameters set from asynchronous training: {optimizer.hyperparameters}')
+
+
+class ProjectionOperatorBuilderGPCamEngine(BackgroundTraining):
     default_retrain_locally_at = tuple()
-    default_retrain_globally_at = tuple() #tuple(np.array(GPCAMInProcessEngine.default_retrain_globally_at)*3)
+    default_retrain_globally_at = tuple() #82
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        matched_grid_posterior_mean = GPCamPosteriorMean()
-        matched_grid_posterior_mean.shape = (32, 32)
         self.graphs = [
             # GPCamPosteriorCovariance(),
-            #            GPCamAcquisitionFunction(),
-                       DomainGraph(),
+            #            SinogramSpaceGPCamAcquisitionFunction(shape=(32, 32), real_space_bounds=((0, l_x), (0, l_x))),
+                       ReconstructionGraph(shape=(l_x, l_x)),
+                       ProjectionMask(shape=(l_x, l_x)),
+                       ProjectionOperatorGraph(),
                        # GPCamAverageCovariance(),
                        GPCamHyperparameterPlot(),
                        Table(),
                        # Variance(),
-                       # Score()
+                       Score()
         ]
+
+    def init_optimizer(self):
+        super().init_optimizer()
+        self.optimizer.init_cost(cost)
+
     def update_measurements(self, data: Data):
         with data.r_lock():  # quickly grab values within lock before passing to optimizer
             positions = data.positions.copy()
@@ -228,19 +301,13 @@ class ProjectionOperatorBuilderGPCamEngine(GPCAMInProcessEngine):
         scores = np.array(scores).ravel()
         variances = np.array(variances).ravel()
 
-        if getattr(self.optimizer, 'A', None) is None:
-            self.optimizer.A = np.zeros((0, l_x**2))
-
-        if not getattr(self, '_positions_seen', None):
-            self._positions_seen = 0
-
         length_diff = len(positions) - self._positions_seen
         if length_diff:
             for position in positions[-length_diff:]:
                 A_vec = projection_operator(*position, l_x).reshape(1, l_x **2)
                 self.optimizer.A = np.vstack([self.optimizer.A, A_vec])
                 self._positions_seen += 1
-
+                # self.optimizer.positions = np.vstack([self.optimizer.positions, position])
 
         self.optimizer.tell(np.asarray(real_space_positions), np.asarray(scores), np.asarray(variances))
         if not self.optimizer.gp_initialized:
@@ -252,6 +319,73 @@ class ProjectionOperatorBuilderGPCamEngine(GPCAMInProcessEngine):
                 opts['compute_device'] = 'numpy'
 
             self.init_gp(hyperparameters, **opts)
+
+    def reset(self):
+        super().reset()
+        self.optimizer.A = np.zeros((0, l_x ** 2))
+        self.optimizer.positions = np.zeros((0, 2))
+        self._positions_seen = 0
+        if self.graphs:
+            self.graphs[0].last_recon = None
+
+
+class EmptyOptimizer():
+    pass
+
+
+class ProjectionOperatorGrid(Grid):
+    def __init__(self, *args, **kwargs):
+        self.optimizer = EmptyOptimizer()
+        super().__init__(*args, **kwargs)
+        self.graphs = [ReconstructionGraph(),
+                       Table(),
+                       Score()
+                       ]
+
+    def update_measurements(self, data: Data):
+        with data.r_lock():  # quickly grab values within lock before passing to optimizer
+            positions = data.positions.copy()
+
+        length_diff = len(positions) - self._positions_seen
+        if length_diff:
+            for position in positions[-length_diff:]:
+                A_vec = projection_operator(*position, l_x).reshape(1, l_x **2)
+                self.optimizer.A = np.vstack([self.optimizer.A, A_vec])
+                self._positions_seen += 1
+
+    def update_metrics(self, data: Data):
+        for graph in self.graphs:
+            try:
+                graph.compute(data, self)
+            except Exception as ex:
+                logger.exception(ex)
+
+    def reset(self):
+        super().reset()
+        self.optimizer.A = np.zeros((0, l_x ** 2))
+        self._positions_seen = 0
+        if self.graphs:
+            self.graphs[0].last_recon = None
+
+
+class GridFirst(ProjectionOperatorBuilderGPCamEngine):
+    def __init__(self, grid_until_N:int, parameter_bounds, *args, **kwargs):
+        self.grid_until_N = grid_until_N
+        self.grid_engine = Grid(parameter_bounds=parameter_bounds)
+        super().__init__(*args, parameter_bounds=parameter_bounds, **kwargs)
+
+    def request_targets(self, position):
+        if len(self.optimizer.y_data) < self.grid_until_N:
+            self.last_position = position
+            return self.grid_engine.request_targets(position)
+        else:
+            return super().request_targets(position)
+
+    def reset(self):
+        super().reset()
+
+        self.grid_engine.reset()
+
 
 
 if __name__ == "__main__":
@@ -272,7 +406,7 @@ if __name__ == "__main__":
     print('angles:', np.unique(map))
     l_x = map.shape[0]  ##l_x times l_x is the size of the real space image
 
-    domain_maps = {angle: map == angle for angle in np.unique(map)}
+    domain_maps = {angle: map == angle for angle in np.unique(map) if angle == 139}
     n_sinograms = len(domain_maps)
 
     angles = np.linspace(0.0, np.pi, n_angles)
@@ -286,17 +420,20 @@ if __name__ == "__main__":
     execution = SimpleEngine(measure_func=partial(bilinear_sample, data=domain_sinograms))
 
     # Define a gpCAM adaptive engine with initial parameters
-    adaptive = ProjectionOperatorBuilderGPCamEngine(dimensionality=2,
-                                    parameter_bounds=[(0, l_x),
-                                                      (0, 180)],
-                                    hyperparameters=[2, 2.7],
-                                    hyperparameter_bounds=[[0.00001,2.],
-                                                           [0.001,20.]],
-                                    gp_opts=dict(gp_kernel_function=kernel,
-                                                 gp_mean_function=mean_func,
-                                                 # gp_noise_function=noise,
-                                                 ),
-                                    ask_opts=dict(vectorized=False))
+    adaptive = GridFirst(dimensionality=2,
+                         grid_until_N=81,
+                         parameter_bounds=[(0, l_x),
+                                           (0, 180)],
+                         hyperparameters=[9, .16],
+                         hyperparameter_bounds=[[.1, 1e3],  # signal variance
+                                                [.1, 1e4]],  # lengthscale
+                         gp_opts=dict(gp_kernel_function=kernel,
+                                      gp_mean_function=mean_func,
+                                      # gp_noise_function=noise,
+                                      ),
+                         ask_opts=dict(vectorized=False))
+
+    # adaptive = ProjectionOperatorGrid(parameter_bounds=[(0, l_x), (0, 180)])
 
     # x_data = np.empty((l_x ** 2, 2))
     # y_data = np.zeros((n_angles * l_det))
