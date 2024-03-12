@@ -1,3 +1,77 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tsuchinoko"
+dependencies = [
+  "pyside2",
+  "bluesky",
+  "ophyd",
+  "pyqtgraph",
+  "gpCAM<7.5",  # pinned to moderate release cycle
+  "fvgp<3.4",   # pinned to moderate release cycle
+  "numpy",
+  "scipy",
+  "qtmodern",
+  "qtpy",
+  "click",
+  "pyopengl",
+  "pyopengl-accelerate",
+  "qtconsole",
+  "scikit-learn",
+  "torch<2.0.0",  # conflict with pyinstaller
+  "pyqode.python",
+  "pyqode.core",
+  "loguru"
+]
+requires-python = ">=3.9"
+authors = [
+  {name = "Ronald J. Pandolfi", email = "ronpandolfi@lbl.gov"},
+]
+maintainers = [
+  {name = "Ronald J. Pandolfi", email = "ronpandolfi@lbl.gov"}
+]
+description = "A Qt application for adaptive experiment tuning and execution "
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["autonomous", "self driving", "adaptive", "gui", "qt"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Natural Language :: English",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = ["pyinstaller"]
+docs = ["sphinx", "sphinx-markdown-tables", "numpydoc", "sphinx_copybutton", "myst_parser", "sphinx_rtd_theme", "sphinx_rtd_dark_mode"]
+tests = ["pytest<8", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixture"]
+
+[project.urls]
+Homepage = "https://tsuchinoko.readthedocs.io/"
+Documentation = "https://tsuchinoko.readthedocs.io/"
+Repository = "https://github.com/lbl-camera/tsuchinoko.git"
+"Bug Tracker" = "https://github.com/lbl-camera/tsuchinoko/issues"
+Changelog = "https://github.com/lbl-camera/tsuchinoko/commits/master/"
+
+[project.scripts]
+tsuchinoko_demo = "tsuchinoko:launch_server"
+tsuchinoko_bootstrap = "tsuchinoko:bootstrap"
+
+[project.gui-scripts]
+tsuchinoko = "tsuchinoko:launch_client"
+
+#[project.entry-points."spam.magical"]
+#tomatoes = "spam:main_tomatoes"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "tsuchinoko/_version.py"
+
 [tool.black]
 include = '\.pyi?$'
 exclude = '''

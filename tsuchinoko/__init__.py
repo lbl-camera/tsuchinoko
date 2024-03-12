@@ -1,28 +1,21 @@
-import click
-from qtpy.QtCore import QEventLoop
-from pyqtgraph import mkQApp
 import ctypes
-import os
-import asyncio
 import importlib
-import sys
+import os
 import runpy
+import sys
 
-from ._version import get_versions
+import click
+from pyqtgraph import mkQApp
 
-__version__ = get_versions()['version']
-
-from . import patches
-from .utils import runengine
 from . import parameters  # registers parameter types
-
-del get_versions
+from . import patches
+from ._version import __version__
+from .utils import runengine
 
 
 @click.command()
 @click.argument('core_address', required=False, default='localhost')
 def launch_client(core_address='localhost'):
-
     if os.name == 'nt':
         # https://stackoverflow.com/questions/67599432/setting-the-same-icon-as-application-icon-in-task-bar-for-pyqt5-application
         myappid = 'camera.tsuchinoko'  # arbitrary string
