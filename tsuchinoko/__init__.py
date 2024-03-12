@@ -9,8 +9,11 @@ from pyqtgraph import mkQApp
 
 from . import parameters  # registers parameter types
 from . import patches
-from ._version import __version__
 from .utils import runengine
+try:
+    from ._version import __version__
+except ImportError as ex:
+    raise ImportError("You probably haven't installed tsuchinoko yet: pip install -e .") from ex
 
 
 @click.command()
