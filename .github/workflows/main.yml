@@ -58,8 +58,8 @@ jobs:
 
       - name: Setup deploy
         run: |
-          pip install --upgrade setuptools wheel twine
-          python setup.py sdist bdist_wheel
+          pip install --upgrade build wheel twine
+          python -m build
 
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
