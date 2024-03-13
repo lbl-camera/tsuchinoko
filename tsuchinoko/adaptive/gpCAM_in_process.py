@@ -70,11 +70,12 @@ class GPCAMInProcessEngine(Engine):
                            Table()]
 
     def init_optimizer(self):
-        parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
-                                        for edge in ['min', 'max']]
-                                       for i in range(self.dimensionality)])
+        opts = self.gp_opts.copy()
+        # TODO: only fallback to numpy when packaged as an app
+        if sys.platform == 'darwin':
+            opts['compute_device'] = 'numpy'
 
-        self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
+        self.optimizer = GPOptimizer(np.random.rand(2, self.dimensionality), np.random.rand(2), **opts) # give hyperparameters!!!!!!!!!!!!!!!!!
 
     def reset(self):
         self._completed_training = {'global': set(),
@@ -113,13 +114,6 @@ class GPCAMInProcessEngine(Engine):
         return GroupParameter(name='top', children=parameters)
 
     def _set_hyperparameter(self, parameter, value):
-        self.optimizer.gp_initialized = False  # Force re-initialization
-        opts = self.gp_opts.copy()
-        # TODO: only fallback to numpy when packaged as an app
-        if sys.platform == 'darwin':
-            opts['compute_device'] = 'numpy'
-        # self.optimizer.init_gp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-        #                                    for i in range(self.num_hyperparameters)]), **opts)
         hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                            for i in range(self.num_hyperparameters)])
         self.optimizer.hyperparameters = hyperparameters
@@ -130,18 +124,6 @@ class GPCAMInProcessEngine(Engine):
             scores = data.scores.copy()
             variances = data.variances.copy()
         self.optimizer.tell(np.asarray(positions), np.asarray(scores), np.asarray(variances))
-        if not self.optimizer.gp_initialized:
-            hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                          for i in range(self.num_hyperparameters)])
-            opts = self.gp_opts.copy()
-            # TODO: only fallback to numpy when packaged as an app
-            if sys.platform == 'darwin':
-                opts['compute_device'] = 'numpy'
-
-            self.init_gp(hyperparameters, **opts)
-
-    def init_gp(self, hyperparameters, **opts):
-        self.optimizer.init_gp(hyperparameters, **opts)
 
     def update_metrics(self, data: Data):
         for graph in self.graphs:
@@ -157,14 +139,10 @@ class GPCAMInProcessEngine(Engine):
                     for i in range(self.dimensionality)])
         n = self.parameters['n']
 
-        # If the GP is not initialized, generate random targets
-        if not self.optimizer.gp_initialized:
-            return [[np.random.uniform(bounds[i][0], bounds[i][1]) for i in range(self.dimensionality)] for j in range(n)]
-        else:
-            kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
-            kwargs.update({'bounds': bounds})
-            kwargs.update(self.ask_opts)
-            return self.optimizer.ask(position, n, acquisition_function=gpcam_acquisition_functions[kwargs.pop('acquisition_function')], **kwargs)['x']
+        kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
+        kwargs.update({'bounds': bounds})
+        kwargs.update(self.ask_opts)
+        return self.optimizer.ask(position=position, n=n, acquisition_function=gpcam_acquisition_functions[kwargs.pop('acquisition_function')], **kwargs)['x']
 
     def train(self):
         for method in ['global', 'local']:
@@ -173,13 +151,12 @@ class GPCAMInProcessEngine(Engine):
             for N in train_at:
                 if len(self.optimizer.y_data) > N and N not in self._completed_training[method]:
                     logger.info('Training in progress. This make take a while...')
-                    self.optimizer.train(np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
+                    self.optimizer.train(hyperparameter_bounds=np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
                                                       for edge in ['min', 'max']]
                                                      for i in range(self.num_hyperparameters)]),
-                                         np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
+                                         init_hyperparameters=np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                                      for i in range(self.num_hyperparameters)]), method=method)
                     self._completed_training[method].add(N)
                     logger.info(f"New hyperparameters: {self.optimizer.hyperparameters}")
-                    # return  # only does global training if specified for both
 
         return True
