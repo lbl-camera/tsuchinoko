@@ -316,7 +316,7 @@ class GPCamPosteriorCovariance(Image):
 
         # assign to data object with lock
         with data.w_lock():
-            data.states[self.data_key] = result_dict['S(x)']
+            data.states[self.data_key] = result_dict['S']
 
 
 @dataclass(eq=False)
