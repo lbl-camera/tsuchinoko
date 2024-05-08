@@ -6,7 +6,7 @@ from typing import Tuple, ClassVar, List
 import numpy as np
 from loguru import logger
 from pyqtgraph import PlotItem, PlotWidget, TableWidget, mkColor, intColor, PlotDataItem, mkPen, mkBrush, colormap, \
-    ScatterPlotItem
+    ScatterPlotItem, BarGraphItem
 from qtpy.QtWidgets import QFormLayout, QWidget, QComboBox, QLabel, QVBoxLayout
 from qtpy.QtCore import Qt, QSignalBlocker, Signal, QRectF
 
@@ -177,6 +177,28 @@ class PlotGraphWidget(PlotWidget):
         super().__init__(*args, **kwargs)
         if label_key:
             self.getPlotItem().addLegend()
+
+
+@dataclass(eq=False)
+class Bar(Graph):
+    data_key: ClassVar[str] = None
+    widget_class = PlotGraphWidget
+    label_key: InitVar[str] = None
+
+    def __post_init__(self, label_key):
+        self.widget_kwargs['label_key'] = label_key
+
+    def update(self, widget, data, update_slice: slice):
+        if not hasattr(self, 'bgi'):
+            self.bgi = BarGraphItem(x0=[], x1=[], height=[], pen='w', brush=(0, 0, 255, 150))
+            widget.addItem(self.bgi)
+
+        with data.r_lock():
+            y, x  = data[self.data_key].copy()
+
+        self.bgi.setOpts(x0=x[:-1], x1=x[1:], height=y)
+
+
 
 
 @dataclass(eq=False)
