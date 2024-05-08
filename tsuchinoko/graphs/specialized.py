@@ -7,7 +7,7 @@ from scipy import linalg, sparse
 from tsuchinoko.graphics_items.mixins import YInvert, ClickRequester, BetterButtons, LogScaleIntensity, AspectRatioLock, \
     BetterAutoLUTRangeImageView, DomainROI
 from tsuchinoko.graphs import Location
-from tsuchinoko.graphs.common import Image, ImageViewBlendROI, image_grid, ImageViewBlend
+from tsuchinoko.graphs.common import Image, ImageViewBlendROI, image_grid, ImageViewBlend, Plot, Bar
 
 
 class NonViridisBlend(YInvert,
@@ -136,3 +136,29 @@ class SinogramSpaceGPCamAcquisitionFunction(Image):
             data.states[self.data_key] = acquisition_function_value
 
 
+@dataclass(eq=False)
+class ReconHistogram(Bar):
+    compute_with = Location.AdaptiveEngine
+    data_key = 'Recon Histogram'
+    name = "Recon Histogram"
+
+    def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        scores = np.array(data.scores)
+
+        try:
+            num_sinograms = len(scores[0])
+        except TypeError:
+            num_sinograms = 1
+
+        # calculate domain maps
+        self.last_recon = sirt(scores.T.ravel(),
+                               linalg.block_diag(*[engine.optimizer.A] * num_sinograms),
+                               num_iterations=1,
+                               initial=getattr(self, 'last_recon', None))
+
+        # calculate histogram
+        y, x = np.histogram(self.last_recon, bins=100)
+
+        # assign to data object with lock
+        with data.w_lock():
+            data.states[self.data_key] = [y, x]
