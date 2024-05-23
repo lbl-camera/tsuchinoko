@@ -86,7 +86,7 @@ class ProjectionMask(Image):
 @dataclass(eq=False)
 class ProjectionOperatorGraph(Image):
     compute_with = Location.AdaptiveEngine
-    shape = (32, 32)
+    shape: tuple = (32, 32)
     data_key = 'Projection Operator'
     # widget_class = NonViridisBlend
     transform_to_parameter_space = False
