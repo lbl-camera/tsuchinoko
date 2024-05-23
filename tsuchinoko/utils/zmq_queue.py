@@ -300,9 +300,9 @@ xf11bm_gpu2 = '10.68.80.29'
 # }
 
 c = {
-    'decision': {'ip': local, 'port': 5551},
-    'measure': {'ip': local, 'port': 5552},
-    'analyze': {'ip': local, 'port': 5553},
+    'decision': {'ip': local, 'port': 5557},
+    'measure': {'ip': local, 'port': 5558},
+    'analyze': {'ip': local, 'port': 5559},
 }
 
 # c = {
@@ -321,7 +321,7 @@ class Queue_decision(CustomQueue):  # gpCAM
         super().__init__(from_port=from_port, to_port=to_port, from_ip=from_ip, to_ip=to_ip, name=name,
                          save_dir=save_dir, verbosity=verbosity, **kwargs)
 
-    def get(self, save=True, check_interrupted=True, force_load=False):
+    def get(self, save=True, check_interrupted=False, force_load=False):
         return super().get(save=save, check_interrupted=check_interrupted, force_load=force_load)
 
 
@@ -331,7 +331,7 @@ class Queue_measure(CustomQueue):  # beamline
         super().__init__(from_port=from_port, to_port=to_port, from_ip=from_ip, to_ip=to_ip, name=name,
                          save_dir=save_dir, verbosity=verbosity, **kwargs)
 
-    def get(self, save=True, check_interrupted=True, force_load=False):
+    def get(self, save=True, check_interrupted=False, force_load=False):
         return super().get(save=save, check_interrupted=check_interrupted, force_load=force_load)
 
 
@@ -341,7 +341,7 @@ class Queue_analyze(CustomQueue):  # SciAnalysis
         super().__init__(from_port=from_port, to_port=to_port, from_ip=from_ip, to_ip=to_ip, name=name,
                          save_dir=save_dir, verbosity=verbosity, **kwargs)
 
-    def get(self, save=True, check_interrupted=True, force_load=False):
+    def get(self, save=True, check_interrupted=False, force_load=False):
         return super().get(save=save, check_interrupted=check_interrupted, force_load=force_load)
 
 
