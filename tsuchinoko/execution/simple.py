@@ -42,6 +42,7 @@ class SimpleEngine(Engine):
             if not self._gives_metrics:
                 measurement = [*measurement, {}]
             self.new_measurements.append(tuple(measurement))
+            self.targets.task_done()
 
         measurements = self.new_measurements
         self.new_measurements = []
