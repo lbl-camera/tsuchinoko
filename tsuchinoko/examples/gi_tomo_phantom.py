@@ -24,7 +24,7 @@ from tsuchinoko.graphs.common import Table, Image, ImageViewBlendROI, image_grid
     GPCamHyperparameterPlot, Score, Variance, GPCamAcquisitionFunction
 from tsuchinoko.utils import threads
 from tsuchinoko.graphs.specialized import ReconstructionGraph, ProjectionOperatorGraph, \
-    SinogramSpaceGPCamAcquisitionFunction, ProjectionMask, ReconHistogram
+    SinogramSpaceGPCamAcquisitionFunction, ProjectionMask, ReconHistogram, sirt
 import PIL
 
 from tsuchinoko.utils.zmq_queue import Queue_decision
@@ -113,12 +113,36 @@ def projection_operator(x, phi, map_size, center=None, width=1, length=None):
     return map_mask
 
 
+def get_distance_matrix(x1, x2):
+    """
+    Function to calculate the pairwise distance matrix of
+    points in x1 and x2.
+
+    Parameters
+    ----------
+    x1 : np.ndarray
+        Numpy array of shape (U x D).
+    x2 : np.ndarray
+        Numpy array of shape (V x D).
+
+    Return
+    ------
+    distance matrix : np.ndarray
+    """
+    d = np.zeros((len(x1), len(x2)))
+    for i in range(x1.shape[1]): d += (x1[:, i].reshape(-1, 1) - x2[:, i]) ** 2
+    return np.sqrt(d)
+
+
 def kernel(x1,x2,hps,obj):
     # print('kernel:', hps, x1, x2)
     # with log_time('kernel', cumulative_key='kernel'):
     A = obj.A
     #this kernel takes elements from the real space the prior covariance in sinogram space
-    d = obj.get_distance_matrix(x1, x2)
+    # newstyle
+    # d = obj.get_distance_matrix(x1, x2)
+    # oldstyle
+    d = get_distance_matrix(x1, x2)
     k = hps[0] * np.exp(-d**2/hps[1])
     if len(x1) == len(x2) == len(obj.x_data):  # training
         kernel = linalg.block_diag(*[A @ k @ A.T]*n_sinograms)
@@ -137,8 +161,10 @@ def noise(x,hps,obj):
     n = A @ (np.zeros((len(x))) + 0.01)
     return np.diag(n)
 
-
-def mean_func(x,hps,obj):
+# newstyle
+# def mean_func(x,hps,obj):
+# oldstyle
+def mean_func(obj, x, hps):
     A = obj.A
     #this function takes elements from the real space and returns prior mean values in sinogram space
     # m = A @ np.zeros(len(x),)
@@ -163,24 +189,29 @@ def cost(origin, x, arguments=None):
 
 last_variance = (-1, None)
 last_mean = (-1, None)
+last_recon = (-1, None)
 
 
 def memoized_posterior_variance(x, gp):
     global last_variance
-    if len(gp.y_data) == last_variance[0]:
-        return last_variance[1]
-    else:
+    if len(gp.y_data) != last_variance[0]:
         last_variance = len(gp.y_data), gp.posterior_covariance(x, variance_only=True)["v(x)"]
-        return last_variance[1]
+    return last_variance[1]
 
 
 def memoized_posterior_mean(x, gp):
     global last_mean
-    if len(gp.y_data) == last_mean[0]:
-        return last_mean[1]
-    else:
+    if len(gp.y_data) != last_mean[0]:
         last_mean = len(gp.y_data), gp.posterior_mean(x)["f(x)"]
-        return last_mean[1]
+    return last_mean[1]
+
+
+def memoized_recon(gp):
+    global last_recon
+    if len(gp.y_data) != last_recon[0]:
+        last_recon = len(gp.y_data), sirt(gp.y_data, gp.A, num_iterations=30)
+        gp.last_recon = last_recon[1]
+    return last_recon[1]
 
 
 def variance(x, gp):
@@ -236,9 +267,9 @@ def binary_resolve(x, gp):
 
     v_s = memoized_posterior_variance(grid_positions[:-1], gp)
     m_s = memoized_posterior_mean(grid_positions[:-1], gp)
+    recon = memoized_recon(gp)
 
     v = np.array([projection.ravel()[:-1] * v_s for projection in projections])
-    m = np.array([projection.ravel()[:-1] * m_s for projection in projections])
 
     # normalize m_s by projection length
 
@@ -248,8 +279,15 @@ def binary_resolve(x, gp):
     mid = (high-low)/2 + low
     width = high-mid
 
-    #d = np.average(np.abs(m) - 1, axis=1) + 3.0 * np.sqrt(v)
-    d = np.average(np.abs(np.abs(m-mid) - width), axis=1) + 3.0 * np.sqrt(np.average(v, axis=1))
+    binary_levels_distance = np.abs(np.abs(m_s - mid) - width)
+    m = np.array([projection.ravel()[:-1] * binary_levels_distance for projection in projections])
+    cumulative_measurements = np.array([projection.ravel() * np.sum(gp.A, axis=0) for projection in projections])
+
+    average_binary_distance = np.average(m, axis=1)
+    average_cumulative_measurements = np.maximum(np.average(cumulative_measurements, axis=1), .0000001)
+
+
+    d = average_binary_distance / average_cumulative_measurements
 
     return d
 
@@ -259,7 +297,7 @@ def bilinear_sample(pos, data):
     # print(f'measuring: x={pos[1]:.1f} y={pos[0]:.1f}')
     # return pos, [ndimage.map_coordinates(sino, [[pos[1]], [pos[0]]], order=1)[0] for sino in data.values()], [.001] * n_sinograms, {}
     A = projection_operator(*pos, l_x).reshape(l_x, l_x)
-    return pos, [np.sum(map * A) for map in data.values()], [.001] * n_sinograms, {}
+    return pos, [np.sum(map * A) for map in data.values()], [.00001] * n_sinograms, {}
 
 
 def push_to_queue(pos):
@@ -284,7 +322,10 @@ class BackgroundTraining(GPCAMInProcessEngine):
         if not self.training_thread or self.training_thread.done:
             if len(self.optimizer.y_data) >= self.start_training_at:
                 # pull values from optimizer
-                x, y, v, A = self.optimizer.x_data.copy(), self.optimizer.y_data.copy(), self.optimizer.V.copy(), self.optimizer.A.copy()
+                # newstyle
+                # x, y, v, A = self.optimizer.x_data.copy(), self.optimizer.y_data.copy(), self.optimizer.V.copy(), self.optimizer.A.copy()
+                # oldstyle
+                x, y, v, A = self.optimizer.x_data.copy(), self.optimizer.y_data.copy(), self.optimizer.variances.copy(), self.optimizer.A.copy()
 
                 # pull parameters
                 hyperparameters_bounds = np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
@@ -311,14 +352,21 @@ class BackgroundTraining(GPCAMInProcessEngine):
 
     def _background_train(self, x, y, v, A, parameter_bounds, hyperparameters, hyperparameter_bounds, training_kwargs):
         logger.info('Training asynchronously...')
-        optimizer = GPOptimizer(x,
-                                y,
-                                noise_variances=v,
-                                init_hyperparameters=hyperparameters,
-                                hyperparameter_bounds=hyperparameter_bounds,
-                                **self.gp_opts.copy())
+        # newstyle
+        # optimizer = GPOptimizer(x,
+        #                         y,
+        #                         noise_variances=v,
+        #                         init_hyperparameters=hyperparameters,
+        #                         hyperparameter_bounds=hyperparameter_bounds,
+        #                         **self.gp_opts.copy())
+
+        # oldstyle
+        optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
         optimizer.A = A.copy()
-        optimizer.train(**training_kwargs)
+        optimizer.tell(x, y, v)
+        opts = self.gp_opts.copy()
+        optimizer.init_gp(init_hyperparameters=hyperparameters, **opts)
+        optimizer.train(hyperparameter_bounds=hyperparameter_bounds, init_hyperparameters=hyperparameters, **training_kwargs)
 
         self.optimizer.hyperparameters = optimizer.hyperparameters
         logger.info(f'Hyperparameters set from asynchronous training: {optimizer.hyperparameters}')
@@ -350,13 +398,21 @@ class ProjectionOperatorBuilderGPCamEngine(BackgroundTraining):
         if sys.platform == 'darwin':
             opts['compute_device'] = 'numpy'
 
-        # swap in full real-space grid
 
-        real_space_positions = np.mgrid[:l_x, :l_x].T.reshape(-1, 2)
-        self.optimizer = GPOptimizer(real_space_positions,
-                                     np.random.rand(2),
-                                     noise_variances=np.ones((2,))*.01,
-                                     **opts)  # give hyperparameters!!!!!!!!!!!!!!!!!
+
+
+        # oldstyle
+        parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
+                                        for edge in ['min', 'max']]
+                                       for i in range(self.dimensionality)])
+        self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
+
+        # newstyle
+        # real_space_positions = np.mgrid[:l_x, :l_x].T.reshape(-1, 2) # swap in full real-space grid
+        # self.optimizer = GPOptimizer(real_space_positions,
+        #                              np.random.rand(2),
+        #                              #noise_variances=np.ones((2,))*.01,
+        #                              **opts)  # give hyperparameters!!!!!!!!!!!!!!!!!
 
     def update_measurements(self, data: Data):
         with data.r_lock():  # quickly grab values within lock before passing to optimizer
@@ -377,6 +433,17 @@ class ProjectionOperatorBuilderGPCamEngine(BackgroundTraining):
                 # self.optimizer.positions = np.vstack([self.optimizer.positions, position])
 
         self.optimizer.tell(np.asarray(real_space_positions), np.asarray(scores), np.asarray(variances))
+
+        # oldstyle
+        if not self.optimizer.gp_initialized:
+            hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
+                                          for i in range(self.num_hyperparameters)])
+            opts = self.gp_opts.copy()
+            # TODO: only fallback to numpy when packaged as an app
+            if sys.platform == 'darwin':
+                opts['compute_device'] = 'numpy'
+
+            self.init_gp(hyperparameters, **opts)
 
     def reset(self):
         super().reset()
@@ -433,8 +500,7 @@ class GridFirst(ProjectionOperatorBuilderGPCamEngine):
         super().__init__(*args, parameter_bounds=parameter_bounds, **kwargs)
 
     def request_targets(self, position):
-        if len(self.optimizer.y_data) < self.grid_until_N:
-            self.last_position = position
+        if not hasattr(self.optimizer, 'y_data') or len(self.optimizer.y_data) < self.grid_until_N:
             return self.grid_engine.request_targets(position)
         else:
             return super().request_targets(position)
@@ -479,7 +545,7 @@ map = (np.asarray(image) / 255 * n_angles).astype(int) % n_angles
 print('angles:', np.unique(map))
 l_x = map.shape[0]  ##l_x times l_x is the size of the real space image
 
-domain_maps = {angle: map == angle for angle in np.unique(map) if angle == 139}
+domain_maps = {angle: (map == angle)*2-1 for angle in np.unique(map) if angle == 139}
 # n_sinograms = len(domain_maps)
 n_sinograms = 1
 
@@ -507,14 +573,14 @@ if __name__ == "__main__":
                          grid_until_N=4,
                          parameter_bounds=[(0, l_x-1),  # NOTE: THIS -1 is important to avoid the projection weight not becoming empty
                                            (0, 180)],
-                         hyperparameters=[9, .16],
+                         hyperparameters=[1, 2],
                          hyperparameter_bounds=[[.1, 1e3],  # signal variance
                                                 [.1, 1e4]],  # lengthscale
                          gp_opts=dict(gp_kernel_function=kernel,
                                       gp_mean_function=mean_func,
-                                      gp_noise_function=noise,
+                                      #gp_noise_function=noise, # newstyle
                                       ),
-                         ask_opts=dict(vectorized=False),
+                         # ask_opts=dict(vectorized=False),
                          acquisition_functions={'Binary Resolve': binary_resolve,
                                                 'Projected Variance': variance,
                                                 'Projected UCB': ucb})
