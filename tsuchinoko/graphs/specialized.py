@@ -153,14 +153,16 @@ class ReconHistogram(Bar):
             num_sinograms = 1
 
         # calculate domain maps
-        self.last_recon = sirt(scores.T.ravel(),
-                               linalg.block_diag(*[engine.optimizer.A] * num_sinograms),
-                               num_iterations=1,
-                               initial=getattr(self, 'last_recon', None))
+        # self.last_recon = sirt(scores.T.ravel(),
+        #                        linalg.block_diag(*[engine.optimizer.A] * num_sinograms),
+        #                        num_iterations=1,
+        #                        initial=getattr(self, 'last_recon', None))
+        self.last_recon = getattr(engine.optimizer, 'last_recon', None)
 
         # calculate histogram
         y, x = np.histogram(self.last_recon, bins=100)
 
-        # assign to data object with lock
-        with data.w_lock():
-            data.states[self.data_key] = [y, x]
+        if self.last_recon is not None:
+            # assign to data object with lock
+            with data.w_lock():
+                data.states[self.data_key] = [y, x]
