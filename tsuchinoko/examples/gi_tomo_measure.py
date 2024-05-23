@@ -12,6 +12,7 @@ if __name__ == "__main__":
 
         pos = measure_queue.get()  # Get measurement command
         print('received:', pos)
-        measurement = bilinear_sample(pos, domain_maps)
-        print('sending:', measurement)
-        measure_queue.publish(measurement)  # Send new results for analysis
+        pos[0]['value'] = bilinear_sample(pos[0]['position'], domain_maps)
+        print('sending:', pos)
+        measure_queue.publish(pos)  # Send new results for analysis
+

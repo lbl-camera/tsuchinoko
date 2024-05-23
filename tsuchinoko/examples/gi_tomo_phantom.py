@@ -28,6 +28,10 @@ from tsuchinoko.graphs.specialized import ReconstructionGraph, ProjectionOperato
 import PIL
 
 from tsuchinoko.utils.zmq_queue import Queue_decision
+from uuid import uuid4
+
+
+session_id = uuid4()
 
 
 def trapez(y,y0,w):
@@ -260,9 +264,14 @@ def bilinear_sample(pos, data):
 
 def push_to_queue(pos):
     logger.critical(f'publishing: {pos}')
-    decision_queue.publish(pos)
-    measurement = decision_queue.get()
-    return measurement
+    decision_queue.publish([{'session': session_id, 'position': pos}])
+    while True:
+        measurement = decision_queue.get()
+        if measurement[0]['session'] != session_id:
+            logger.critical('Stale data received. Clearing Queue...')
+        else:
+            break
+    return measurement[0]['value']
 
 
 class BackgroundTraining(GPCAMInProcessEngine):
@@ -436,7 +445,14 @@ class GridFirst(ProjectionOperatorBuilderGPCamEngine):
         self.grid_engine.reset()
 
 
-class ThresholdResolve(GridFirst):
+class SessionReset(GPCAMInProcessEngine):
+    def reset(self):
+        global session_id
+        session_id = uuid4()
+        super().reset()
+
+
+class ThresholdResolve(GridFirst, SessionReset):
     binary_low = SimpleParameter(title='Binary Low', name='binary_low', type='float', value=-1)
     binary_high = SimpleParameter(title='Binary High', name='binary_high', type='float', value=1)
     @cached_property
