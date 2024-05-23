@@ -57,14 +57,16 @@ class ReconstructionGraph(Image):
             num_sinograms = 1
 
         # calculate domain maps
-        self.last_recon = sirt(scores.T.ravel(),
-                               linalg.block_diag(*[engine.optimizer.A] * num_sinograms),
-                               num_iterations=1,
-                               initial=getattr(self, 'last_recon', None))
+        # self.last_recon = sirt(scores.T.ravel(),
+        #                        linalg.block_diag(*[engine.optimizer.A] * num_sinograms),
+        #                        num_iterations=1,
+        #                        initial=getattr(self, 'last_recon', None))
+        self.last_recon = getattr(engine.optimizer, 'last_recon', None)
 
         # assign to data object with lock
-        with data.w_lock():
-            data.states[self.data_key] = np.fliplr(self.last_recon.reshape(num_sinograms, *self.shape).T)
+        if self.last_recon is not None:
+            with data.w_lock():
+                data.states[self.data_key] = np.fliplr(self.last_recon.reshape(num_sinograms, *self.shape).T)
 
 
 @dataclass(eq=False)
@@ -84,7 +86,7 @@ class ProjectionMask(Image):
 @dataclass(eq=False)
 class ProjectionOperatorGraph(Image):
     compute_with = Location.AdaptiveEngine
-    # shape = (32, 32)
+    shape = (32, 32)
     data_key = 'Projection Operator'
     # widget_class = NonViridisBlend
     transform_to_parameter_space = False
@@ -93,7 +95,7 @@ class ProjectionOperatorGraph(Image):
 
         # assign to data object with lock
         with data.w_lock():
-            data.states[self.data_key] = engine.optimizer.A
+            data.states[self.data_key] = np.sum(engine.optimizer.A, axis=0).reshape(*self.shape)
 
 
 @dataclass(eq=False)
