@@ -310,7 +310,7 @@ class ZMQCore(Core):
         for socket in sockets:
             try:
                 request = await socket.recv_pyobj(zmq.NOBLOCK)
-            except zmq.ZMQError as ex:
+            except (zmq.ZMQError, zmq.error.Again) as ex:
                 logger.exception(ex)
             else:
                 if not request:

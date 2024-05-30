@@ -18,7 +18,7 @@ except ImportError:
     from yaml import Loader, Dumper
 
 import zmq
-from zmq.error import ZMQError
+from zmq.error import ZMQError, Again
 import numpy as np
 from qtpy.QtGui import QIcon
 from loguru import logger
@@ -217,7 +217,7 @@ class MainWindow(QMainWindow):
             try:
                 self.socket.send_pyobj(request)
                 response = self.socket.recv_pyobj()
-            except ZMQError as ex:
+            except (ZMQError, Again) as ex:
                 logger.warning(f'Unable to connect to core server at {self.core_address}...')
                 time.sleep(1)
                 # logger.exception(ex)
