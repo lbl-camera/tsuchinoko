@@ -75,6 +75,10 @@ class Data:
                         self.graphics_items)
         raise ValueError(f'Unknown item: {item}')
 
+    def __contains__(self, item):
+        if isinstance(item, str):
+            return item in self.states or item in self.metrics
+
     def __setitem__(self, key, value):
         if isinstance(key, str):
             self.metrics[key] = value
