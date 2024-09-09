@@ -4,6 +4,7 @@ import os
 import runpy
 import sys
 
+
 import click
 from pyqtgraph import mkQApp
 

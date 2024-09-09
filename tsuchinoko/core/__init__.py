@@ -1,10 +1,13 @@
+import os
 import threading
 import time
 from asyncio import events
 from enum import Enum, auto
 from queue import Queue
+from appdirs import user_state_dir
 
 from loguru import logger
+from yaml import dump
 
 from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, \
     UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, \
@@ -15,6 +18,7 @@ from ..adaptive import Engine as AdaptiveEngine, Data
 from ..execution import Engine as ExecutionEngine
 from ..utils.logging import log_time
 
+user_state_dir = user_state_dir('tsuchinoko','camera')
 
 class CoreState(Enum):
     Connecting = auto()
@@ -48,6 +52,11 @@ class Core:
         self._forced_measurement_queue = Queue()
         self._has_fresh_data = True
         self.compute_metrics = compute_metrics
+        self.checkpoint_template = 'checkpoint_{n}'
+        self.checkpoint_at = []
+        self.pause_at = []
+        self.stop_at = []
+        self.exit_at = []
 
         self.data = Data()
         self._graphs = []
@@ -123,6 +132,17 @@ class Core:
         while True:
             if self.state == CoreState.Running:
                 logger.info(f'Iteration: {self.data._completed_iterations}, Data count: {len(self.data)}')
+                if self.data._completed_iterations in self.checkpoint_at:
+                    self.save_checkpoint()
+                if self.data._completed_iterations in self.pause_at:
+                    self.state = CoreState.Pausing
+                    continue
+                if self.data._completed_iterations in self.stop_at:
+                    self.state = CoreState.Stopping
+                    return
+                if self.data._completed_iterations in self.exit_at:
+                    self.state = CoreState.Exiting
+                    return
                 try:
                     self.experiment_iteration()
                 except Exception as ex:
@@ -207,6 +227,12 @@ class Core:
         with log_time('updating engine with initial measurements'):
             self.data = Data(dimensionality=len(x[0]), positions=x, scores=y, variances=v)
             self.adaptive_engine.update_measurements(self.data)
+
+    def save_checkpoint(self):
+        checkpoint_file_path = os.path.join(user_state_dir,
+                                            self.checkpoint_template.format(n=self.data._completed_iterations))
+
+        dump(self.data.as_dict(), open(checkpoint_file_path, 'w'))
 
 
 class ZMQCore(Core):
