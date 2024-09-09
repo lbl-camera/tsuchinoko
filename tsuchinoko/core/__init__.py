@@ -52,7 +52,7 @@ class Core:
         self._forced_measurement_queue = Queue()
         self._has_fresh_data = True
         self.compute_metrics = compute_metrics
-        self.checkpoint_template = 'checkpoint_{n}'
+        self.checkpoint_template = 'checkpoint_{n}.yml'
         self.checkpoint_at = []
         self.pause_at = []
         self.stop_at = []
@@ -231,7 +231,7 @@ class Core:
     def save_checkpoint(self):
         checkpoint_file_path = os.path.join(user_state_dir,
                                             self.checkpoint_template.format(n=self.data._completed_iterations))
-        os.makedirs(checkpoint_file_path, exist_ok=True)
+        os.makedirs(os.path.dirname(checkpoint_file_path), exist_ok=True)
         dump(self.data.as_dict(), open(checkpoint_file_path, 'w'))
 
 
