@@ -228,8 +228,8 @@ class Core:
             self.data = Data(dimensionality=len(x[0]), positions=x, scores=y, variances=v)
             self.adaptive_engine.update_measurements(self.data)
 
-    def save_checkpoint(self):
-        checkpoint_file_path = os.path.join(user_state_dir,
+    def save_checkpoint(self, directory=user_state_dir):
+        checkpoint_file_path = os.path.join(directory,
                                             self.checkpoint_template.format(n=self.data._completed_iterations))
         os.makedirs(os.path.dirname(checkpoint_file_path), exist_ok=True)
         dump(self.data.as_dict(), open(checkpoint_file_path, 'w'))
