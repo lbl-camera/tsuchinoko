@@ -12,7 +12,7 @@ from . import patches
 from .utils import runengine
 try:
     from ._version import __version__
-except ImportError as ex:
+except (ImportError, ModuleNotFoundError) as ex:
     raise ImportError("You probably haven't installed tsuchinoko yet: pip install -e .") from ex
 
 
