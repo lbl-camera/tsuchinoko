@@ -194,7 +194,10 @@ class Bar(Graph):
             widget.addItem(self.bgi)
 
         with data.r_lock():
-            y, x  = data[self.data_key].copy()
+            if self.data_key in data:
+                y, x = data[self.data_key].copy()
+            else:
+                logger.warning(f'A graph could not find the required key: {self.data_key}.')
 
         self.bgi.setOpts(x0=x[:-1], x1=x[1:], height=y)
 
@@ -338,7 +341,7 @@ class GPCamPosteriorCovariance(Image):
 
         # assign to data object with lock
         with data.w_lock():
-            data.states[self.data_key] = result_dict['S(x)']
+            data.states[self.data_key] = result_dict['S']
 
 
 @dataclass(eq=False)
@@ -383,7 +386,7 @@ class GPCamAcquisitionFunction(Image):
 @dataclass(eq=False)
 class GPCamPosteriorMean(Image):
     compute_with = Location.AdaptiveEngine
-    shape = (50, 50)
+    shape:tuple = (50, 50)
     data_key = 'Posterior Mean'
     widget_class = ImageViewBlendROI
 
