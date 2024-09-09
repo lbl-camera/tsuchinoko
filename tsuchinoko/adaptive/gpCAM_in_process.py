@@ -32,6 +32,7 @@ class GPCAMInProcessEngine(Engine):
     """
     default_retrain_globally_at = (20, 50, 100, 400, 1000)
     default_retrain_locally_at = (20, 40, 60, 80, 100, 200, 400, 1000)
+    default_retrain_mcmc_at = tuple()
 
     def __init__(self, dimensionality, parameter_bounds, hyperparameters, hyperparameter_bounds,
                  acquisition_functions:dict[str, Callable]=None,
@@ -70,11 +71,15 @@ class GPCAMInProcessEngine(Engine):
                            Table()]
 
     def init_optimizer(self):
-        parameter_bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
-                                        for edge in ['min', 'max']]
-                                       for i in range(self.dimensionality)])
+        opts = self.gp_opts.copy()
+        if sys.platform == 'darwin':
+            opts['compute_device'] = 'numpy'
 
-        self.optimizer = GPOptimizer(self.dimensionality, parameter_bounds)
+        hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
+                                      for i in range(self.num_hyperparameters)])
+
+        self.optimizer = GPOptimizer(init_hyperparameters=hyperparameters,
+                                     **opts)
 
     def reset(self):
         self._completed_training = {'global': set(),
@@ -101,6 +106,12 @@ class GPCAMInProcessEngine(Engine):
         local_train_parameter = TrainingParameter(title='Train locally at...', name='local_training', addText='Add', children=[
             SimpleParameter(title='N=', name=str(uuid.uuid4()), value=N, type='int') for N in self.default_retrain_locally_at
         ])
+        mcmc_train_parameter = TrainingParameter(title='Train locally at...', name='mcmc_training', addText='Add',
+                                                  children=[
+                                                      SimpleParameter(title='N=', name=str(uuid.uuid4()), value=N,
+                                                                      type='int') for N in
+                                                      self.default_retrain_mcmc_at
+                                                  ])
 
         # wireup callback-based parameters
         for param in hyper_parameters:
@@ -109,13 +120,14 @@ class GPCAMInProcessEngine(Engine):
         parameters = func_parameters + [GroupParameter(name='bounds', title='Axis Bounds', children=bounds_parameters),
                                         GroupParameter(name='hyperparameters', title='Hyperparameter Bounds', children=hyper_parameters + hyper_parameters_bounds),
                                         global_train_parameter,
-                                        local_train_parameter, ]
+                                        local_train_parameter,
+                                        mcmc_train_parameter,
+                                        ]
         return GroupParameter(name='top', children=parameters)
 
     def _set_hyperparameter(self, parameter, value):
         self.optimizer.gp_initialized = False  # Force re-initialization
         opts = self.gp_opts.copy()
-        # TODO: only fallback to numpy when packaged as an app
         if sys.platform == 'darwin':
             opts['compute_device'] = 'numpy'
         # self.optimizer.init_gp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
@@ -130,15 +142,6 @@ class GPCAMInProcessEngine(Engine):
             scores = data.scores.copy()
             variances = data.variances.copy()
         self.optimizer.tell(np.asarray(positions), np.asarray(scores), np.asarray(variances))
-        if not self.optimizer.gp_initialized:
-            hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-                                          for i in range(self.num_hyperparameters)])
-            opts = self.gp_opts.copy()
-            # TODO: only fallback to numpy when packaged as an app
-            if sys.platform == 'darwin':
-                opts['compute_device'] = 'numpy'
-
-            self.init_gp(hyperparameters, **opts)
 
     def init_gp(self, hyperparameters, **opts):
         self.optimizer.init_gp(hyperparameters, **opts)
@@ -158,16 +161,20 @@ class GPCAMInProcessEngine(Engine):
         n = self.parameters['n']
 
         # If the GP is not initialized, generate random targets
-        if not self.optimizer.gp_initialized:
-            return [[np.random.uniform(bounds[i][0], bounds[i][1]) for i in range(self.dimensionality)] for j in range(n)]
+        if not self.optimizer.gp:
+            return [[np.random.uniform(bounds[i][0], bounds[i][1]) for i in range(self.dimensionality)] for _ in range(n)]
         else:
             kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
-            kwargs.update({'bounds': bounds})
+            kwargs.update({'input_set': bounds})
             kwargs.update(self.ask_opts)
-            return self.optimizer.ask(position, n, acquisition_function=gpcam_acquisition_functions[kwargs.pop('acquisition_function')], **kwargs)['x']
+            return self.optimizer.ask(position=position,
+                                      n=n,
+                                      acquisition_function=gpcam_acquisition_functions[kwargs.pop('acquisition_function')],
+                                      x0=np.asarray(position),
+                                      **kwargs)['x']
 
     def train(self):
-        for method in ['global', 'local']:
+        for method in ['global', 'local', 'mcmc']:
             train_at = set(child.value() for child in self.parameters.child(f'{method}_training').children())
 
             for N in train_at:
@@ -180,6 +187,5 @@ class GPCAMInProcessEngine(Engine):
                                                      for i in range(self.num_hyperparameters)]), method=method)
                     self._completed_training[method].add(N)
                     logger.info(f"New hyperparameters: {self.optimizer.hyperparameters}")
-                    # return  # only does global training if specified for both
 
         return True
