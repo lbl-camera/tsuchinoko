@@ -231,7 +231,7 @@ class Core:
     def save_checkpoint(self):
         checkpoint_file_path = os.path.join(user_state_dir,
                                             self.checkpoint_template.format(n=self.data._completed_iterations))
-
+        os.makedirs(checkpoint_file_path, exist_ok=True)
         dump(self.data.as_dict(), open(checkpoint_file_path, 'w'))
 
 
