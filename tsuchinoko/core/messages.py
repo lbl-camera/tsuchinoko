@@ -124,7 +124,7 @@ class StateRequest(Message):
 
 
 class StateResponse(Message):
-    __slots__ = ('state',)
+    __slots__ = ('state', 'compute_metrics')
 
 
 class GetParametersRequest(Message):
@@ -164,7 +164,7 @@ class ConnectRequest(Message):
 
 
 class ConnectResponse(Message):
-    __slots__ = ('state',)
+    __slots__ = ('state', 'compute_metrics')
 
 
 class PushGraphsRequest(Message):
@@ -185,3 +185,7 @@ class ReplayRequest(Message):
 
 class ReplayResponse(Message):
     __slots__ = ('enable',)
+
+
+class SetComputeMetricsRequest(Message):
+    __slots__ = ('compute_metrics',)

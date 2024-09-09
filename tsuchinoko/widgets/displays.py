@@ -113,26 +113,35 @@ class StateManager(Display, metaclass=Singleton):
     sigStop = Signal()
     sigPause = Signal()
     sigReplay = Signal()
+    sigSetComputeMetrics = Signal(bool)
 
     def __init__(self):
         super(StateManager, self).__init__('Status', size=(300, 50))
 
+        self._state = CoreState.Connecting
+        self._compute_metrics = True
+
         self.stop_button = QToolButton()
         self.start_pause_button = QToolButton()
         self.replay_button = QToolButton()
+        self.metrics_button = QToolButton()
         self.state_label = QLabel('...')
 
         self.stop_button.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
         self.start_pause_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.replay_button.setIcon(self.style().standardIcon(QStyle.SP_MediaSkipBackward))
+        self.metrics_button.setIcon(self.style().standardIcon(QStyle.SP_DialogYesButton))
 
         self.start_pause_button.clicked.connect(self._start_or_pause)
+        self.metrics_button.clicked.connect(self._toggle_metrics)
         self.stop_button.clicked.connect(self.sigStop)
         self.replay_button.clicked.connect(self.sigReplay)
 
         self.start_pause_button.setToolTip('Start/Pause Experiment')
         self.stop_button.setToolTip('Stop Experiment')
         self.replay_button.setToolTip('Replay Experiment')
+        self.metrics_button.setToolTip('Pause/Update Graphs')
+        self.metrics_button.setText('Pause Graphs')
 
         layout_widget = QWidget()
         layout_widget.setLayout(QHBoxLayout())
@@ -140,17 +149,22 @@ class StateManager(Display, metaclass=Singleton):
         layout_widget.layout().addWidget(self.stop_button)
         layout_widget.layout().addWidget(self.start_pause_button)
         layout_widget.layout().addWidget(self.replay_button)
+        layout_widget.layout().addWidget(self.metrics_button)
         layout_widget.layout().addWidget(self.state_label)
 
         self.addWidget(layout_widget)
 
         self.state = CoreState.Connecting
 
-    def update_state(self, state):
-        # set state value immediately
-        self._state = state
-        # defer setter actions until event can be consumed
-        invoke_as_event(setattr, self, 'state', state)
+    def update_state(self, state, compute_metrics):
+        if state != self._state:
+            # set state value immediately
+            self._state = state
+            # defer setter actions until event can be consumed
+            invoke_as_event(setattr, self, 'state', state)
+        if compute_metrics != self._compute_metrics:
+            self._compute_metrics = compute_metrics
+            invoke_as_event(self.update_compute_metrics, compute_metrics)
 
     @property
     def state(self):
@@ -185,6 +199,20 @@ class StateManager(Display, metaclass=Singleton):
             self.sigPause.emit()
         elif self.start_pause_button.text() in ['Start', 'Resume']:
             self.sigStart.emit()
+
+    def _toggle_metrics(self):
+        if self.metrics_button.text() == 'Pause Graphs':
+            self.sigSetComputeMetrics.emit(False)
+        elif self.metrics_button.text() == 'Update Graphs':
+            self.sigSetComputeMetrics.emit(True)
+
+    def update_compute_metrics(self, compute_metrics):
+        if compute_metrics:
+            self.metrics_button.setIcon(self.style().standardIcon(QStyle.SP_DialogYesButton))
+            self.metrics_button.setText('Pause Graphs')
+        else:
+            self.metrics_button.setIcon(self.style().standardIcon(QStyle.SP_DialogNoButton))
+            self.metrics_button.setText('Update Graphs')
 
 
 class GraphManager(Display, metaclass=Singleton):

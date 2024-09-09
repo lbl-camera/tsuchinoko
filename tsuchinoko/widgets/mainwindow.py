@@ -34,7 +34,7 @@ from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRe
     PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, \
     FullDataResponse, PartialDataResponse, MeasureRequest, \
     ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse, PullGraphsRequest, GraphsResponse, \
-    ReplayRequest, ExitRequest, PushGraphsRequest
+    ReplayRequest, ExitRequest, PushGraphsRequest, SetComputeMetricsRequest
 from tsuchinoko.graphics_items.clouditem import CloudItem
 from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
 from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
@@ -111,6 +111,7 @@ class MainWindow(QMainWindow):
         self.state_manager_widget.sigStart.connect(self.start)
         self.state_manager_widget.sigStop.connect(self.stop)
         self.state_manager_widget.sigReplay.connect(self.replay)
+        self.state_manager_widget.sigSetComputeMetrics.connect(self.set_compute_metrics)
         self.configuration_widget.sigPushParameter.connect(self.set_parameter)
         self.configuration_widget.sigRequestParameters.connect(self.request_parameters)
         self.graph_manager_widget.sigPush.connect(self.push_graph)
@@ -126,8 +127,8 @@ class MainWindow(QMainWindow):
         self.subscribe(self.state_manager_widget.update_state, StateResponse)
         self.subscribe(self.state_manager_widget.update_state, ConnectResponse)
         self.subscribe(self.configuration_widget.update_parameters, GetParametersResponse, invoke_as_event=True)
-        self.subscribe(self._data_callback, FullDataResponse)
-        self.subscribe(self._data_callback, PartialDataResponse)
+        self.subscribe(partial(self._data_callback, response_type='full'), FullDataResponse)
+        self.subscribe(partial(self._data_callback, response_type='partial'), PartialDataResponse)
         self.subscribe(self.refresh_state, ConnectResponse)
         self.subscribe(self.log_widget.log_exception, ExceptionResponse)
         self.subscribe(self.set_graphs, GraphsResponse, invoke_as_event=True)
@@ -167,6 +168,9 @@ class MainWindow(QMainWindow):
         self.message_queue.put(StopRequest())
         self.message_queue.put(message)
         self.message_queue.put(StartRequest())
+
+    def set_compute_metrics(self, value):
+        self.message_queue.put(SetComputeMetricsRequest(value))
 
     def request_measure(self, pos):
         self.message_queue.put(MeasureRequest(pos))
@@ -225,7 +229,7 @@ class MainWindow(QMainWindow):
                     self.init_socket()
                 self.data = Data()  # wipeout data and get a full update next time
                 self.last_data_size = 0
-                self.state_manager_widget.update_state(CoreState.Connecting)
+                self.state_manager_widget.update_state(CoreState.Connecting, True)
             else:
                 logger.info(f'response: {response}')
                 if not response:
@@ -239,20 +243,27 @@ class MainWindow(QMainWindow):
                         else:
                             callback(*response.payload)
 
-    def _data_callback(self, data_payload, last_data_size=None):
+    def _data_callback(self, data_payload, last_data_size=None, response_type='partial'):
         if not isinstance(data_payload, dict):  # TODO: Remove when responses are mapped to callbacks
             return
 
         if last_data_size is not None and last_data_size < len(self.data):
             raise IndexError('Overwriting of previous data prevented.')
 
-        self.data.extend(Data(**data_payload))
+        if response_type == 'full':
+            self.data = Data(**data_payload)
+            self.last_data_size = 0
+        elif response_type == 'partial':
+            self.data.extend(Data(**data_payload))
+        else:
+            raise ValueError()
+
         if len(data_payload['positions']):
             # stash the length of new data early to avoid events getting confused when pausing this thread
             old_last_data_size, self.last_data_size = self.last_data_size, len(self.data)
             invoke_as_event(self.update_graphs, self.data, old_last_data_size)
 
-    def refresh_state(self, _):
+    def refresh_state(self, _, __):
         self.message_queue.queue.clear()
         self.message_queue.put(GetParametersRequest())
         self.message_queue.put(PullGraphsRequest())

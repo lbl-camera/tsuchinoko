@@ -35,7 +35,8 @@ SLEEP_FOR_FRESH_DATA_TIME = .1
 class Core:
     def __init__(self,
                  execution_engine: ExecutionEngine = None,
-                 adaptive_engine: AdaptiveEngine = None):
+                 adaptive_engine: AdaptiveEngine = None,
+                 compute_metrics: bool = True):
         self.execution_engine = execution_engine
         self.adaptive_engine = adaptive_engine
 
@@ -46,6 +47,7 @@ class Core:
         self._forced_position_queue = Queue()
         self._forced_measurement_queue = Queue()
         self._has_fresh_data = True
+        self.compute_metrics = compute_metrics
 
         self.data = Data()
         self._graphs = []
@@ -164,8 +166,9 @@ class Core:
                     self.data.inject_new(new_measurements)
                 with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
                     self.adaptive_engine.update_measurements(self.data)
-                with log_time('updating metrics', cumulative_key='updating metrics'):
-                    self.adaptive_engine.update_metrics(self.data)
+                if self.compute_metrics:
+                    with log_time('updating metrics', cumulative_key='updating metrics'):
+                        self.adaptive_engine.update_metrics(self.data)
             else:
                 time.sleep(SLEEP_FOR_FRESH_DATA_TIME)
             if self._has_fresh_data:
@@ -232,7 +235,7 @@ class ZMQCore(Core):
                 partial_data = self.data[request.iteration:]
             return PartialDataResponse(partial_data.as_dict(), request.iteration)
         else:
-            return StateResponse(self.state)
+            return StateResponse(self.state, self.compute_metrics)
 
     def respond_PushDataRequest(self, request):
         self.data = Data(**request.data)
@@ -243,26 +246,26 @@ class ZMQCore(Core):
             self.state = CoreState.Resuming
         elif self.state == CoreState.Inactive:
             self.state = CoreState.Starting
-        return StateResponse(self.state)
+        return StateResponse(self.state, self.compute_metrics)
 
     def respond_StopRequest(self, request):
         self.state = CoreState.Stopping
         self.experiment_thread.join()
-        return StateResponse(self.state)
+        return StateResponse(self.state, self.compute_metrics)
 
     def respond_ExitRequest(self, request):
         self.state = CoreState.Exiting
-        return StateResponse(self.state)
+        return StateResponse(self.state, self.compute_metrics)
 
     def respond_PauseRequest(self, request):
         self.state = CoreState.Pausing
-        return StateResponse(self.state)
+        return StateResponse(self.state, self.compute_metrics)
 
     def respond_StateRequest(self, request):
         if not self._exception_queue.empty():
             return ExceptionResponse(self._exception_queue.get())
         else:
-            return StateResponse(self.state)
+            return StateResponse(self.state, self.compute_metrics)
 
     def respond_GetParametersRequest(self, request):
         return GetParametersResponse(self.adaptive_engine.parameters.saveState())
@@ -276,7 +279,7 @@ class ZMQCore(Core):
         return MeasureResponse(True)
 
     def respond_ConnectRequest(self, request):
-        return ConnectResponse(self.state)
+        return ConnectResponse(self.state, self.compute_metrics)
 
     def respond_PullGraphsRequest(self, request):
         return GraphsResponse(self.graphs)
@@ -288,7 +291,11 @@ class ZMQCore(Core):
             except ValueError as ex:
                 return ExceptionResponse("Graph ID not found in server's graphs.")
         # self.graphs = request.graphs
-        return StateResponse(self.state)
+        return StateResponse(self.state, self.compute_metrics)
+
+    def respond_SetComputeMetricsRequest(self, request):
+        self.compute_metrics = request.compute_metrics
+        return StateResponse(self.state, self.compute_metrics)
 
     def respond_ReplayRequest(self, request):
         self._forced_measurement_queue.queue.clear()
