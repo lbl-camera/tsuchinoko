@@ -94,7 +94,7 @@ class GPCAMInProcessEngine(Engine):
                                    for i in range(self.num_hyperparameters) for edge in ['min', 'max']]
         bounds_parameters = [SimpleParameter(title=f'Axis #{i + 1} {edge}', name=f'axis_{i}_{edge}', type='float')
                              for i in range(self.dimensionality) for edge in ['min', 'max']]
-        func_parameters = [ListParameter(title='Method', name='method', limits=['global', 'local', 'hgdl']),
+        func_parameters = [ListParameter(title='Method', name='method', limits=['global', 'local', 'hgdl'], default='global'),
                            ListParameter(title='Acquisition Function', name='acquisition_function', limits=list(gpcam_acquisition_functions.keys()), default=list(gpcam_acquisition_functions.keys())[0]),
                            SimpleParameter(title='Queue Length', name='n', value=1, type='int'),
                            SimpleParameter(title='Population Size (global only)', name='pop_size', value=20, type='int'),
