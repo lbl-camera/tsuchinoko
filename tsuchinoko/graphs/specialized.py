@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from functools import partial
 
 import numpy as np
 from loguru import logger
+import numba as nb
 from scipy import linalg, sparse
 
 from tsuchinoko.graphics_items.mixins import YInvert, ClickRequester, BetterButtons, LogScaleIntensity, AspectRatioLock, \
@@ -20,6 +22,70 @@ class NonViridisBlend(YInvert,
     pass
 
 
+#@nb.jit
+def distance_from_line(x1, x2, pointsx, pointsy):
+    """
+    Calculate the perpendicular distance from an array of points to a line
+    defined by two points, x1 and x2.
+
+    Args:
+        points (numpy.ndarray): An Nx2 array of points where each row is a point [p1, p2].
+        x1 (numpy.ndarray): A 1x2 array representing the first point on the line [x1_1, x1_2].
+        x2 (numpy.ndarray): A 1x2 array representing the second point on the line [x2_1, x2_2].
+
+    Returns:
+        numpy.ndarray: An N-element array where each element is the distance of a point to the line.
+    """
+    points = np.array([pointsx, pointsy]).T
+    # Vector from x1 to x2 (direction of the line)
+    line_vec = x2 - x1
+
+    # Vectors from x1 to each point
+    points_vec = points - x1
+
+    # Cross product of line_vec and points_vec (only z component in 2D)
+    cross_prod = np.abs(line_vec[0] * points_vec[:, :, 1] - line_vec[1] * points_vec[:, :, 0])
+
+    # Magnitude of the line vector (length of the line)
+    line_mag = np.linalg.norm(line_vec)
+
+    # Distance from points to line (perpendicular distance)
+    distances = cross_prod / line_mag
+
+    return distances
+
+def distance_from_line_array(p1, p2, shape):
+    return np.fromfunction(partial(distance_from_line,p1,p2), shape)
+
+
+def projection_operator(x, phi, map_size, center=None, width=1, length=None):
+    if not length:
+        length = map_size * 2
+
+    if not center:
+        center = (map_size/2, map_size/2)
+
+    # get a sampling over a slice through x, phi
+    v = np.array([-np.cos(np.deg2rad(phi)), np.sin(np.deg2rad(phi))]) * (-x + map_size/2)
+    c = np.array(center)
+    f = np.array([-np.sin(np.deg2rad(phi)), -np.cos(np.deg2rad(phi))]) * length / 2
+
+    f0 = v + c + f
+    f1 = v + c - f
+
+    x0, y0 = f0
+    x1, y1 = f1
+
+    distance = distance_from_line_array(f0-.5, f1-.5, (map_size, map_size))
+    projection = np.clip(1-distance/1.1, 0, None)
+
+    return projection
+
+@nb.jit()#nb.types.float32[:],(nb.types.float32[:],
+                            # nb.types.float32[:, :],
+                            # nb.types.optional(nb.types.int64),
+                            # nb.types.optional(nb.types.float32[:, :]),
+                            # nb.types.optional(nb.types.float32[:])))
 def sirt(sinogram, projection_operator, num_iterations=10, inverse_operator=None, initial=None):
     R = np.diag(1 / np.sum(projection_operator, axis=1, dtype=np.float32))
     R = np.nan_to_num(R)
@@ -32,10 +98,10 @@ def sirt(sinogram, projection_operator, num_iterations=10, inverse_operator=None
         x_rec = initial
 
     for _ in range(num_iterations):
-        if inverse_operator:
-            x_rec += C @ (inverse_operator @ (R @ (sinogram.ravel() - projection_operator @ x_rec)))
+        if inverse_operator is not None:
+            x_rec += C @ (inverse_operator @ (R @ (sinogram - projection_operator @ x_rec)))
         else:
-            x_rec += C @ (projection_operator.T @ (R @ (sinogram.ravel() - projection_operator @ x_rec)))
+            x_rec += C @ (projection_operator.T @ (R @ (sinogram - projection_operator @ x_rec)))
 
     return x_rec
 
@@ -83,7 +149,8 @@ class ProjectionMask(Image):
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
         # assign to data object with lock
         with data.w_lock():
-            data.states[self.data_key] = np.flipud(np.rot90(engine.optimizer.A[-1].reshape(*self.shape),1))
+            data.states[self.data_key] = np.rot90(projection_operator(*data.positions[-1], self.shape[0]), 3)
+
 
 
 @dataclass(eq=False)
@@ -95,10 +162,20 @@ class ProjectionOperatorGraph(Image):
     transform_to_parameter_space = False
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        if not hasattr(self, 'A'):
+            self.A = np.empty((0,np.prod(self.shape)))
+            self._positions_seen = 0
+
+        length_diff = len(data) - self._positions_seen
+        if length_diff:
+            for position in data.positions[-length_diff:]:
+                A_vec = projection_operator(*position, self.shape[0]).reshape(1, self.shape[0] ** 2)
+                self.A = np.vstack([self.A, A_vec])
+                self._positions_seen += 1
 
         # assign to data object with lock
         with data.w_lock():
-            data.states[self.data_key] = np.flipud(np.rot90(np.sum(engine.optimizer.A, axis=0).reshape(*self.shape),1))
+            data.states[self.data_key] = np.rot90(np.sum(self.A, axis=0).reshape(*self.shape),3)
 
 
 @dataclass(eq=False)
@@ -230,3 +307,164 @@ class RealSpacePosteriorVariance(Image):
         # assign to data object with lock
         with data.w_lock():
             data.states['Posterior Variance'] = posterior_variance_value
+
+
+@dataclass(eq=False)
+class InvertedRealSpacePosteriorMean(Image):
+    compute_with = Location.AdaptiveEngine
+    shape:tuple = (64, 180)
+    data_key = 'Posterior Mean'
+    widget_class = ImageViewBlend
+    transform_to_parameter_space = False
+    A_inv:np.array = None
+
+    def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
+                   for edge in ['min', 'max'])
+                  for i in range(engine.dimensionality))
+
+        grid_positions = image_grid(((0,self.shape[0]), (0, 180)), self.shape)
+        shape = self.shape
+
+        # if multi-task, extend the grid_positions to include the task dimension
+        if hasattr(engine, 'output_number'):
+            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+            shape = (*self.shape, engine.output_number)
+
+        # calculate posterior_mean
+        posterior_mean = engine.optimizer.posterior_mean(grid_positions)['f(x)']
+
+        # invert posterior_mean
+        real_space_posterior_mean = np.rot90((self.A_inv @ posterior_mean).reshape(shape[0], shape[0]), 3)
+
+        # assign to data object with lock
+        with data.w_lock():
+            data.states[self.data_key] = real_space_posterior_mean
+
+
+@dataclass(eq=False)
+class InvertedRealSpacePosteriorVariance(Image):
+    compute_with = Location.AdaptiveEngine
+    shape:tuple = (64, 180)
+    data_key = 'Posterior Variance'
+    widget_class = ImageViewBlend
+    transform_to_parameter_space = False
+    A_inv:np.array = None
+
+    def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
+                   for edge in ['min', 'max'])
+                  for i in range(engine.dimensionality))
+
+        grid_positions = image_grid(((0,self.shape[0]), (0, 180)), self.shape)
+        shape = self.shape
+
+        # if multi-task, extend the grid_positions to include the task dimension
+        if hasattr(engine, 'output_number'):
+            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+            shape = (*self.shape, engine.output_number)
+
+        # calculate posterior_ variance
+        posterior_variance = engine.optimizer.posterior_covariance(grid_positions)['v(x)']
+
+        # invert posterior_variance
+        real_space_posterior_variance = np.rot90((self.A_inv @ posterior_variance).reshape(shape[0], shape[0]), 3)
+
+        # assign to data object with lock
+        with data.w_lock():
+            data.states[self.data_key] = real_space_posterior_variance
+
+@dataclass(eq=False)
+class InvertedSinoSpacePosteriorMean(Image):
+    compute_with = Location.AdaptiveEngine
+    shape:tuple = (64, 180)
+    data_key = 'Sino Posterior Mean'
+    widget_class = ImageViewBlend
+    transform_to_parameter_space = False
+
+    def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
+                   for edge in ['min', 'max'])
+                  for i in range(engine.dimensionality))
+
+        grid_positions = image_grid(((0,self.shape[0]), (0, 180)), self.shape)
+        shape = self.shape
+
+        # if multi-task, extend the grid_positions to include the task dimension
+        if hasattr(engine, 'output_number'):
+            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+            shape = (*self.shape, engine.output_number)
+
+        # calculate posterior_mean
+        posterior_mean = engine.optimizer.posterior_mean(grid_positions)['f(x)']
+
+        # invert posterior_mean
+        real_space_posterior_mean = posterior_mean.reshape(shape)
+
+        # assign to data object with lock
+        with data.w_lock():
+            data.states[self.data_key] = real_space_posterior_mean
+
+
+@dataclass(eq=False)
+class InvertedSinoSpacePosteriorVariance(Image):
+    compute_with = Location.AdaptiveEngine
+    shape:tuple = (64, 180)
+    data_key = 'Sino Posterior Variance'
+    widget_class = ImageViewBlend
+    transform_to_parameter_space = False
+
+    def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
+                   for edge in ['min', 'max'])
+                  for i in range(engine.dimensionality))
+
+        grid_positions = image_grid(((0,self.shape[0]), (0, 180)), self.shape)
+        shape = self.shape
+
+        # if multi-task, extend the grid_positions to include the task dimension
+        if hasattr(engine, 'output_number'):
+            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+            shape = (*self.shape, engine.output_number)
+
+        # calculate posterior_mean
+        posterior_variance = engine.optimizer.posterior_covariance(grid_positions)['v(x)']
+
+        # invert posterior_mean
+        real_space_posterior_mean = posterior_variance.reshape(shape)
+
+        # assign to data object with lock
+        with data.w_lock():
+            data.states[self.data_key] = real_space_posterior_mean
+
+
+@dataclass(eq=False)
+class InvertedRecon(Image):
+    compute_with = Location.AdaptiveEngine
+    shape:tuple = (64, 180)
+    data_key = 'Reconstruction'
+    widget_class = ImageViewBlend
+    transform_to_parameter_space = False
+    A_inv:np.array = None
+
+    def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
+                   for edge in ['min', 'max'])
+                  for i in range(engine.dimensionality))
+
+        grid_positions = image_grid(((0,self.shape[0]), (0, 180)), self.shape)
+        shape = self.shape
+
+        # if multi-task, extend the grid_positions to include the task dimension
+        if hasattr(engine, 'output_number'):
+            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+            shape = (*self.shape, engine.output_number)
+
+        # calculate posterior_mean
+        posterior_mean = engine.optimizer.posterior_mean(grid_positions)['f(x)']
+
+        recon = sirt(posterior_mean.astype(np.float32), self.A_inv.T.astype(np.float32))
+
+        # assign to data object with lock
+        with data.w_lock():
+            data.states[self.data_key] = np.rot90(recon.reshape(shape[0], shape[0]), 3)
