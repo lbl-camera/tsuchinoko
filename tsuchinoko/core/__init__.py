@@ -57,6 +57,7 @@ class Core:
         self.pause_at = []
         self.stop_at = []
         self.exit_at = []
+        self.compute_metrics_at = []
 
         self.data = Data()
         self._graphs = []
@@ -186,7 +187,7 @@ class Core:
                     self.data.inject_new(new_measurements)
                 with log_time('updating engine with new measurements', cumulative_key='updating engine with new measurements'):
                     self.adaptive_engine.update_measurements(self.data)
-                if self.compute_metrics:
+                if self.compute_metrics or len(self.data) in self.compute_metrics_at:
                     with log_time('updating metrics', cumulative_key='updating metrics'):
                         self.adaptive_engine.update_metrics(self.data)
             else:
