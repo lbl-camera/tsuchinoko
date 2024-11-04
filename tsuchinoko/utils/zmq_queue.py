@@ -110,7 +110,7 @@ class CustomQueue():
         message = self.from_socket.recv()
         self.msg('Received reply: {}'.format(message))
 
-    def get(self, save=True, check_interrupted=False, force_load=False):
+    def get(self, save=True, check_interrupted=False, force_load=False, flags:int=0):
         '''Get the current item being published.'''
         # message = self.from_socket.recv()
 
@@ -127,7 +127,7 @@ class CustomQueue():
 
         else:
             self.msg('Waiting for data/command ({})...'.format(self.now()), 4, 1)
-            data = self.from_socket.recv_pyobj()
+            data = self.from_socket.recv_pyobj(flags=flags)
 
             if isinstance(data, (list, tuple, np.ndarray)):
                 self.msg('Received: list length {}'.format(len(data)), 4, 2)

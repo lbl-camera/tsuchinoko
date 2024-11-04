@@ -365,13 +365,19 @@ class GPCamAcquisitionFunction(Image):
             logger.exception(ValueError('The selected acquisition_function is not available for display.'))
             return
 
+        extra_kwargs={}
+        output_num = getattr(engine.optimizer.gp, 'output_num', 1)
+        if output_num > 1:
+            extra_kwargs['x_out'] = np.arange(output_num)
+
         # calculate acquisition function
         acquisition_function_value = engine.optimizer.evaluate_acquisition_function(grid_positions,
                                                                                     acquisition_function=
                                                                                     gpcam_acquisition_functions[
                                                                                         engine.parameters[
                                                                                             'acquisition_function']],
-                                                                                    origin=engine.last_position)
+                                                                                    origin=engine.last_position,
+                                                                                    **extra_kwargs)
 
         try:
             acquisition_function_value = acquisition_function_value.reshape(*self.shape)
@@ -398,13 +404,19 @@ class GPCamPosteriorMean(Image):
         grid_positions = image_grid(bounds, self.shape)
         shape = self.shape
 
+        # For GITOMO; needs to be combined with below
         # if multi-task, extend the grid_positions to include the task dimension
-        if hasattr(engine, 'output_number'):
-            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
-            shape = (*self.shape, engine.output_number)
+        # if hasattr(engine, 'output_number'):
+        #     grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+        #     shape = (*self.shape, engine.output_number)
+
+        extra_kwargs = dict()
+        if hasattr(engine.optimizer.gp, 'output_num'):
+            extra_kwargs['x_out'] = np.arange(engine.optimizer.gp.output_num)
+            shape = (*shape, engine.optimizer.gp.output_num)
 
         # calculate acquisition function
-        posterior_mean_value = engine.optimizer.posterior_mean(grid_positions)['f(x)'].reshape(*shape)
+        posterior_mean_value = engine.optimizer.posterior_mean(grid_positions, **extra_kwargs)['f(x)'].reshape(*shape)
 
         # assign to data object with lock
         with data.w_lock():

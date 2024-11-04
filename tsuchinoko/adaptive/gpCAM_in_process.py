@@ -126,15 +126,9 @@ class GPCAMInProcessEngine(Engine):
         return GroupParameter(name='top', children=parameters)
 
     def _set_hyperparameter(self, parameter, value):
-        self.optimizer.gp_initialized = False  # Force re-initialization
-        opts = self.gp_opts.copy()
-        if sys.platform == 'darwin':
-            opts['compute_device'] = 'numpy'
-        # self.optimizer.init_gp(np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
-        #                                    for i in range(self.num_hyperparameters)]), **opts)
         hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                            for i in range(self.num_hyperparameters)])
-        self.optimizer.hyperparameters = hyperparameters
+        self.optimizer.set_hyperparameters(hyperparameters)
 
     def update_measurements(self, data: Data):
         with data.r_lock():  # quickly grab values within lock before passing to optimizer
@@ -153,7 +147,7 @@ class GPCAMInProcessEngine(Engine):
             except Exception as ex:
                 logger.exception(ex)
 
-    def request_targets(self, position):
+    def request_targets(self, position, **kwargs):
         self.last_position = position
         bounds = np.asarray([[self.parameters[('bounds', f'axis_{i}_{edge}')]
                      for edge in ['min', 'max']]
@@ -164,7 +158,7 @@ class GPCAMInProcessEngine(Engine):
         if not self.optimizer.gp:
             return [[np.random.uniform(bounds[i][0], bounds[i][1]) for i in range(self.dimensionality)] for _ in range(n)]
         else:
-            kwargs = {key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']}
+            kwargs.update({key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']})
             kwargs.update({'input_set': bounds})
             kwargs.update(self.ask_opts)
             return self.optimizer.ask(position=position,
@@ -180,9 +174,11 @@ class GPCAMInProcessEngine(Engine):
             for N in train_at:
                 if len(self.optimizer.y_data) > N and N not in self._completed_training[method]:
                     logger.info('Training in progress. This make take a while...')
-                    self.optimizer.train(np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
+                    self.optimizer.train(hyperparameter_bounds=
+                                         np.asarray([[self.parameters[('hyperparameters', f'hyperparameter_{i}_{edge}')]
                                                       for edge in ['min', 'max']]
                                                      for i in range(self.num_hyperparameters)]),
+                                         init_hyperparameters=
                                          np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                                      for i in range(self.num_hyperparameters)]), method=method)
                     self._completed_training[method].add(N)

@@ -5,8 +5,11 @@ from PIL import Image
 from scipy import ndimage
 
 from tsuchinoko.adaptive.fvgp_gpCAM_in_process import FvgpGPCAMInProcessEngine
-from tsuchinoko.core import ZMQCore
+from tsuchinoko.core import ZMQCore, CoreState
 from tsuchinoko.execution.simple import SimpleEngine
+
+# NOTES:
+# 2 signal variances per task
 
 # Load data from a jpg image to be used as a luminosity map
 images = [np.flipud(np.asarray(Image.open(Path(__file__).parent / f'peak{i + 1}.png'))) for i in range(2)]
@@ -23,14 +26,11 @@ execution = SimpleEngine(measure_func=bilinear_sample)
 
 # Define a gpCAM adaptive engine with initial parameters
 adaptive = FvgpGPCAMInProcessEngine(dimensionality=2,
-                                    output_dim=1,
                                     output_number=2,
                                     parameter_bounds=[(0, images[0].shape[1]),
                                                       (0, images[0].shape[0])],
-                                    hyperparameters=[255, 100, 100],
-                                    hyperparameter_bounds=[(0, 1e5),
-                                                           (0, 1e5),
-                                                           (0, 1e5)])
+                                    hyperparameters=[255**2, 1, 1, 1],
+                                    hyperparameter_bounds=[(1e-1, 1e5)]*4)
 
 # Construct a core server
 core = ZMQCore()
@@ -39,4 +39,5 @@ core.set_execution_engine(execution)
 
 if __name__ == '__main__':
     # Start the core server
+    core.state = CoreState.Starting
     core.main()

@@ -1,16 +1,10 @@
-import os
-import re
-import tempfile
-from pathlib import Path
+
 from time import perf_counter
 
 import numpy as np
 from PySide2.QtCore import Qt, QTimer
-from PySide2.QtWidgets import QAction, QFileDialog
 from loguru import logger
-from pyqtgraph.exporters import ImageExporter
-from qtpy import QtWidgets
-from qtpy.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from qtpy.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox
 from pyqtgraph import InfiniteLine, mkPen, PlotWidget, HistogramLUTWidget, mkBrush, functions as fn, FileDialog
 
 from tsuchinoko.graphics_items.clouditem import CloudItem
@@ -46,14 +40,25 @@ class CloudWidget(QWidget):
         self.cloud = CloudItem(name='scatter', size=10)
         histlut = HistogramLUTWidget()
         histlut.setImageItem(self.cloud)
+        self.output_selector = QComboBox()
+        self.output_selector.setHidden(True)
+        self.output_selector.currentIndexChanged.connect(self.invalidate_cloud)
 
         self.setLayout(QVBoxLayout())
+        self.layout().setContentsMargins(0,0,0,0)
+        self.layout().setSpacing(0)
         hlayout = QHBoxLayout()
         self.layout().addLayout(hlayout)
-        self.layout().addWidget(self.timeline_plot)
+        right_layout = QVBoxLayout()
+        right_layout.setSpacing(0)
+        right_layout.setContentsMargins(0,0,0,0)
 
+
+        self.layout().addWidget(self.timeline_plot)
         hlayout.addWidget(self.graph)
-        hlayout.addWidget(histlut)
+        hlayout.addLayout(right_layout)
+        right_layout.addWidget(histlut)
+        right_layout.addWidget(self.output_selector)
 
         self.graph.addItem(self.cloud)
 
@@ -71,6 +76,9 @@ class CloudWidget(QWidget):
         self.fps = 1  # 1 Hz by default
         self.last_play_time = 0
         self.play_timer.timeout.connect(self.timeout)
+
+    def invalidate_cloud(self):
+        self.cloud.clear()
 
     def timeline_changed(self):
         if not self.cache:
@@ -202,13 +210,22 @@ class CloudWidget(QWidget):
 
         with data.r_lock():
             v = np.asarray(data[self.data_key].copy())
-            if v.ndim == 2:
+            x, y = zip(*data.positions)
+
+        if v.ndim == 2:
+            if len(v[0]) > 1:
+                self.output_selector.setHidden(False)
+                if self.output_selector.count() != len(v[0]):
+                    self.output_selector.clear()
+                    for i in range(len(v[0])):
+                        self.output_selector.addItem(f'{i}')
+                    self.output_selector.setCurrentIndex(0)
+                v = v[:, self.output_selector.currentIndex()]
+            else:
                 try:
                     v = np.squeeze(v, 1)
                 except ValueError:
                     pass
-
-            x, y = zip(*data.positions)
 
         lengths = len(v), len(x), len(y)
         min_length = min(lengths)
