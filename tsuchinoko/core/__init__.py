@@ -3,6 +3,7 @@ import threading
 import time
 from asyncio import events
 from enum import Enum, auto
+from pickle import UnpicklingError
 from queue import Queue
 from appdirs import user_state_dir
 
@@ -346,6 +347,9 @@ class ZMQCore(Core):
                 request = await socket.recv_pyobj(zmq.NOBLOCK)
             except (zmq.ZMQError, zmq.error.Again) as ex:
                 logger.exception(ex)
+            except UnpicklingError as ex:
+                logger.exception(ex)
+                logger.critical('The above error prevented unpacking data from the client.')
             else:
                 if not request:
                     time.sleep(.1)

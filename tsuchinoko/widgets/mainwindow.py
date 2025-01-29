@@ -1,6 +1,7 @@
 import time
 from collections import defaultdict
 from functools import partial
+from pickle import UnpicklingError
 from queue import Queue, Empty
 import subprocess
 from signal import SIGINT
@@ -230,6 +231,9 @@ class MainWindow(QMainWindow):
                 self.data = Data()  # wipeout data and get a full update next time
                 self.last_data_size = 0
                 self.state_manager_widget.update_state(CoreState.Connecting, True)
+            except UnpicklingError as ex:
+                logger.exception(ex)
+                logger.critical('The above error prevented unpacking data from the server.')
             else:
                 logger.info(f'response: {response}')
                 if not response:
