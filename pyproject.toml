@@ -47,7 +47,7 @@ dynamic = ["version"]
 [project.optional-dependencies]
 dev = ["pyinstaller"]
 docs = ["sphinx", "sphinx-markdown-tables", "numpydoc", "sphinx_copybutton", "myst_parser", "sphinx_rtd_theme", "sphinx_rtd_dark_mode"]
-tests = ["pytest<8", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixture"]
+tests = ["pillow", "pytest<8", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixture"]
 
 [project.urls]
 Homepage = "https://tsuchinoko.readthedocs.io/"
