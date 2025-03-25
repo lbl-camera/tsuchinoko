@@ -620,3 +620,6 @@ class CloudItem(pg.GraphicsObject):
                 return cp.asnumpy(hist[1][:-1]), cp.asnumpy(hist[0])
             else:
                 return hist[1][:-1], hist[0]
+
+    def getLevels(self):
+        return self.levels
