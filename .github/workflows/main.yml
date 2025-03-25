@@ -76,6 +76,7 @@ jobs:
 
       - name: Github Release
         uses: fnkr/github-action-ghr@v1
+        continue-on-error: true
         env:
           GHR_COMPRESS: xz
           GHR_PATH: build/
