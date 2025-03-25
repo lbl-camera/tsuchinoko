@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "tsuchinoko"
 dependencies = [
-  "pyside2",
+  "pyside6",
   "bluesky",
   "ophyd",
   "pyqtgraph",
@@ -22,7 +22,8 @@ dependencies = [
   "scikit-learn",
   "pyqode.python",
   "pyqode.core",
-  "loguru"
+  "loguru",
+  "appdirs"
 ]
 requires-python = ">=3.9"
 authors = [
