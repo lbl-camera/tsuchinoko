@@ -26,9 +26,9 @@ adaptive = GPCAMInProcessEngine(dimensionality=2,
                                 parameter_bounds=[(0, image.shape[1]),
                                                   (0, image.shape[0])],
                                 hyperparameters=[255, 100, 100],
-                                hyperparameter_bounds=[(0, 1e5),
-                                                       (0, 1e5),
-                                                       (0, 1e5)])
+                                hyperparameter_bounds=[(.1, 1e5),
+                                                       (.1, 1e5),
+                                                       (.1, 1e5)])
 
 # Construct a core server
 core = ZMQCore()
