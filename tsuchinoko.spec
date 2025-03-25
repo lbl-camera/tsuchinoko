@@ -6,8 +6,6 @@ import sys
 import dask
 import distributed
 import event_model
-import torch
-import functorch
 import debugpy
 import pyqode.python.backend
 
