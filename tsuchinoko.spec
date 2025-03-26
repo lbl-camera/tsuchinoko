@@ -218,7 +218,7 @@ elif sys.platform == 'darwin':
         a.zipfiles, a2.zipfiles, a3.zipfiles,
         a.datas, a2.datas, a3.datas,
         name='Tsuchinoko',
-        icon=assets.path('tsuchinoko.png'),
+        icon=assets.path('tsuchinoko.icns'),
         bundle_identifier=None,
     )
 
