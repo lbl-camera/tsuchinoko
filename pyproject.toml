@@ -34,7 +34,7 @@ maintainers = [
 ]
 description = "A Qt application for adaptive experiment tuning and execution "
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "GPL-3.0-only"
 keywords = ["autonomous", "self driving", "adaptive", "gui", "qt"]
 classifiers = [
   "Development Status :: 4 - Beta",
