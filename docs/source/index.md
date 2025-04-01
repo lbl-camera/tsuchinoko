@@ -22,7 +22,7 @@ core service. These components are separable to allow flexibility with a variety
 ## Installation
 
 The latest stable Tsuchinoko version is available on PyPI, and is installable with `pip`. It is recommended that you
-use Python 3.10 for this installation.
+use Python 3.12 for this installation.
 
 ```bash
 pip install tsuchinoko
