@@ -5,6 +5,7 @@ import numpy as np
 from loguru import logger
 import numba as nb
 from scipy import linalg, sparse
+from scipy.ndimage import median_filter
 
 from tsuchinoko.graphics_items.mixins import YInvert, ClickRequester, BetterButtons, LogScaleIntensity, AspectRatioLock, \
     BetterAutoLUTRangeImageView, DomainROI
@@ -77,7 +78,7 @@ def projection_operator(x, phi, map_size, center=None, width=1, length=None):
     x1, y1 = f1
 
     distance = distance_from_line_array(f0-.5, f1-.5, (map_size, map_size))
-    projection = np.clip(1-distance/1.1, 0, None)
+    projection = np.clip(width-distance, 0, None)
 
     return projection
 
@@ -381,25 +382,22 @@ class InvertedSinoSpacePosteriorMean(Image):
     data_key = 'Sino Posterior Mean'
     widget_class = ImageViewBlend
     transform_to_parameter_space = False
+    upsampling: int = 3
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
-        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
-                   for edge in ['min', 'max'])
-                  for i in range(engine.dimensionality))
+        grid_shape = self.shape[0] * self.upsampling, self.shape[1] + 1
+        grid_positions = image_grid(((0,self.shape[0]), (0, self.shape[1])), grid_shape)
 
-        grid_positions = image_grid(((0,self.shape[0]), (0, 180)), self.shape)
-        shape = self.shape
-
-        # if multi-task, extend the grid_positions to include the task dimension
-        if hasattr(engine, 'output_number'):
-            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
-            shape = (*self.shape, engine.output_number)
+        # # if multi-task, extend the grid_positions to include the task dimension
+        # if hasattr(engine, 'output_number'):
+        #     grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+        #     shape = (*self.shape, engine.output_number)
 
         # calculate posterior_mean
         posterior_mean = engine.optimizer.posterior_mean(grid_positions)['f(x)']
 
         # invert posterior_mean
-        real_space_posterior_mean = posterior_mean.reshape(shape)
+        real_space_posterior_mean = posterior_mean.reshape(self.shape)
 
         # assign to data object with lock
         with data.w_lock():
@@ -413,29 +411,28 @@ class InvertedSinoSpacePosteriorVariance(Image):
     data_key = 'Sino Posterior Variance'
     widget_class = ImageViewBlend
     transform_to_parameter_space = False
+    upsampling: int = 3
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
-        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
-                   for edge in ['min', 'max'])
-                  for i in range(engine.dimensionality))
+        grid_shape = self.shape[0] * self.upsampling, self.shape[1] + 1
+        grid_positions = image_grid(((0,self.shape[0]), (0, self.shape[1])), grid_shape)
 
-        grid_positions = image_grid(((0,self.shape[0]), (0, 180)), self.shape)
-        shape = self.shape
-
-        # if multi-task, extend the grid_positions to include the task dimension
-        if hasattr(engine, 'output_number'):
-            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
-            shape = (*self.shape, engine.output_number)
+        # # if multi-task, extend the grid_positions to include the task dimension
+        # if hasattr(engine, 'output_number'):
+        #     grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+        #     shape = (*self.shape, engine.output_number)
 
         # calculate posterior_mean
         posterior_variance = engine.optimizer.posterior_covariance(grid_positions)['v(x)']
 
         # invert posterior_mean
-        real_space_posterior_mean = posterior_variance.reshape(shape)
+        real_space_posterior_mean = posterior_variance.reshape(self.shape)
 
         # assign to data object with lock
         with data.w_lock():
             data.states[self.data_key] = real_space_posterior_mean
+
+import tomopy
 
 
 @dataclass(eq=False)
@@ -445,26 +442,53 @@ class InvertedRecon(Image):
     data_key = 'Reconstruction'
     widget_class = ImageViewBlend
     transform_to_parameter_space = False
-    A_inv:np.array = None
+    upsampling:int = 3
+    algorithm:str = 'art'
+    start_finding_center_at: int = 500
+    find_center_every: int = 100
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
-        bounds = tuple(tuple(engine.parameters[('bounds', f'axis_{i}_{edge}')]
-                   for edge in ['min', 'max'])
-                  for i in range(engine.dimensionality))
-
-        grid_positions = image_grid(((0,self.shape[0]), (0, 180)), self.shape)
-        shape = self.shape
-
-        # if multi-task, extend the grid_positions to include the task dimension
-        if hasattr(engine, 'output_number'):
-            grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
-            shape = (*self.shape, engine.output_number)
+        grid_shape = self.shape[0] * self.upsampling, self.shape[1] + 1
+        grid_positions = image_grid(((0,self.shape[0]), (0, self.shape[1])), grid_shape)
+        # shape = self.shape
+        #
+        # # if multi-task, extend the grid_positions to include the task dimension
+        # if hasattr(engine, 'output_number'):
+        #     grid_positions = np.vstack([np.hstack([grid_positions, np.full((grid_positions.shape[0], 1), i)]) for i in range(engine.output_number)])
+        #     shape = (*self.shape, engine.output_number)
 
         # calculate posterior_mean
-        posterior_mean = engine.optimizer.posterior_mean(grid_positions)['f(x)']
+        sinogram = engine.optimizer.posterior_mean(grid_positions)['f(x)']
 
-        recon = sirt(posterior_mean.astype(np.float32), self.A_inv.T.astype(np.float32))
+        # filter and clip
+        sinogram = median_filter(sinogram, 3)
+        sinogram = np.clip(sinogram, 3000, None)
+
+        # reconstruct
+        theta = np.deg2rad(np.linspace(0, self.shape[1], self.shape[1] + 1))
+        last_center_found = data.states.get('recon_last_center_found', 0)
+        if 'recon_center' in data.states:
+            center = data.states.get('recon_center')
+        elif len(data) > self.start_finding_center_at and len(data) - last_center_found > self.find_center_every:
+            center = tomopy.find_center(sinogram.T[np.newaxis, :, :],
+                                        theta,
+                                        init=self.shape[0] * self.upsampling / 2,
+                                        ind=0,
+                                        tol=0.01,
+                                        sinogram_order=True)
+            data.states['recon_last_center_found'] = len(data)
+        else:
+            center = self.shape[0] / 2
+        recon = tomopy.recon(sinogram.T[np.newaxis, :, :],
+                             theta,
+                             center=center * self.upsampling,
+                             algorithm=self.algorithm,
+                             sinogram_order=True)
+
+        # mask
+        recon = tomopy.circ_mask(recon, axis=0, ratio=0.95)
 
         # assign to data object with lock
         with data.w_lock():
-            data.states[self.data_key] = np.rot90(recon.reshape(shape[0], shape[0]), 3)
+            data.states[self.data_key] = np.rot90(recon.reshape(self.shape[0]*self.upsampling,
+                                                                self.shape[0]*self.upsampling), 3)
