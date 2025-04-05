@@ -394,7 +394,7 @@ class InvertedSinoSpacePosteriorMean(Image):
         #     shape = (*self.shape, engine.output_number)
 
         # calculate posterior_mean
-        posterior_mean = engine.optimizer.posterior_mean(grid_positions)['f(x)']
+        posterior_mean = engine.optimizer.posterior_mean(grid_positions)['f(x)'].reshape(*grid_shape)
 
         # invert posterior_mean
         real_space_posterior_mean = posterior_mean.reshape(self.shape)
@@ -423,7 +423,7 @@ class InvertedSinoSpacePosteriorVariance(Image):
         #     shape = (*self.shape, engine.output_number)
 
         # calculate posterior_mean
-        posterior_variance = engine.optimizer.posterior_covariance(grid_positions)['v(x)']
+        posterior_variance = engine.optimizer.posterior_covariance(grid_positions)['v(x)'].reshape(*grid_shape)
 
         # invert posterior_mean
         real_space_posterior_mean = posterior_variance.reshape(self.shape)
@@ -458,7 +458,7 @@ class InvertedRecon(Image):
         #     shape = (*self.shape, engine.output_number)
 
         # calculate posterior_mean
-        sinogram = engine.optimizer.posterior_mean(grid_positions)['f(x)']
+        sinogram = engine.optimizer.posterior_mean(grid_positions)['f(x)'].reshape(*grid_shape)
 
         # filter and clip
         sinogram = median_filter(sinogram, 3)
