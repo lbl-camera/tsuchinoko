@@ -600,7 +600,7 @@ class GPCamHyperparameterLogPlot(MultiPlot):
 
     def update(self, widget, data: 'Data', engine: 'GPCAMInProcessEngine'):
         if 'hyperparameter training log' in data.states:
-            plot_data = np.array(data.get(['hyperparameter training log'])
+            plot_data = np.array(data.get(['hyperparameter training log']))
             widget.plot(x=plot_data[:, 0], y=plot_data[:, 1])
 
             if self.pen_key is None:
