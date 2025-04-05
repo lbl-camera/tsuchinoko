@@ -589,13 +589,22 @@ class GPCamHyperparameterPlot(MultiPlot):
                 data.states[self.data_key][i].append(engine.optimizer.hyperparameters[i])
             data.states[self.label_key] = [f"Hyperparameter #{i+1}" for i in range(len(engine.optimizer.hyperparameters))]
 
+@dataclass(eq=False)
+class GPCamHyperparameterLogPlot(MultiPlot):
+    compute_with = Location.AdaptiveEngine
+    data_key: ClassVar[str] = 'hyperparameter training log'
+    name = 'Hyperparameters'
+    label_key: InitVar[str] = 'Hyperparameter Labels'
+    accumulates = True
+    stack_plots: ClassVar[bool] = False
 
-import glob
-from PIL import Image as pImage
-import numpy as np
+    def update(self, widget, data: 'Data', engine: 'GPCAMInProcessEngine'):
+        plot_data = np.array(data['hyperparameter training log'])
+        widget.plot(x=plot_data[:, 0], y=plot_data[:, 1])
 
-raw_path = r"C:\data\raw\*.tif"
-raw_images = glob.glob(raw_path)
+        if self.pen_key is None:
+            self.colorize(widget, data)
+
 
 
 class RawGraph(Image):
@@ -605,6 +614,12 @@ class RawGraph(Image):
     transform_to_parameter_space: ClassVar[bool] = False
 
     def compute(self, data, engine: 'GPCamInProcessEngine'):
+        import glob
+        from PIL import Image as pImage
+        import numpy as np
+
+        raw_path = r"C:\data\raw\*.tif"
+        raw_images = glob.glob(raw_path)
         raw_image = np.fliplr(np.asarray(pImage.open(np.random.choice(raw_images))).T)
         with data.w_lock():
             data.states[self.data_key] = raw_image
