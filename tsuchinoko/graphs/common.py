@@ -599,11 +599,12 @@ class GPCamHyperparameterLogPlot(MultiPlot):
     stack_plots: ClassVar[bool] = False
 
     def update(self, widget, data: 'Data', engine: 'GPCAMInProcessEngine'):
-        plot_data = np.array(data['hyperparameter training log'])
-        widget.plot(x=plot_data[:, 0], y=plot_data[:, 1])
+        if 'hyperparameter training log' in data.states:
+            plot_data = np.array(data.get(['hyperparameter training log'])
+            widget.plot(x=plot_data[:, 0], y=plot_data[:, 1])
 
-        if self.pen_key is None:
-            self.colorize(widget, data)
+            if self.pen_key is None:
+                self.colorize(widget, data)
 
 
 
