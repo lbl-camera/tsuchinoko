@@ -397,7 +397,7 @@ class InvertedSinoSpacePosteriorMean(Image):
         posterior_mean = engine.optimizer.posterior_mean(grid_positions)['f(x)'].reshape(*grid_shape)
 
         # invert posterior_mean
-        real_space_posterior_mean = posterior_mean.reshape(self.shape)
+        real_space_posterior_mean = posterior_mean
 
         # assign to data object with lock
         with data.w_lock():
