@@ -2,10 +2,12 @@ import pickle
 import time
 from typing import Tuple, List
 
+import numpy as np
 import zmq
 from loguru import logger
 
 from . import Engine
+from ..adaptive.gpCAM_in_process import GPCAMInProcessEngine
 
 SLEEP_FOR_AGENT_TIME = .1
 SLEEP_FOR_TSUCHINOKO_TIME = .1
@@ -17,7 +19,11 @@ class BlueskyAdaptiveEngine(Engine):
     A `tsuchinoko.execution.Engine` that sends targets to Blueskly-Adaptive and receives back measured data.
     """
 
-    def __init__(self, host: str = '127.0.0.1', port: int = 5557):
+    suggest_blacklist = ["x_data",
+                         "y_data",
+                         "noise_variances"]  # keys with ragged state
+
+    def __init__(self, adaptive_engine:GPCAMInProcessEngine, host: str = '127.0.0.1', port: int = 5557):
         """
 
         Parameters
@@ -29,6 +35,7 @@ class BlueskyAdaptiveEngine(Engine):
         """
         super(BlueskyAdaptiveEngine, self).__init__()
 
+        self.adaptive_engine = adaptive_engine
         self.position = None
         self.context = None
         self.socket = None
@@ -59,8 +66,16 @@ class BlueskyAdaptiveEngine(Engine):
         if self.has_fresh_points_on_server:
             time.sleep(SLEEP_FOR_AGENT_TIME)  # chill if the Agent hasn't measured any points from the previous list
         else:
+            # checkpoint optimizer state
+            gpcam_state = self.adaptive_engine.optimizer.__getstate__()
+            sanitized_gpcam_state = dict(
+                **{key if key not in self.suggest_blacklist else f"STATEDICT-{key}": np.asarray(val)
+                   for key, val in gpcam_state.items()
+                   if key in self.suggest_blacklist})
+
             # send targets to TsuchinokoAgent
-            self.has_fresh_points_on_server = self.send_payload({'targets': targets})
+            self.has_fresh_points_on_server = self.send_payload({'candidate': targets,
+                                                                 'optimizer': sanitized_gpcam_state})
             self._last_targets_sent = targets
 
     def get_measurements(self) -> List[Tuple]:
