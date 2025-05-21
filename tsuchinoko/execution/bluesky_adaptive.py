@@ -14,7 +14,7 @@ FORCE_KICKSTART_TIME = 5
 
 class BlueskyAdaptiveEngine(Engine):
     """
-    A `tsuchinoko.adaptive.Engine` that sends targets to Blueskly-Adaptive and receives back measured data.
+    A `tsuchinoko.execution.Engine` that sends targets to Blueskly-Adaptive and receives back measured data.
     """
 
     def __init__(self, host: str = '127.0.0.1', port: int = 5557):
