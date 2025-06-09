@@ -73,7 +73,7 @@ class Table(Graph):
             v = v[:min_length]
             extra_fields = {k: v[:min_length] for k, v in extra_fields.items()}
 
-        values = np.array([x, y, v, *extra_fields.values()], dtype=object)
+        values = [x, y, v, *extra_fields.values()]
 
         names = ['Position', 'Value', 'Variance'] + list(extra_fields.keys())
 
@@ -416,7 +416,7 @@ class GPCamPosteriorMean(Image):
             shape = (*shape, engine.optimizer.gp.output_num)
 
         # calculate acquisition function
-        posterior_mean_value = engine.optimizer.posterior_mean(grid_positions, **extra_kwargs)['f(x)'].reshape(*shape)
+        posterior_mean_value = engine.optimizer.posterior_mean(grid_positions, **extra_kwargs)['m(x)'].reshape(*shape)
 
         # assign to data object with lock
         with data.w_lock():
@@ -582,12 +582,12 @@ class GPCamHyperparameterPlot(MultiPlot):
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
         if data.states.get(self.data_key, None) is None:
-            data.states[self.data_key] = [[] for i in range(len(engine.optimizer.hyperparameters))]
+            data.states[self.data_key] = [[] for i in range(len(engine.optimizer.get_hyperparameters()))]
         # assign to data object with lock
         with data.w_lock():
-            for i in range(len(engine.optimizer.hyperparameters)):
-                data.states[self.data_key][i].append(engine.optimizer.hyperparameters[i])
-            data.states[self.label_key] = [f"Hyperparameter #{i+1}" for i in range(len(engine.optimizer.hyperparameters))]
+            for i in range(len(engine.optimizer.get_hyperparameters())):
+                data.states[self.data_key][i].append(engine.optimizer.get_hyperparameters()[i])
+            data.states[self.label_key] = [f"Hyperparameter #{i+1}" for i in range(len(engine.optimizer.get_hyperparameters()))]
 
 @dataclass(eq=False)
 class GPCamHyperparameterLogPlot(MultiPlot):
