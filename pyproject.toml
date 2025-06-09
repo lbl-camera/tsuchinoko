@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "tsuchinoko"
 dependencies = [
-  "pyside6",
+  "pyside6<6.9.1",  # 6.9.1 has issues with graphics items
   "bluesky",
   "ophyd",
   "pyqtgraph",
-  "gpCAM~=8.1.7",  # pinned to moderate release cycle
-  "fvgp~=4.4.3",   # pinned to moderate release cycle
+  "gpCAM~=8.2.3",  # pinned to moderate release cycle
+  "fvgp~=4.6.5",   # pinned to moderate release cycle
   "numpy",
   "scipy",
   "qtmodern",
@@ -23,7 +23,8 @@ dependencies = [
   "pyqode.python",
   "pyqode.core",
   "loguru",
-  "appdirs"
+  "appdirs",
+  "pillow", # required by server demo
 ]
 requires-python = ">=3.9"
 authors = [
