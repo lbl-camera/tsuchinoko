@@ -5,7 +5,6 @@ from collections.abc import Callable
 import numpy as np
 
 import pyqtgraph as pg
-from numpy import math
 from pyqtgraph import debug, getConfigOption, functions as fn, colormap, ColorMap, getCupy, rescaleData, applyLookupTable
 from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 from pyqtgraph.graphicsItems.ScatterPlotItem import SymbolAtlas, ScatterPlotItem
@@ -443,7 +442,7 @@ class CloudItem(pg.GraphicsObject):
                 # All-NaN data is acceptable; Explicit numpy warning is not needed.
                 warnings.simplefilter("ignore")
                 b = (np.nanmin(d), np.nanmax(d))
-            if math.isinf(b[0]) or math.isinf(b[1]):
+            if np.isinf(b[0]) or np.isinf(b[1]):
                 mask = np.isfinite(d)
                 d = d[mask]
                 if len(d) == 0:
