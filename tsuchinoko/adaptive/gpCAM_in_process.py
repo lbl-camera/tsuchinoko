@@ -165,7 +165,7 @@ class GPCAMInProcessEngine(Engine):
                                       n=n,
                                       acquisition_function=gpcam_acquisition_functions[kwargs.pop('acquisition_function')],
                                       x0=np.asarray(position),
-                                      **kwargs)['x']
+                                      **kwargs)['x'].astype(float)
 
     def train(self):
         for method in ['global', 'local', 'mcmc']:
@@ -182,6 +182,6 @@ class GPCAMInProcessEngine(Engine):
                                          np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                                      for i in range(self.num_hyperparameters)]), method=method)
                     self._completed_training[method].add(N)
-                    logger.info(f"New hyperparameters: {self.optimizer.hyperparameters}")
+                    logger.info(f"New hyperparameters: {self.optimizer.get_hyperparameters()}")
 
         return True
