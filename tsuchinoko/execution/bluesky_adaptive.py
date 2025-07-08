@@ -1,3 +1,4 @@
+import numbers
 import pickle
 import time
 from typing import Tuple, List
@@ -21,7 +22,8 @@ class BlueskyAdaptiveEngine(Engine):
 
     suggest_blacklist = ["x_data",
                          "y_data",
-                         "noise_variances"]  # keys with ragged state
+                         "noise_variances",
+                         "init_hyperparameters"]  # keys with ragged state
 
     def __init__(self, adaptive_engine:GPCAMInProcessEngine, host: str = '127.0.0.1', port: int = 5557):
         """
@@ -68,10 +70,17 @@ class BlueskyAdaptiveEngine(Engine):
         else:
             # checkpoint optimizer state
             gpcam_state = self.adaptive_engine.optimizer.__getstate__()
+
+            # sanitize state
+            for key in self.suggest_blacklist:
+                if gpcam_state[key] is None:
+                    gpcam_state[key] = np.array([])
             sanitized_gpcam_state = dict(
-                **{key if key not in self.suggest_blacklist else f"STATEDICT-{key}": np.asarray(val)
+                **{key if key not in self.suggest_blacklist else f"STATEDICT-{key}":
+                       np.asarray(val) if isinstance(val, (list, tuple)) else val
                    for key, val in gpcam_state.items()
-                   if key in self.suggest_blacklist})
+                   if val is not None}  # event-model doesn't like Nones
+                )
 
             # send targets to TsuchinokoAgent
             self.has_fresh_points_on_server = self.send_payload({'candidate': targets,
