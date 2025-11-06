@@ -69,7 +69,10 @@ class BlueskyAdaptiveEngine(Engine):
             time.sleep(SLEEP_FOR_AGENT_TIME)  # chill if the Agent hasn't measured any points from the previous list
         else:
             # checkpoint optimizer state
+            gp = self.adaptive_engine.gp # This is a temporary fix to address gp state not being included before initialization
+            self.adaptive_engine.gp = False
             gpcam_state = self.adaptive_engine.optimizer.__getstate__()
+            self.adaptive_engine.gp = gp
             gpcam_state['args'] = str(gpcam_state.get('args',{}))
 
             # sanitize state
