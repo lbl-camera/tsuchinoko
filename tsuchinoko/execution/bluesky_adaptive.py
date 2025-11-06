@@ -70,6 +70,7 @@ class BlueskyAdaptiveEngine(Engine):
         else:
             # checkpoint optimizer state
             gpcam_state = self.adaptive_engine.optimizer.__getstate__()
+            gpcam_state['args'] = str(gpcam_state.get('args',{}))
 
             # sanitize state
             for key in self.suggest_blacklist:
