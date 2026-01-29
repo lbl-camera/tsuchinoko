@@ -20,12 +20,12 @@ except ImportError:
 import zmq
 from zmq.error import ZMQError, Again
 import numpy as np
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QAction
 from loguru import logger
 from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea
 from qtmodern.styles import dark
-from PySide6.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMenuBar, QAction, QStyle, QFileDialog, QDialog, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMenuBar, QStyle, QFileDialog, QDialog, QMessageBox
 
 from tsuchinoko.assets import path
 from tsuchinoko.adaptive import Data

@@ -2,7 +2,6 @@ from threading import Thread
 
 from pytest import fixture
 from PySide6.QtWidgets import QMessageBox, QFileDialog
-from pytestqt import qtbot
 from PySide6 import QtCore
 from loguru import logger
 

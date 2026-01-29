@@ -3,7 +3,6 @@ import os
 import numpy as np
 import pyqtgraph as pg
 import pytest
-import scipy.misc
 
 from tsuchinoko.graphics_items.clouditem import CloudItem
 
@@ -21,8 +20,8 @@ def test_cloud(qtbot, monkeypatch):
     win.setWindowTitle('CloudItem Example')
     view = win.addViewBox()
 
-    # image = np.asarray(Image.open('test.jpeg'))
-    image = scipy.misc.ascent()
+    # Create a simple gradient test image
+    image = np.outer(np.arange(512), np.ones(512))
     x, y = np.random.random((2, 10000))
     x *= image.shape[1]
     y *= image.shape[0]

@@ -9,7 +9,7 @@ from loguru import logger
 from ophyd import Device
 from ophyd.sim import SynAxis, SynSignal, Cpt
 from pytest import fixture
-from pytest_lazyfixture import lazy_fixture
+from pytest_lazy_fixtures import lf as lazy_fixture
 from scipy import ndimage
 
 from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine

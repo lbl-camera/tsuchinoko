@@ -1,5 +1,11 @@
 # Tsuchinoko Project Context
 
+## Development Plan
+See `CODEBASE_ANALYSIS.md` for a comprehensive codebase analysis and phased improvement plan covering:
+- Critical fixes (exception handling, blocking I/O, test coverage)
+- Architecture improvements (extract NetworkManager, state machine, dependency injection)
+- Code quality (type hints, docstrings, signal/callback consolidation)
+
 ## Overview
 Tsuchinoko is a Qt application for adaptive experiment tuning and execution, powered by gpCAM for Gaussian Process optimization.
 
@@ -30,12 +36,11 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QMenuBar
 
 ## Testing Notes
 
-### pytest-lazy-fixture Compatibility
-The `pytest-lazy-fixture` package has compatibility issues with pytest 8.x. Tests in `conftest.py` using `lazy_fixture` may fail with:
+### pytest-lazy-fixtures
+Tests use `pytest-lazy-fixtures` (note the 's') which is compatible with pytest 8.x. The import is:
+```python
+from pytest_lazy_fixtures import lf as lazy_fixture
 ```
-AttributeError: 'CallSpec2' object has no attribute 'funcargs'
-```
-Consider migrating to `pytest-lazy-fixtures` (note the 's') or refactoring parametrized fixtures.
 
 ### gpCAM Testing Considerations
 When testing gpCAM's `request_targets()` with trained GP:
@@ -45,8 +50,14 @@ When testing gpCAM's `request_targets()` with trained GP:
 - Random target generation (before GP is initialized) is reliable for testing bounds
 
 ### Test Coverage
-`tests/test_gpcam_engine.py` achieves 98% coverage on `gpCAM_in_process.py` with 30 tests covering:
-- Initialization, optimizer lifecycle, measurements, target requests, training, parameters
+37 tests with 36% overall coverage. Key modules:
+- `gpCAM_in_process.py`: 98% (30 tests)
+- `random_in_process.py`: 100%
+- `core/__init__.py`: 74%
+- `mainwindow.py`: 75%
+- `displays.py`: 79%
+
+Run tests: `pytest tests/ -v --cov=tsuchinoko`
 
 ## Architecture Notes
 
