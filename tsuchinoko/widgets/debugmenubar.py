@@ -38,7 +38,9 @@ class DebuggableMenuBar(QMenuBar):
     def set_level(self, level: str):
         from . import displays
         logger.remove(displays.log_handler_id)
-        displays.log_handler_id = logger.add(displays.LogHandler(), level=level.upper())
+        log_handler = displays.LogHandler.get_current()
+        if log_handler:
+            displays.log_handler_id = logger.add(log_handler, level=level.upper())
         logger.critical(f'Log level set to {level.upper()}')
 
     def showDebugMenu(self):

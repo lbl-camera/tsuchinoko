@@ -18,30 +18,36 @@ from tsuchinoko.utils.threads import invoke_as_event, invoke_in_main_thread
 log_handler_id = None
 
 
-class Singleton(type(QObject)):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
+# NOTE: The Singleton metaclass has been removed in favor of ApplicationContext.
+# Use ApplicationContext.current().configuration instead of Configuration().
+# See tsuchinoko/widgets/context.py for the new pattern.
 
 
 class Display(Dock):
     ...
 
 
-class LogHandler(logging.Handler, metaclass=Singleton):
+# Module-level reference to the current log handler for access from debugmenubar
+_current_log_handler = None
+
+
+class LogHandler(logging.Handler):
     colors = {logging.DEBUG: Qt.gray, logging.ERROR: Qt.darkRed, logging.CRITICAL: Qt.red,
               logging.INFO: Qt.white, logging.WARNING: Qt.yellow}
 
     def __init__(self, log_widget, level=logging.WARNING):
-        global log_handler_id
+        global log_handler_id, _current_log_handler
         super(LogHandler, self).__init__(level=level)
         logging.getLogger().addHandler(self)
         self.log_widget = log_widget
+        _current_log_handler = self
 
         log_handler_id = logger.add(logging.getLogger().handlers[-1], level=level)
+
+    @classmethod
+    def get_current(cls):
+        """Get the current log handler instance."""
+        return _current_log_handler
 
     # follows same design as vanilla logger emissions
     def emit(self, record, level=logging.INFO, timestamp=None, icon=None, *args):  # We can have icons!
@@ -75,7 +81,7 @@ class Log(Display, logging.Handler):
         logger.exception(ex)
 
 
-class Configuration(Display, metaclass=Singleton):
+class Configuration(Display):
     sigRequestParameters = Signal()
     sigPushParameter = Signal(list, object)
 
@@ -108,7 +114,7 @@ class Configuration(Display, metaclass=Singleton):
                     self.sigPushParameter.emit(self.parameter.childPath(param), info)
 
 
-class StateManager(Display, metaclass=Singleton):
+class StateManager(Display):
     sigStart = Signal()
     sigStop = Signal()
     sigPause = Signal()
@@ -215,7 +221,7 @@ class StateManager(Display, metaclass=Singleton):
             self.metrics_button.setText('Update Graphs')
 
 
-class GraphManager(Display, metaclass=Singleton):
+class GraphManager(Display):
     sigPush = Signal(object)
 
     def __init__(self):

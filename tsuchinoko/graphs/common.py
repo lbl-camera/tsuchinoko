@@ -13,7 +13,6 @@ from PySide6.QtCore import Qt, QSignalBlocker, Signal, QRectF
 from tsuchinoko.graphics_items.mixins import ClickRequester, DomainROI, BetterButtons, LogScaleIntensity, \
     BetterAutoLUTRangeImageView, ViridisImageView, AspectRatioLock, YInvert
 from tsuchinoko.graphs import Graph, Location, graph_signal_relay
-from tsuchinoko.widgets.displays import Configuration
 from tsuchinoko.widgets.graph_widgets import CloudWidget
 import sklearn
 
@@ -132,9 +131,11 @@ class Image(Graph):
             raise NotImplemented('Accumulation in Image graphs not implemented yet')
         else:
             if getattr(v, 'ndim', None) in [2, 3]:
-                bounds = [tuple(Configuration().parameter.child('bounds')[f'axis_{i}_{limit}']
+                from tsuchinoko.widgets.context import get_configuration
+                config = get_configuration()
+                bounds = [tuple(config.parameter.child('bounds')[f'axis_{i}_{limit}']
                                 for limit in ['min', 'max'])
-                          for i in range(2)]
+                          for i in range(2)] if config and config.parameter else None
                 axes = None
                 if v.ndim == 2:
                     axes = {'x': 0, 'y': 1}

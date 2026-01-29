@@ -7,7 +7,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QSizePolicy
 from pyqtgraph import functions as fn, debug, Point
 
-from tsuchinoko.widgets.displays import Configuration
+from tsuchinoko.widgets.context import get_configuration
 
 
 # TODO: map imageitems into target coordinate domain
@@ -327,19 +327,19 @@ class DomainROI(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        bounds = [tuple(Configuration().parameter.child('bounds')[f'axis_{i}_{limit}']
+        bounds = [tuple(get_configuration().parameter.child('bounds')[f'axis_{i}_{limit}']
                         for limit in ['min', 'max'])
                   for i in range(2)]
         self._domain_roi = RectROI((bounds[0][0], bounds[1][0]),
                                    (bounds[0][1] - bounds[0][0], bounds[1][1] - bounds[1][0]))
         self._domain_roi.sigRegionChangeFinished.connect(self.update_bounds)
         self.getView().addItem(self._domain_roi)
-        bounds_param = Configuration().parameter.child('bounds')
+        bounds_param = get_configuration().parameter.child('bounds')
         for child in bounds_param.children():
             child.sigValueChanged.connect(self.update_roi)
 
     def update_bounds(self):
-        bounds_param = Configuration().parameter.child('bounds')
+        bounds_param = get_configuration().parameter.child('bounds')
         for child in bounds_param.children():
             child.sigValueChanged.disconnect(self.update_roi)
         bounds_param[f'axis_0_min'] = self._domain_roi.pos().x()
@@ -350,7 +350,7 @@ class DomainROI(QWidget):
             child.sigValueChanged.connect(self.update_roi)
 
     def update_roi(self):
-        bounds_param = Configuration().parameter.child('bounds')
+        bounds_param = get_configuration().parameter.child('bounds')
         blocker = QSignalBlocker(self._domain_roi)
         self._domain_roi.setPos(bounds_param[f'axis_0_min'], bounds_param[f'axis_1_min'], update=False)
         self._domain_roi.setSize(bounds_param[f'axis_0_max'] - bounds_param[f'axis_0_min'],

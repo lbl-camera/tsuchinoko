@@ -28,6 +28,7 @@ from tsuchinoko.core.messages import (
 from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay
 from tsuchinoko.network import NetworkManager
 from tsuchinoko.utils.threads import invoke_as_event
+from tsuchinoko.widgets.context import ApplicationContext
 from tsuchinoko.widgets.displays import Log, Configuration, GraphManager, StateManager
 
 
@@ -75,6 +76,13 @@ class MainWindow(QMainWindow):
         self.configuration_widget = Configuration()
         self.state_manager_widget = StateManager()
         self.graph_manager_widget = GraphManager()
+
+        # Set up application context for global widget access
+        context = ApplicationContext()
+        context.configuration = self.configuration_widget
+        context.state_manager = self.state_manager_widget
+        context.graph_manager = self.graph_manager_widget
+        ApplicationContext.set_current(context)
 
         self.dock_area = DockArea()
         self.setCentralWidget(self.dock_area)
