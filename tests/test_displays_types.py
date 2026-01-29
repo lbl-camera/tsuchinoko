@@ -50,3 +50,27 @@ def test_state_manager_methods_have_type_hints():
     hints = get_type_hints(StateManager.update_compute_metrics)
     assert 'compute_metrics' in hints
     assert 'return' in hints
+
+
+def test_graph_manager_methods_have_type_hints():
+    """Verify GraphManager methods have proper type annotations."""
+    from tsuchinoko.graphs import Graph
+
+    hints = get_type_hints(GraphManager.set_graphs)
+    assert 'graphs' in hints
+    assert 'return' in hints
+
+    hints = get_type_hints(GraphManager.register_graph)
+    assert 'graph' in hints
+    assert 'return' in hints
+
+    hints = get_type_hints(GraphManager.update_graphs)
+    assert 'data' in hints
+    assert 'last_data_size' in hints
+    assert 'return' in hints
+
+    hints = get_type_hints(GraphManager.clear)
+    assert 'return' in hints
+
+    hints = get_type_hints(GraphManager.reset)
+    assert 'return' in hints

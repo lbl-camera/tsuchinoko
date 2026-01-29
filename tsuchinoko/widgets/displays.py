@@ -1,4 +1,4 @@
-from typing import List, Any, Tuple, Optional
+from typing import List, Any, Tuple, Optional, Dict
 import logging
 
 from PySide6.QtCore import QObject, Signal, Qt
@@ -9,8 +9,9 @@ from pyqtgraph.parametertree.parameterTypes import GroupParameter
 from PySide6.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout, QVBoxLayout
 from loguru import logger
 
+from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState, ExceptionResponse
-from tsuchinoko.graphs import graph_signal_relay
+from tsuchinoko.graphs import Graph, graph_signal_relay
 from tsuchinoko.utils import runengine
 from tsuchinoko.utils.threads import invoke_as_event, invoke_in_main_thread
 
@@ -225,15 +226,15 @@ class StateManager(Display):
 class GraphManager(Display):
     sigPush = Signal(object)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.dock_area = DockArea()
 
         super(GraphManager, self).__init__('Graphs', hideTitle=True, size=(500, 500), widget=self.dock_area)
 
-        self.graphs = dict()  # graph: widget
+        self.graphs: Dict[Graph, QWidget] = dict()
         graph_signal_relay.sigPush.connect(self.sigPush)
 
-    def set_graphs(self, graphs, data=None):
+    def set_graphs(self, graphs: List[Graph], data: Optional[Data] = None) -> None:
         self.clear()
         self.graphs.clear()
         for graph in graphs:
@@ -241,27 +242,27 @@ class GraphManager(Display):
         if data:
             self.update_graphs(data, 0)
 
-    def register_graph(self, graph):
+    def register_graph(self, graph: Graph) -> None:
         widget = graph.make_widget()
         display = Dock(graph.name, area=self.dock_area, widget=widget)
         # graph.display = display
         self.dock_area.addDock(display, position='below')
         self.graphs[graph] = widget
 
-    def update_graphs(self, data, last_data_size):
+    def update_graphs(self, data: Data, last_data_size: int) -> None:
         for graph, widget in self.graphs.items():
             try:
                 graph.update(widget, data, slice(last_data_size, None))
             except Exception as ex:
                 logger.exception(ex)
 
-    def clear(self):
+    def clear(self) -> None:
         for graph in self.graphs:
             # NOTE: the parent's parent is always a Display instance containing only that graph
             self.graphs[graph].parent().parent().setParent(None)
             self.graphs[graph].parent().parent().close()
             self.graphs[graph].parent().parent().deleteLater()
 
-    def reset(self):
+    def reset(self) -> None:
         self.clear()
         self.set_graphs(self.graphs)
