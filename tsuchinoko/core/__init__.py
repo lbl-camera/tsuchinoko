@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 import time
 from asyncio import events
@@ -19,7 +20,7 @@ from ..adaptive import Engine as AdaptiveEngine, Data
 from ..execution import Engine as ExecutionEngine
 from ..utils.logging import log_time
 
-user_state_dir = user_state_dir('tsuchinoko','camera')
+user_state_dir = user_state_dir('tsuchinoko', 'camera')
 
 class CoreState(Enum):
     Connecting = auto()
@@ -38,6 +39,16 @@ SLEEP_FOR_FRESH_DATA_TIME = .1
 
 
 class Core:
+    # Import state machine lazily to avoid circular imports
+    _state_machine_class = None
+
+    @classmethod
+    def _get_state_machine_class(cls):
+        if cls._state_machine_class is None:
+            from .state_machine import CoreStateMachine
+            cls._state_machine_class = CoreStateMachine
+        return cls._state_machine_class
+
     def __init__(self,
                  execution_engine: ExecutionEngine = None,
                  adaptive_engine: AdaptiveEngine = None,
@@ -47,7 +58,8 @@ class Core:
 
         self.iteration = 0
 
-        self._state = CoreState.Inactive
+        # Initialize state machine
+        self._state_machine = self._get_state_machine_class()()
         self._exception_queue = Queue()
         self._forced_position_queue = Queue()
         self._forced_measurement_queue = Queue()
@@ -66,13 +78,51 @@ class Core:
         self.experiment_thread = None
 
     @property
-    def state(self):
-        return self._state
+    def state(self) -> CoreState:
+        """Get current state from the state machine."""
+        return self._state_machine.state
 
     @state.setter
-    def state(self, value):
-        logger.info(f'Changing core state to {value}')
-        self._state = value
+    def state(self, value: CoreState):
+        """Set state via state machine transitions.
+
+        Maps direct state assignments to appropriate state machine triggers.
+        This setter maintains backward compatibility while using the state machine.
+        """
+        current = self._state_machine.state
+
+        # Map state assignments to triggers
+        if value == current:
+            return  # No change needed
+
+        # Define transition mappings from current state to target state
+        transition_map = {
+            (CoreState.Inactive, CoreState.Starting): 'start',
+            (CoreState.Starting, CoreState.Running): 'started',
+            (CoreState.Running, CoreState.Pausing): 'pause',
+            (CoreState.Pausing, CoreState.Paused): 'paused',
+            (CoreState.Paused, CoreState.Resuming): 'resume',
+            (CoreState.Resuming, CoreState.Running): 'resumed',
+            (CoreState.Running, CoreState.Stopping): 'stop',
+            (CoreState.Starting, CoreState.Stopping): 'stop',
+            (CoreState.Pausing, CoreState.Stopping): 'stop',
+            (CoreState.Paused, CoreState.Stopping): 'stop',
+            (CoreState.Resuming, CoreState.Stopping): 'stop',
+            (CoreState.Stopping, CoreState.Inactive): 'stopped',
+        }
+
+        # Handle exit from any state
+        if value == CoreState.Exiting:
+            self._state_machine.try_transition('exit')
+            return
+
+        key = (current, value)
+        if key in transition_map:
+            trigger = transition_map[key]
+            if not self._state_machine.try_transition(trigger):
+                logger.warning(f'State transition failed: {current} → {value}')
+        else:
+            logger.warning(f'No transition mapping for {current} → {value}')
 
     def set_execution_engine(self, engine: ExecutionEngine):
         self.execution_engine = engine
