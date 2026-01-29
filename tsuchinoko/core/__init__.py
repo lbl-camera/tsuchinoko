@@ -130,12 +130,12 @@ class Core:
     def set_adaptive_engine(self, engine: AdaptiveEngine):
         self.adaptive_engine = engine
 
-    def main(self, debug=False):
+    def main(self, debug: bool = False) -> None:
         loop = events.new_event_loop()  # <---- this ensures the current loop is replaced
         try:
             events.set_event_loop(loop)
             loop.set_debug(debug)
-            return loop.run_until_complete(self._main())
+            loop.run_until_complete(self._main())
         finally:
             try:
                 # _cancel_all_tasks(loop)
@@ -144,7 +144,7 @@ class Core:
                 events.set_event_loop(None)
                 loop.close()
 
-    async def _main(self, min_response_sleep=.1):
+    async def _main(self, min_response_sleep: float = .1) -> None:
         while self.state != CoreState.Exiting:
 
             if self.state == CoreState.Running:
@@ -180,7 +180,7 @@ class Core:
             if self.state not in [CoreState.Stopping, CoreState.Exiting, CoreState.Resuming, CoreState.Restarting]:
                 await self.notify_clients()
 
-    def experiment_loop(self):
+    def experiment_loop(self) -> None:
         while True:
             if self.state == CoreState.Running:
                 logger.info(f'Iteration: {self.data._completed_iterations}, Data count: {len(self.data)}')
@@ -206,7 +206,7 @@ class Core:
             else:
                 time.sleep(.1)
 
-    def experiment_iteration(self):
+    def experiment_iteration(self) -> None:
         with self.data.iteration():
             if self._has_fresh_data:
                 with log_time('getting position', cumulative_key='getting position'):
