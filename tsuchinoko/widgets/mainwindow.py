@@ -1,13 +1,8 @@
-import time
-from collections import defaultdict
-from functools import partial
-from pickle import UnpicklingError
-from queue import Queue, Empty
 import subprocess
-from signal import SIGINT
-from typing import Any, Type, Union
 import sys
+from functools import partial
 from pathlib import Path
+from typing import Any, Type, Union
 
 from tsuchinoko.utils.dependencies import check_dependencies
 from tsuchinoko.widgets.debugmenubar import DebuggableMenuBar
@@ -17,28 +12,22 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 
-import zmq
-from zmq.error import ZMQError, Again
-import numpy as np
 from PySide6.QtGui import QIcon, QAction
 from loguru import logger
-from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea
 from qtmodern.styles import dark
-from PySide6.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMenuBar, QStyle, QFileDialog, QDialog, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QApplication, QStyle, QFileDialog, QMessageBox
 
 from tsuchinoko.assets import path
 from tsuchinoko.adaptive import Data
 from tsuchinoko.core import CoreState
-from tsuchinoko.core.messages import PauseRequest, StartRequest, GetParametersRequest, SetParameterRequest, \
-    PartialDataRequest, FullDataRequest, StopRequest, Message, StateRequest, StateResponse, GetParametersResponse, \
-    FullDataResponse, PartialDataResponse, MeasureRequest, \
-    ConnectRequest, ConnectResponse, PushDataRequest, ExceptionResponse, PullGraphsRequest, GraphsResponse, \
-    ReplayRequest, ExitRequest, PushGraphsRequest, SetComputeMetricsRequest
-from tsuchinoko.graphics_items.clouditem import CloudItem
-from tsuchinoko.graphics_items.indicatoritem import BetterCurveArrow
-from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay, ClickRequesterPlot
-from tsuchinoko.utils.threads import QThreadFutureIterator, invoke_as_event
+from tsuchinoko.core.messages import (
+    Message, StateResponse, GetParametersResponse, FullDataResponse,
+    PartialDataResponse, ConnectResponse, ExceptionResponse, GraphsResponse
+)
+from tsuchinoko.graphics_items.mixins import ClickRequester, request_relay
+from tsuchinoko.network import NetworkManager
+from tsuchinoko.utils.threads import invoke_as_event
 from tsuchinoko.widgets.displays import Log, Configuration, GraphManager, StateManager
 
 
@@ -99,149 +88,64 @@ class MainWindow(QMainWindow):
 
         dark(QApplication.instance())
 
-        self.context = zmq.Context()
-        self.socket = None
-        self.core_address = core_address
-        self.init_socket()
-
-        self.state_manager_widget.sigPause.connect(self.pause)
-        self.state_manager_widget.sigStart.connect(self.start)
-        self.state_manager_widget.sigStop.connect(self.stop)
-        self.state_manager_widget.sigReplay.connect(self.replay)
-        self.state_manager_widget.sigSetComputeMetrics.connect(self.set_compute_metrics)
-        self.configuration_widget.sigPushParameter.connect(self.set_parameter)
-        self.configuration_widget.sigRequestParameters.connect(self.request_parameters)
-        self.graph_manager_widget.sigPush.connect(self.push_graph)
-        request_relay.sigRequestMeasure.connect(self.request_measure)
-
-        self.update_thread = QThreadFutureIterator(self.update, finished_slot=self.close_zmq, name='tsuchinoko-update')
-        self.update_thread.start()
-
+        # Initialize data
         self.data: Data = Data()
-        self.last_data_size = None
-        self.callbacks = defaultdict(list)
+        self.last_data_size = 0
 
-        self.subscribe(self.state_manager_widget.update_state, StateResponse)
-        self.subscribe(self.state_manager_widget.update_state, ConnectResponse)
-        self.subscribe(self.configuration_widget.update_parameters, GetParametersResponse, invoke_as_event=True)
-        self.subscribe(partial(self._data_callback, response_type='full'), FullDataResponse)
-        self.subscribe(partial(self._data_callback, response_type='partial'), PartialDataResponse)
-        self.subscribe(self.refresh_state, ConnectResponse)
-        self.subscribe(self.log_widget.log_exception, ExceptionResponse)
-        self.subscribe(self.set_graphs, GraphsResponse, invoke_as_event=True)
+        # Initialize network manager
+        self.core_address = core_address
+        self.network = NetworkManager(address=core_address)
+        self.network.set_state_getter(lambda: self.state_manager_widget.state)
+        self.network.set_on_connection_lost(self._on_connection_lost)
+        self.network._create_data_request = self._create_data_request
+
+        # Connect widget signals to network operations
+        self.state_manager_widget.sigPause.connect(self.network.pause)
+        self.state_manager_widget.sigStart.connect(self.network.start_experiment)
+        self.state_manager_widget.sigStop.connect(self.network.stop)
+        self.state_manager_widget.sigReplay.connect(self._replay)
+        self.state_manager_widget.sigSetComputeMetrics.connect(self.network.set_compute_metrics)
+        self.configuration_widget.sigPushParameter.connect(self.network.set_parameter)
+        self.configuration_widget.sigRequestParameters.connect(self.network.request_parameters)
+        self.graph_manager_widget.sigPush.connect(self.network.push_graph)
+        request_relay.sigRequestMeasure.connect(self.network.request_measure)
+
+        # Register response callbacks
+        self.network.subscribe(self.state_manager_widget.update_state, StateResponse)
+        self.network.subscribe(self.state_manager_widget.update_state, ConnectResponse)
+        self.network.subscribe(self.configuration_widget.update_parameters, GetParametersResponse, invoke_as_event=True)
+        self.network.subscribe(partial(self._data_callback, response_type='full'), FullDataResponse)
+        self.network.subscribe(partial(self._data_callback, response_type='partial'), PartialDataResponse)
+        self.network.subscribe(self._refresh_state, ConnectResponse)
+        self.network.subscribe(self.log_widget.log_exception, ExceptionResponse)
+        self.network.subscribe(self.set_graphs, GraphsResponse, invoke_as_event=True)
+
+        # Start network communication
+        self.network.start(finished_slot=self._close_network)
 
         self._server = None
 
-    def init_socket(self):
-        if self.socket:
-            logger.debug("Closing socket")
-            self.socket.close()
+    @property
+    def update_thread(self):
+        """Access the network update thread. For backward compatibility."""
+        return self.network._update_thread
 
-        #  Socket to talk to server
-        logger.info("Connecting to core server…")
-        self.socket = self.context.socket(zmq.REQ)
-        self.socket.setsockopt(zmq.LINGER, 5)
-        self.socket.connect(f"tcp://{self.core_address}:5555")
-        self.socket.RCVTIMEO = 5000
-        self.message_queue = Queue()
+    def _replay(self):
+        """Send replay request with current data."""
+        self.network.replay(self.data.positions, self.data.measurements)
 
-    def try_connect(self):
-        self.message_queue.put(ConnectRequest())
+    def _create_data_request(self):
+        """Create appropriate data request based on current data state."""
+        from tsuchinoko.core.messages import PartialDataRequest, FullDataRequest
+        if self.data:
+            return PartialDataRequest(len(self.data))
+        return FullDataRequest()
 
-    def get_state(self):
-        self.message_queue.put(StateRequest())
-
-    def pause(self):
-        self.message_queue.put(PauseRequest())
-
-    def start(self):
-        self.message_queue.put(StartRequest())
-
-    def stop(self):
-        self.message_queue.put(StopRequest())
-
-    def replay(self):
-        message = ReplayRequest(self.data.positions, self.data.measurements)
-        self.message_queue.put(StopRequest())
-        self.message_queue.put(message)
-        self.message_queue.put(StartRequest())
-
-    def set_compute_metrics(self, value):
-        self.message_queue.put(SetComputeMetricsRequest(value))
-
-    def request_measure(self, pos):
-        self.message_queue.put(MeasureRequest(pos))
-
-    def request_parameters(self):
-        self.message_queue.put(GetParametersRequest())
-
-    def push_graph(self, graph):
-        self.message_queue.put(PushGraphsRequest([graph]))
-
-    def set_parameter(self, child_path: str, value: Any):
-        if child_path:
-            self.message_queue.put(SetParameterRequest(child_path, value))
-
-    def update(self):
+    def _on_connection_lost(self):
+        """Handle connection loss - reset data and update UI."""
         self.data = Data()
         self.last_data_size = 0
-
-        while True:
-            yield
-            request = None
-
-            if self.state_manager_widget.state == CoreState.Stopping:
-                self.last_data_size = 0
-                self.data = Data()
-
-            if self.state_manager_widget.state == CoreState.Connecting:
-                self.try_connect()
-
-            if self.state_manager_widget.state in [CoreState.Pausing, CoreState.Starting, CoreState.Resuming, CoreState.Resuming, CoreState.Stopping]:
-                self.get_state()
-
-            try:
-                request = self.message_queue.get(timeout=.2)
-            except Empty:
-                if self.state_manager_widget.state == CoreState.Running:
-                    if self.data:
-                        request = PartialDataRequest(len(self.data))
-                    else:
-                        request = FullDataRequest()
-
-            if not request:
-                self.get_state()
-                continue
-            else:
-                logger.info(f'request: {request}')
-
-            try:
-                self.socket.send_pyobj(request)
-                response = self.socket.recv_pyobj()
-            except (ZMQError, Again) as ex:
-                logger.warning(f'Unable to connect to core server at {self.core_address}...')
-                time.sleep(1)
-                # logger.exception(ex)
-                if self.context:
-                    self.init_socket()
-                self.data = Data()  # wipeout data and get a full update next time
-                self.last_data_size = 0
-                self.state_manager_widget.update_state(CoreState.Connecting, True)
-            except UnpicklingError as ex:
-                logger.exception(ex)
-                logger.critical('The above error prevented unpacking data from the server.')
-            else:
-                logger.info(f'response: {response}')
-                if not response:
-                    self.get_state()
-                else:
-                    if self.state_manager_widget.state == CoreState.Connecting:
-                        logger.critical(f'Successfully connected to server at {self.core_address}.')
-                    for callback, as_event in self.callbacks[type(response)]:
-                        if as_event:
-                            invoke_as_event(callback, *response.payload)
-                        else:
-                            callback(*response.payload)
+        self.state_manager_widget.update_state(CoreState.Connecting, True)
 
     def _data_callback(self, data_payload, last_data_size=None, response_type='partial'):
         if not isinstance(data_payload, dict):  # TODO: Remove when responses are mapped to callbacks
@@ -263,10 +167,11 @@ class MainWindow(QMainWindow):
             old_last_data_size, self.last_data_size = self.last_data_size, len(self.data)
             invoke_as_event(self.update_graphs, self.data, old_last_data_size)
 
-    def refresh_state(self, _, __):
-        self.message_queue.queue.clear()
-        self.message_queue.put(GetParametersRequest())
-        self.message_queue.put(PullGraphsRequest())
+    def _refresh_state(self, _, __):
+        """Refresh parameters and graphs after connection."""
+        self.network.clear_queue()
+        self.network.request_parameters()
+        self.network.pull_graphs()
 
     def update_graphs(self, data, last_data_size):
         self.graph_manager_widget.update_graphs(data, last_data_size)
@@ -282,10 +187,12 @@ class MainWindow(QMainWindow):
         self.graph_manager_widget.set_graphs(graphs, self.data)
 
     def subscribe(self, callback, response_type: Union[Type[Message], None] = None, invoke_as_event: bool = False):
-        self.callbacks[response_type].append((callback, invoke_as_event))
+        """Subscribe to network responses. Delegates to NetworkManager."""
+        self.network.subscribe(callback, response_type, invoke_as_event)
 
     def unsubscribe(self, callback, response_type: Union[Type[Message], None] = None):
-        self.callbacks[response_type] = list(filter(lambda match_callback, invoke_as_event: match_callback == callback, self.callbacks[response_type]))
+        """Unsubscribe from network responses. Delegates to NetworkManager."""
+        self.network.unsubscribe(callback, response_type)
 
     def open_data(self):
         name, filter = QFileDialog.getOpenFileName(filter=("YAML (*.yml)"))
@@ -303,9 +210,7 @@ class MainWindow(QMainWindow):
 
         self.data = Data(**load(open(name, 'r'), Loader=Loader))
         self.last_data_size = len(self.data)
-        # self.graph_manager_widget.reset()
-        self.message_queue.put(PullGraphsRequest())
-        # self.update_graphs(self.data, 0)
+        self.network.pull_graphs()
         if self.state_manager_widget.state == CoreState.Connecting:
             logger.warning('Data has been loaded before connecting to an experiment server. Remember to reload data after a connection is established.')
         else:
@@ -315,7 +220,7 @@ class MainWindow(QMainWindow):
                                           buttons=QMessageBox.StandardButtons(QMessageBox.Yes | QMessageBox.No),
                                           defaultButton=QMessageBox.Yes)
             if result == QMessageBox.Yes:
-                self.message_queue.put(PushDataRequest(self.data.as_dict()))
+                self.network.push_data(self.data.as_dict())
 
     def save_data(self):
         name, filter = QFileDialog.getSaveFileName(filter=("YAML (*.yml)"))
@@ -351,19 +256,9 @@ class MainWindow(QMainWindow):
         self.data = Data()
         self.graph_manager_widget.reset()
 
-    def close_zmq(self):
-        if self.update_thread.running:
-            logger.info('waiting for update thread to finish')
-            self.update_thread.requestInterruption()
-            self.update_thread.wait()
-        if self.socket:
-            logger.debug('Closing socket')
-            self.socket.close()
-            self.socket = None
-        if self.context:
-            logger.debug('Closing context')
-            self.context.term()
-            self.context = None
+    def _close_network(self):
+        """Clean up network resources."""
+        self.network.close()
 
     def closeEvent(self, event):
         if not self.close_demo(confirm=True):
@@ -379,26 +274,26 @@ class MainWindow(QMainWindow):
                 self.save_data()
             if result in [QMessageBox.Yes, QMessageBox.No]:
                 event.accept()
-                self.close_zmq()
+                self._close_network()
             else:
                 event.ignore()
         else:
             event.accept()
-            self.close_zmq()
+            self._close_network()
 
     def start_demo(self, demo_key):
-        # If not communicating with localhost, dump connection to server
+        # If not communicating with localhost, reconnect to localhost
         if self.core_address != 'localhost':
             self.core_address = 'localhost'
-            self.init_socket()
+            self.network.address = 'localhost'
+            self.network.init_socket()
 
         # if there's a child process server, exit it
         if not self.close_demo(confirm=True):
             return
 
-        suffix = Path(sys.executable).suffix 
+        suffix = Path(sys.executable).suffix
         demo_exe = (Path(sys.executable).parent/'tsuchinoko_demo').with_suffix(suffix if suffix=='.exe' else '')
-        # print(demo_exe)
         self._server = subprocess.Popen([demo_exe, demo_key])
 
     def start_server(self, path):
@@ -418,7 +313,7 @@ class MainWindow(QMainWindow):
                                               defaultButton=QMessageBox.Yes)
                 if result != QMessageBox.Yes:
                     return False
-            self.message_queue.put(ExitRequest())
+            self.network.request_exit()
             try:
                 self._server.wait(3)
 
