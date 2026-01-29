@@ -74,3 +74,11 @@ def test_graph_manager_methods_have_type_hints():
 
     hints = get_type_hints(GraphManager.reset)
     assert 'return' in hints
+
+
+def test_display_classes_have_docstrings():
+    """Verify all Display classes have class-level docstrings."""
+    from tsuchinoko.widgets.displays import Display
+    classes = [Display, LogHandler, Log, Configuration, StateManager, GraphManager]
+    for cls in classes:
+        assert cls.__doc__ is not None, f"{cls.__name__} should have docstring"

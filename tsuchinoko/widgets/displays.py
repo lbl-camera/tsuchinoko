@@ -25,6 +25,11 @@ log_handler_id = None
 
 
 class Display(Dock):
+    """Base class for dockable display widgets.
+
+    Provides a consistent interface for creating dock widgets
+    that can be arranged in the main window's dock area.
+    """
     ...
 
 
@@ -33,6 +38,16 @@ _current_log_handler = None
 
 
 class LogHandler(logging.Handler):
+    """Custom logging handler that displays messages in a QListWidget.
+
+    Integrates with both Python's logging module and loguru to capture
+    log messages and display them with color-coding based on level.
+
+    Attributes:
+        colors: Mapping of log levels to Qt colors
+        log_widget: QListWidget for displaying messages
+    """
+
     colors = {logging.DEBUG: Qt.gray, logging.ERROR: Qt.darkRed, logging.CRITICAL: Qt.red,
               logging.INFO: Qt.white, logging.WARNING: Qt.yellow}
 
@@ -70,6 +85,12 @@ class LogHandler(logging.Handler):
 
 
 class Log(Display, logging.Handler):
+    """Log display widget showing application messages.
+
+    Combines a Display dock with a LogHandler to provide a visual
+    log viewer in the application interface.
+    """
+
     def __init__(self) -> None:
         super(Log, self).__init__('Log', size=(800, 100))
 
@@ -84,6 +105,17 @@ class Log(Display, logging.Handler):
 
 
 class Configuration(Display):
+    """Configuration panel for adaptive engine parameters.
+
+    Displays a parameter tree that allows users to view and modify
+    the adaptive engine's configuration. Changes are propagated
+    to the server via sigPushParameter signal.
+
+    Signals:
+        sigRequestParameters: Emitted to request current parameters from server
+        sigPushParameter: Emitted when a parameter value changes (path, value)
+    """
+
     sigRequestParameters = Signal()
     sigPushParameter = Signal(list, object)
 
@@ -117,6 +149,20 @@ class Configuration(Display):
 
 
 class StateManager(Display):
+    """Experiment state control panel.
+
+    Provides buttons for starting, pausing, stopping, and replaying
+    experiments. Displays current state and allows toggling metrics
+    computation.
+
+    Signals:
+        sigStart: Emitted when start/resume is requested
+        sigStop: Emitted when stop is requested
+        sigPause: Emitted when pause is requested
+        sigReplay: Emitted when replay is requested
+        sigSetComputeMetrics: Emitted with bool when metrics toggle changes
+    """
+
     sigStart = Signal()
     sigStop = Signal()
     sigPause = Signal()
@@ -224,6 +270,20 @@ class StateManager(Display):
 
 
 class GraphManager(Display):
+    """Manager for visualization graph widgets.
+
+    Creates and manages dock widgets for each registered Graph.
+    Handles graph updates when new data arrives and coordinates
+    graph push signals.
+
+    Signals:
+        sigPush: Emitted when a graph needs to be pushed to server
+
+    Attributes:
+        dock_area: DockArea containing graph docks
+        graphs: Dict mapping Graph instances to their widgets
+    """
+
     sigPush = Signal(object)
 
     def __init__(self) -> None:
