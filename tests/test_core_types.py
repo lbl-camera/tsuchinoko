@@ -57,3 +57,33 @@ def test_core_save_checkpoint_has_type_hints():
     hints = get_type_hints(Core.save_checkpoint)
     assert 'directory' in hints, "Parameter 'directory' should have type hint"
     assert 'return' in hints, "Return type should be annotated"
+
+
+def test_zmqcore_respond_methods_have_type_hints():
+    """Verify ZMQCore respond_* methods have proper type annotations."""
+    from tsuchinoko.core.messages import (
+        FullDataRequest, PartialDataRequest, PushDataRequest, StartRequest,
+        StopRequest, PauseRequest, StateRequest, GetParametersRequest,
+        SetParameterRequest, MeasureRequest, ConnectRequest, ReplayRequest
+    )
+
+    respond_methods = [
+        ('respond_FullDataRequest', FullDataRequest),
+        ('respond_PartialDataRequest', PartialDataRequest),
+        ('respond_PushDataRequest', PushDataRequest),
+        ('respond_StartRequest', StartRequest),
+        ('respond_StopRequest', StopRequest),
+        ('respond_PauseRequest', PauseRequest),
+        ('respond_StateRequest', StateRequest),
+        ('respond_GetParametersRequest', GetParametersRequest),
+        ('respond_SetParameterRequest', SetParameterRequest),
+        ('respond_MeasureRequest', MeasureRequest),
+        ('respond_ConnectRequest', ConnectRequest),
+        ('respond_ReplayRequest', ReplayRequest),
+    ]
+
+    for method_name, request_type in respond_methods:
+        method = getattr(ZMQCore, method_name)
+        hints = get_type_hints(method)
+        assert 'request' in hints, f"{method_name} should have 'request' parameter typed"
+        assert 'return' in hints, f"{method_name} should have return type"

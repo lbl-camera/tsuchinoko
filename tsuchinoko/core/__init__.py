@@ -14,11 +14,14 @@ from yaml import dump
 
 from tsuchinoko.graphs import Graph
 
-from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, \
-    UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, \
-    SetParameterResponse, StopRequest, StateResponse, MeasureRequest, \
-    MeasureResponse, ConnectRequest, ConnectResponse, ExceptionResponse, PushDataRequest, PushDataResponse, \
-    GraphsResponse, ReplayResponse
+from .messages import (
+    Message, FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse,
+    StartRequest, UnknownResponse, PauseRequest, StateRequest, GetParametersRequest,
+    SetParameterRequest, GetParametersResponse, SetParameterResponse, StopRequest, StateResponse,
+    MeasureRequest, MeasureResponse, ConnectRequest, ConnectResponse, ExceptionResponse,
+    PushDataRequest, PushDataResponse, GraphsResponse, PullGraphsRequest, PushGraphsRequest,
+    ReplayRequest, ReplayResponse, ExitRequest, SetComputeMetricsRequest
+)
 from ..adaptive import Engine as AdaptiveEngine, Data
 from ..execution import Engine as ExecutionEngine
 from ..utils.logging import log_time
@@ -297,7 +300,7 @@ class ZMQCore(Core):
         self.context = None
         self.poller = None
 
-    def start_server(self):
+    def start_server(self) -> None:
         import zmq
         from zmq.asyncio import Context, Poller
         self.poller = Poller()
@@ -306,11 +309,11 @@ class ZMQCore(Core):
         socket.bind("tcp://*:5555")
         self.poller.register(socket, zmq.POLLIN)
 
-    def respond_FullDataRequest(self, request):
+    def respond_FullDataRequest(self, request: FullDataRequest) -> FullDataResponse:
         with self.data.r_lock():
             return FullDataResponse(self.data.as_dict())
 
-    def respond_PartialDataRequest(self, request):
+    def respond_PartialDataRequest(self, request: PartialDataRequest) -> Message:
         if self.data and request.iteration <= len(self.data) and self.state == CoreState.Running:
             with self.data.r_lock():
                 partial_data = self.data[request.iteration:]
@@ -318,54 +321,54 @@ class ZMQCore(Core):
         else:
             return StateResponse(self.state, self.compute_metrics)
 
-    def respond_PushDataRequest(self, request):
+    def respond_PushDataRequest(self, request: PushDataRequest) -> PushDataResponse:
         self.data = Data(**request.data)
         return PushDataResponse()
 
-    def respond_StartRequest(self, request):
+    def respond_StartRequest(self, request: StartRequest) -> StateResponse:
         if self.state == CoreState.Paused:
             self.state = CoreState.Resuming
         elif self.state == CoreState.Inactive:
             self.state = CoreState.Starting
         return StateResponse(self.state, self.compute_metrics)
 
-    def respond_StopRequest(self, request):
+    def respond_StopRequest(self, request: StopRequest) -> StateResponse:
         self.state = CoreState.Stopping
         self.experiment_thread.join()
         return StateResponse(self.state, self.compute_metrics)
 
-    def respond_ExitRequest(self, request):
+    def respond_ExitRequest(self, request: ExitRequest) -> StateResponse:
         self.state = CoreState.Exiting
         return StateResponse(self.state, self.compute_metrics)
 
-    def respond_PauseRequest(self, request):
+    def respond_PauseRequest(self, request: PauseRequest) -> StateResponse:
         self.state = CoreState.Pausing
         return StateResponse(self.state, self.compute_metrics)
 
-    def respond_StateRequest(self, request):
+    def respond_StateRequest(self, request: StateRequest) -> Message:
         if not self._exception_queue.empty():
             return ExceptionResponse(self._exception_queue.get())
         else:
             return StateResponse(self.state, self.compute_metrics)
 
-    def respond_GetParametersRequest(self, request):
+    def respond_GetParametersRequest(self, request: GetParametersRequest) -> GetParametersResponse:
         return GetParametersResponse(self.adaptive_engine.parameters.saveState())
 
-    def respond_SetParameterRequest(self, request):
+    def respond_SetParameterRequest(self, request: SetParameterRequest) -> SetParameterResponse:
         self.adaptive_engine.parameters.child(*request.child_path).setValue(request.value)
         return SetParameterResponse(True)
 
-    def respond_MeasureRequest(self, request):
+    def respond_MeasureRequest(self, request: MeasureRequest) -> MeasureResponse:
         self._forced_position_queue.put(request.position)
         return MeasureResponse(True)
 
-    def respond_ConnectRequest(self, request):
+    def respond_ConnectRequest(self, request: ConnectRequest) -> ConnectResponse:
         return ConnectResponse(self.state, self.compute_metrics)
 
-    def respond_PullGraphsRequest(self, request):
+    def respond_PullGraphsRequest(self, request: PullGraphsRequest) -> GraphsResponse:
         return GraphsResponse(self.graphs)
 
-    def respond_PushGraphsRequest(self, request):
+    def respond_PushGraphsRequest(self, request: PushGraphsRequest) -> Message:
         for graph in request.graphs:
             try:
                 self.update_graph(graph)
@@ -374,11 +377,11 @@ class ZMQCore(Core):
         # self.graphs = request.graphs
         return StateResponse(self.state, self.compute_metrics)
 
-    def respond_SetComputeMetricsRequest(self, request):
+    def respond_SetComputeMetricsRequest(self, request: SetComputeMetricsRequest) -> StateResponse:
         self.compute_metrics = request.compute_metrics
         return StateResponse(self.state, self.compute_metrics)
 
-    def respond_ReplayRequest(self, request):
+    def respond_ReplayRequest(self, request: ReplayRequest) -> ReplayResponse:
         self._forced_measurement_queue.queue.clear()
         self._forced_position_queue.queue.clear()
 
@@ -426,9 +429,9 @@ class ZMQCore(Core):
                     logger.exception(ValueError(f'Unknown request received: {request}'))
                     time.sleep(.1)
 
-    def exit_later(self):
+    def exit_later(self) -> None:
         self.state = CoreState.Exiting
 
-    def exit(self):
+    def exit(self) -> None:
         self.exit_later()
         self.experiment_thread.join()
