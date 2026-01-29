@@ -28,7 +28,8 @@ class Data:
     graphics_items: dict = field(default_factory=dict)
 
     @property
-    def measurements(self):
+    def measurements(self) -> List[Tuple[tuple, float, float, dict]]:
+        """Get all measurements as list of (position, score, variance, metrics) tuples."""
         return list(zip(self.positions, self.scores, self.variances, [{key: values[i] for key, values in self.metrics.items()} for i in range(len(self))]))
 
     def __post_init__(self):
@@ -38,6 +39,14 @@ class Data:
         self._completed_iterations = 0
 
     def inject_new(self, data: List[Tuple[tuple, float, float, Dict[str, Any]]]) -> None:
+        """Add new measurements to the data collection.
+
+        Thread-safe method that appends new measurements while holding
+        the write lock.
+
+        Args:
+            data: List of (position, score, variance, metrics_dict) tuples
+        """
         with self.w_lock():
             for datum in data:
                 self.positions.append(datum[0])
@@ -49,11 +58,31 @@ class Data:
                     self.metrics[metric].append(datum[3][metric])
 
     def as_dict(self) -> Dict[str, Any]:
+        """Convert data to a dictionary for serialization.
+
+        Returns:
+            Dictionary with all dataclass fields, metrics converted from
+            defaultdict to regular dict.
+        """
         self_copy = copy(self)
         self_copy.metrics = dict(self_copy.metrics)
         return asdict(self_copy)
 
     def __getitem__(self, item: Union[slice, str]) -> Union['Data', List[Any]]:
+        """Access data by slice or metric/state name.
+
+        Args:
+            item: Either a slice for data subsetting, or a string key
+                for accessing metrics, states, or built-in arrays.
+
+        Returns:
+            For slices: New Data instance with subset of measurements
+            For strings: The requested metric, state, or array
+
+        Raises:
+            ValueError: If string key exists in both metrics and states,
+                or if key is not found
+        """
         if isinstance(item, str):
             if item in self.metrics and item in self.states:
                 raise ValueError(f'{item} exists in both states and metrics.')
@@ -76,20 +105,47 @@ class Data:
         raise ValueError(f'Unknown item: {item}')
 
     def __contains__(self, item: str) -> bool:
+        """Check if a key exists in states or metrics.
+
+        Args:
+            item: Key to check for
+
+        Returns:
+            True if key exists in states or metrics
+        """
         if isinstance(item, str):
             return item in self.states or item in self.metrics
         return False
 
     def __setitem__(self, key: str, value: List[Any]) -> None:
+        """Set a metric array by key.
+
+        Args:
+            key: Metric name
+            value: List of metric values
+
+        Raises:
+            ValueError: If key is not a string
+        """
         if isinstance(key, str):
             self.metrics[key] = value
         else:
             raise ValueError()
 
     def __len__(self) -> int:
+        """Return the number of measurements."""
         return len(self.positions)
 
     def extend(self, data: 'Data') -> None:
+        """Extend this data with measurements from another Data instance.
+
+        Thread-safe method that appends all measurements from data while
+        holding the write lock. Also updates dimensionality, graphics_items,
+        and states from the source data.
+
+        Args:
+            data: Data instance to extend from
+        """
         with self.w_lock():
             self.positions += data.positions
             self.scores += data.scores
@@ -109,10 +165,19 @@ class Data:
         self.w_lock().__exit__(exc_type, exc_val, exc_tb)
 
     def __bool__(self) -> bool:
+        """Return True if data contains any measurements."""
         return bool(len(self))
 
     @contextmanager
     def iteration(self) -> Iterator[None]:
+        """Context manager for tracking completed iterations.
+
+        Increments _completed_iterations counter on context exit.
+        Used by Core to track experiment progress.
+
+        Yields:
+            None
+        """
         yield
         self._completed_iterations += 1
 

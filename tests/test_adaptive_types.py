@@ -38,3 +38,14 @@ def test_data_dunder_methods_have_type_hints():
     hints = get_type_hints(Data.__contains__)
     assert 'item' in hints
     assert 'return' in hints
+
+
+def test_data_methods_have_docstrings():
+    """Verify Data class methods have docstrings."""
+    methods = [
+        'inject_new', 'as_dict', 'extend', '__getitem__', '__setitem__',
+        '__contains__', '__len__', 'iteration'
+    ]
+    for method_name in methods:
+        method = getattr(Data, method_name)
+        assert method.__doc__ is not None, f"Data.{method_name} should have docstring"
