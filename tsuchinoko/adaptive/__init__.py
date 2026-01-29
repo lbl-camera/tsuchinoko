@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from copy import copy
 from dataclasses import dataclass, field, asdict
 from abc import ABC, abstractmethod
-from typing import Tuple, Iterable, Set, List, Union
+from typing import Tuple, Iterable, Set, List, Union, Dict, Any, Iterator, Optional
 
 from loguru import logger
 from pyqtgraph.parametertree import Parameter
@@ -37,7 +37,7 @@ class Data:
         self.r_lock = self._lock.r_locked
         self._completed_iterations = 0
 
-    def inject_new(self, data):
+    def inject_new(self, data: List[Tuple[tuple, float, float, Dict[str, Any]]]) -> None:
         with self.w_lock():
             for datum in data:
                 self.positions.append(datum[0])
@@ -48,12 +48,12 @@ class Data:
                         self.metrics[metric] = []
                     self.metrics[metric].append(datum[3][metric])
 
-    def as_dict(self):
+    def as_dict(self) -> Dict[str, Any]:
         self_copy = copy(self)
         self_copy.metrics = dict(self_copy.metrics)
         return asdict(self_copy)
 
-    def __getitem__(self, item: Union[slice, str]):
+    def __getitem__(self, item: Union[slice, str]) -> Union['Data', List[Any]]:
         if isinstance(item, str):
             if item in self.metrics and item in self.states:
                 raise ValueError(f'{item} exists in both states and metrics.')
@@ -75,20 +75,21 @@ class Data:
                         self.graphics_items)
         raise ValueError(f'Unknown item: {item}')
 
-    def __contains__(self, item):
+    def __contains__(self, item: str) -> bool:
         if isinstance(item, str):
             return item in self.states or item in self.metrics
+        return False
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: List[Any]) -> None:
         if isinstance(key, str):
             self.metrics[key] = value
         else:
             raise ValueError()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.positions)
 
-    def extend(self, data: 'Data'):
+    def extend(self, data: 'Data') -> None:
         with self.w_lock():
             self.positions += data.positions
             self.scores += data.scores
@@ -99,18 +100,19 @@ class Data:
             self.graphics_items.update(data.graphics_items)
             self.states = data.states
 
-    def __enter__(self):
+    def __enter__(self) -> 'Data':
         self.w_lock().__enter__()
         logger.exception(RuntimeError("deprecation in progress"))
+        return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Any) -> None:
         self.w_lock().__exit__(exc_type, exc_val, exc_tb)
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(len(self))
 
     @contextmanager
-    def iteration(self):
+    def iteration(self) -> Iterator[None]:
         yield
         self._completed_iterations += 1
 
