@@ -86,28 +86,28 @@ class Configuration(Display):
     sigRequestParameters = Signal()
     sigPushParameter = Signal(list, object)
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(Configuration, self).__init__('Configuration', size=(300, 500))
 
         container_widget = QWidget()
         layout = QVBoxLayout()
 
-        self.parameter = None
+        self.parameter: Optional[GroupParameter] = None
         self.parameter_tree = ParameterTree()
         layout.addWidget(self.parameter_tree)
         container_widget.setLayout(layout)
         self.addWidget(container_widget)
 
-    def request_parameters(self):
+    def request_parameters(self) -> None:
         self.sigRequestParameters.emit()
 
-    def update_parameters(self, state: dict):
+    def update_parameters(self, state: dict) -> None:
         self.parameter = GroupParameter(name='top')
         self.parameter.restoreState(state)
         self.parameter_tree.setParameters(self.parameter, showTop=False)  # required to hide top
         self.parameter.sigTreeStateChanged.connect(self.push_changes)
 
-    def push_changes(self, sender, changes: List[Tuple[Parameter, str, Any]]):
+    def push_changes(self, sender: Parameter, changes: List[Tuple[Parameter, str, Any]]) -> None:
         for change in changes:
             if len(change) == 3:
                 param, change, info = change
@@ -122,7 +122,7 @@ class StateManager(Display):
     sigReplay = Signal()
     sigSetComputeMetrics = Signal(bool)
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(StateManager, self).__init__('Status', size=(300, 50))
 
         self._state = CoreState.Connecting
@@ -163,7 +163,7 @@ class StateManager(Display):
 
         self.state = CoreState.Connecting
 
-    def update_state(self, state, compute_metrics):
+    def update_state(self, state: CoreState, compute_metrics: bool) -> None:
         if state != self._state:
             # set state value immediately
             self._state = state
@@ -174,11 +174,11 @@ class StateManager(Display):
             invoke_as_event(self.update_compute_metrics, compute_metrics)
 
     @property
-    def state(self):
+    def state(self) -> CoreState:
         return self._state
 
     @state.setter
-    def state(self, state):
+    def state(self, state: CoreState) -> None:
         if state in [CoreState.Starting, CoreState.Pausing, CoreState.Restarting, CoreState.Connecting]:
             self.start_pause_button.setDisabled(True)
             self.stop_button.setDisabled(True)
@@ -201,19 +201,19 @@ class StateManager(Display):
         self.state_label.setText(CoreState(state).name)
         self._state = state
 
-    def _start_or_pause(self):
+    def _start_or_pause(self) -> None:
         if self.start_pause_button.text() == 'Pause':
             self.sigPause.emit()
         elif self.start_pause_button.text() in ['Start', 'Resume']:
             self.sigStart.emit()
 
-    def _toggle_metrics(self):
+    def _toggle_metrics(self) -> None:
         if self.metrics_button.text() == 'Pause Graphs':
             self.sigSetComputeMetrics.emit(False)
         elif self.metrics_button.text() == 'Update Graphs':
             self.sigSetComputeMetrics.emit(True)
 
-    def update_compute_metrics(self, compute_metrics):
+    def update_compute_metrics(self, compute_metrics: bool) -> None:
         if compute_metrics:
             self.metrics_button.setIcon(self.style().standardIcon(QStyle.SP_DialogYesButton))
             self.metrics_button.setText('Pause Graphs')
