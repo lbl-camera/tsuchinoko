@@ -28,3 +28,32 @@ def test_core_experiment_iteration_has_type_hints():
     """Verify Core.experiment_iteration() has proper type annotations."""
     hints = get_type_hints(Core.experiment_iteration)
     assert 'return' in hints, "Return type should be annotated"
+
+
+def test_core_notify_clients_has_type_hints():
+    """Verify Core.notify_clients() has proper type annotations."""
+    hints = get_type_hints(Core.notify_clients)
+    assert 'return' in hints, "Return type should be annotated"
+
+
+def test_core_update_graph_has_type_hints():
+    """Verify Core.update_graph() has proper type annotations."""
+    hints = get_type_hints(Core.update_graph)
+    assert 'new_graph' in hints, "Parameter 'new_graph' should have type hint"
+    assert 'return' in hints, "Return type should be annotated"
+
+
+def test_core_initialize_data_has_type_hints():
+    """Verify Core.initialize_data() has proper type annotations."""
+    hints = get_type_hints(Core.initialize_data)
+    assert 'x' in hints
+    assert 'y' in hints
+    assert 'v' in hints
+    assert 'return' in hints
+
+
+def test_core_save_checkpoint_has_type_hints():
+    """Verify Core.save_checkpoint() has proper type annotations."""
+    hints = get_type_hints(Core.save_checkpoint)
+    assert 'directory' in hints, "Parameter 'directory' should have type hint"
+    assert 'return' in hints, "Return type should be annotated"

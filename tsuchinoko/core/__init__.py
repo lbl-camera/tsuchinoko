@@ -6,10 +6,13 @@ from asyncio import events
 from enum import Enum, auto
 from pickle import UnpicklingError
 from queue import Queue
+from typing import List
 from appdirs import user_state_dir
 
 from loguru import logger
 from yaml import dump
+
+from tsuchinoko.graphs import Graph
 
 from .messages import FullDataRequest, FullDataResponse, PartialDataRequest, PartialDataResponse, StartRequest, \
     UnknownResponse, PauseRequest, StateRequest, GetParametersRequest, SetParameterRequest, GetParametersResponse, \
@@ -249,20 +252,20 @@ class Core:
             else:
                 logger.info('Current data is stale. Waiting for an update with fresh data.')
 
-    async def notify_clients(self):
+    async def notify_clients(self) -> None:
         ...
 
     @property
-    def graphs(self):
+    def graphs(self) -> List[Graph]:
         execution_graphs = getattr(self.execution_engine, 'graphs', []) or []
         adaptive_graphs = getattr(self.adaptive_engine, 'graphs', []) or []
         return execution_graphs + adaptive_graphs + self._graphs
 
     @graphs.setter
-    def graphs(self, graphs):
+    def graphs(self, graphs: List[Graph]) -> None:
         raise NotImplementedError('Updating graphs on server not supported yet.')
 
-    def update_graph(self, new_graph):
+    def update_graph(self, new_graph: Graph) -> None:
         execution_graphs = getattr(self.execution_engine, 'graphs', []) or []
         adaptive_graphs = getattr(self.adaptive_engine, 'graphs', []) or []
         self_graphs = self._graphs
@@ -275,12 +278,12 @@ class Core:
         else:
             raise ValueError('Graph not found in graphs lists.')
 
-    def initialize_data(self, x, y, v):
+    def initialize_data(self, x: List[tuple], y: List[float], v: List[float]) -> None:
         with log_time('updating engine with initial measurements'):
             self.data = Data(dimensionality=len(x[0]), positions=x, scores=y, variances=v)
             self.adaptive_engine.update_measurements(self.data)
 
-    def save_checkpoint(self, directory=user_state_dir):
+    def save_checkpoint(self, directory: str = user_state_dir) -> None:
         checkpoint_file_path = os.path.join(directory,
                                             self.checkpoint_template.format(n=self.data._completed_iterations))
         os.makedirs(os.path.dirname(checkpoint_file_path), exist_ok=True)
