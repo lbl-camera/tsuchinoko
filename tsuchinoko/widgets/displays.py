@@ -1,4 +1,4 @@
-from typing import List, Any, Tuple
+from typing import List, Any, Tuple, Optional
 import logging
 
 from PySide6.QtCore import QObject, Signal, Qt
@@ -35,7 +35,7 @@ class LogHandler(logging.Handler):
     colors = {logging.DEBUG: Qt.gray, logging.ERROR: Qt.darkRed, logging.CRITICAL: Qt.red,
               logging.INFO: Qt.white, logging.WARNING: Qt.yellow}
 
-    def __init__(self, log_widget, level=logging.WARNING):
+    def __init__(self, log_widget: QListWidget, level: int = logging.WARNING) -> None:
         global log_handler_id, _current_log_handler
         super(LogHandler, self).__init__(level=level)
         logging.getLogger().addHandler(self)
@@ -50,7 +50,8 @@ class LogHandler(logging.Handler):
         return _current_log_handler
 
     # follows same design as vanilla logger emissions
-    def emit(self, record, level=logging.INFO, timestamp=None, icon=None, *args):  # We can have icons!
+    def emit(self, record: logging.LogRecord, level: int = logging.INFO,
+             timestamp: Optional[str] = None, icon: Optional[Any] = None, *args: Any) -> None:  # We can have icons!
         item = QListWidgetItem(record.getMessage())
         item.setForeground(QBrush(self.colors[record.levelno]))
         item.setToolTip(timestamp)
@@ -59,7 +60,7 @@ class LogHandler(logging.Handler):
         while self.log_widget.count() > 100:
             self.log_widget.takeItem(self.log_widget.count() - 1)
 
-    def sink(self, message:str):
+    def sink(self, message: str) -> None:
         item = QListWidgetItem(message.strip())
         self.log_widget.insertItem(0, item)
 
@@ -68,7 +69,7 @@ class LogHandler(logging.Handler):
 
 
 class Log(Display, logging.Handler):
-    def __init__(self):
+    def __init__(self) -> None:
         super(Log, self).__init__('Log', size=(800, 100))
 
         log = QListWidget()
@@ -76,7 +77,7 @@ class Log(Display, logging.Handler):
         self.addWidget(log)
         self.log_handler = LogHandler(log)
 
-    def log_exception(self, ex: Exception):
+    def log_exception(self, ex: Exception) -> None:
         logger.error('An exception occurred in the experiment. More info to follow:')
         logger.exception(ex)
 
