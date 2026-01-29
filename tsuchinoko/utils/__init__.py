@@ -2,7 +2,7 @@ import logging
 import sys
 import traceback
 
-from qtpy import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 # basic logger functionality
 log = logging.getLogger(__name__)

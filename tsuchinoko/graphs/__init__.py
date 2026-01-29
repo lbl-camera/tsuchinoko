@@ -3,8 +3,8 @@ from enum import Enum, auto
 from typing import ClassVar
 from uuid import uuid4
 
-from qtpy.QtWidgets import QWidget
-from qtpy.QtCore import Signal, QObject
+from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import Signal, QObject
 
 
 class Location(Enum):

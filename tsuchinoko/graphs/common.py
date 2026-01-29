@@ -7,8 +7,8 @@ import numpy as np
 from loguru import logger
 from pyqtgraph import PlotItem, PlotWidget, TableWidget, mkColor, intColor, PlotDataItem, mkPen, mkBrush, colormap, \
     ScatterPlotItem, BarGraphItem
-from qtpy.QtWidgets import QFormLayout, QWidget, QComboBox, QLabel, QVBoxLayout
-from qtpy.QtCore import Qt, QSignalBlocker, Signal, QRectF
+from PySide6.QtWidgets import QFormLayout, QWidget, QComboBox, QLabel, QVBoxLayout
+from PySide6.QtCore import Qt, QSignalBlocker, Signal, QRectF
 
 from tsuchinoko.graphics_items.mixins import ClickRequester, DomainROI, BetterButtons, LogScaleIntensity, \
     BetterAutoLUTRangeImageView, ViridisImageView, AspectRatioLock, YInvert

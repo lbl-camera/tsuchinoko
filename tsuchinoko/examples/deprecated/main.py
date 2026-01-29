@@ -10,7 +10,7 @@ from bluesky.plan_stubs import mov, checkpoint, stage, sleep
 from bluesky.preprocessors import run_decorator
 from gpcam.autonomous_experimenter import AutonomousExperimenterGP
 from ophyd import EpicsSignalRO, EpicsMotor
-from qtpy.QtWidgets import QApplication, QWidget, QHBoxLayout
+from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout
 
 from tsuchinoko.plan_stubs import tune_max_and_fit
 from tsuchinoko.utils import runengine

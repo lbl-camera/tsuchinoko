@@ -1,9 +1,9 @@
 from threading import Thread
 
 from pytest import fixture
-from qtpy.QtWidgets import QMessageBox, QFileDialog
+from PySide6.QtWidgets import QMessageBox, QFileDialog
 from pytestqt import qtbot
-from qtpy import QtCore
+from PySide6 import QtCore
 from loguru import logger
 
 from tsuchinoko.core import ConnectResponse, ZMQCore, CoreState

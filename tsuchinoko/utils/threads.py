@@ -4,8 +4,8 @@ import time
 from functools import wraps
 
 from loguru import logger
-from qtpy.QtCore import QTimer, Signal, QThread, QObject, QEvent, QCoreApplication
-from qtpy.QtWidgets import QApplication
+from PySide6.QtCore import QTimer, Signal, QThread, QObject, QEvent, QCoreApplication
+from PySide6.QtWidgets import QApplication
 
 from tsuchinoko.utils.coverage import coverage_resolve_trace
 

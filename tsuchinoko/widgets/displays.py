@@ -1,12 +1,12 @@
 from typing import List, Any, Tuple
 import logging
 
-from qtpy.QtCore import QObject, Signal, Qt
-from qtpy.QtGui import QBrush
+from PySide6.QtCore import QObject, Signal, Qt
+from PySide6.QtGui import QBrush
 from pyqtgraph.dockarea import Dock, DockArea
 from pyqtgraph.parametertree import ParameterTree, Parameter
 from pyqtgraph.parametertree.parameterTypes import GroupParameter
-from qtpy.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout, QVBoxLayout
+from PySide6.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem, QPushButton, QLabel, QSpacerItem, QSizePolicy, QStyle, QToolButton, QHBoxLayout, QVBoxLayout
 from loguru import logger
 
 from tsuchinoko.core import CoreState, ExceptionResponse

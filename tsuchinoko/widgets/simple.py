@@ -1,5 +1,5 @@
-from qtpy.QtWidgets import QSlider, QWidget, QHBoxLayout, QLabel
-from qtpy.QtCore import Signal
+from PySide6.QtWidgets import QSlider, QWidget, QHBoxLayout, QLabel
+from PySide6.QtCore import Signal
 
 
 class ValueDoubleSlider(QWidget):

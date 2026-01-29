@@ -9,7 +9,7 @@ import dask.distributed  # this insulates from errors related to dask asserting 
 
 from bluesky import RunEngine
 from bluesky.utils import DuringTask, RunEngineInterrupted
-from qtpy.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal
 
 from tsuchinoko.utils import threads
 

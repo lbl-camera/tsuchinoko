@@ -2,8 +2,9 @@ from typing import Callable
 
 import numpy as np
 from pyqtgraph import ImageView, PlotWidget, RectROI, ImageItem, PlotItem
-from qtpy.QtCore import QPointF, Signal, QObject, QEvent, Qt, QSignalBlocker
-from qtpy.QtWidgets import QAction, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QSizePolicy
+from PySide6.QtCore import QPointF, Signal, QObject, QEvent, Qt, QSignalBlocker
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QSizePolicy
 from pyqtgraph import functions as fn, debug, Point
 
 from tsuchinoko.widgets.displays import Configuration

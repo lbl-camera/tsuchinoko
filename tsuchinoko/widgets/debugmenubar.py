@@ -1,15 +1,10 @@
 import sys
 from functools import partial
 
-# Hack to work around PySide being imported from nowhere:
-import qtpy
 from loguru import logger
-from qtpy.QtCore import Qt, QObject, QEvent
-from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QMenuBar, QShortcut, QMenu, QWidget, QAction, QActionGroup, QApplication
-
-if "PySide.QtCore" in sys.modules and qtpy.API != "pyside":
-    del sys.modules["PySide.QtCore"]
+from PySide6.QtCore import Qt, QObject, QEvent
+from PySide6.QtGui import QKeySequence, QAction, QActionGroup, QShortcut
+from PySide6.QtWidgets import QMenuBar, QMenu, QWidget, QApplication
 
 from qtconsole.rich_jupyter_widget import RichJupyterWidget
 from qtconsole.inprocess import QtInProcessKernelManager
@@ -90,7 +85,7 @@ class IPythonDebugger(RichJupyterWidget):
 
 
 if __name__ == "__main__":
-    from qtpy.QtWidgets import QMainWindow, QLabel
+    from PySide6.QtWidgets import QMainWindow, QLabel
 
     app = QApplication([])
     window = QMainWindow()

@@ -11,7 +11,6 @@ from pathlib import Path
 
 from tsuchinoko.utils.dependencies import check_dependencies
 from tsuchinoko.widgets.debugmenubar import DebuggableMenuBar
-from tsuchinoko.widgets.server_editor import ServerEditor
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper, dump, load
@@ -21,12 +20,12 @@ except ImportError:
 import zmq
 from zmq.error import ZMQError, Again
 import numpy as np
-from qtpy.QtGui import QIcon
+from PySide6.QtGui import QIcon
 from loguru import logger
 from pyqtgraph import mkBrush, mkPen, HistogramLUTWidget, PlotItem
 from pyqtgraph.dockarea import DockArea
 from qtmodern.styles import dark
-from qtpy.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMenuBar, QAction, QStyle, QFileDialog, QDialog, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QApplication, QHBoxLayout, QWidget, QMenuBar, QAction, QStyle, QFileDialog, QDialog, QMessageBox
 
 from tsuchinoko.assets import path
 from tsuchinoko.adaptive import Data
@@ -58,12 +57,10 @@ class MainWindow(QMainWindow):
         open_parameters_action = QAction(self.style().standardIcon(QStyle.SP_DirOpenIcon), 'Open parameters...', parent=file_menu)
         save_data_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), 'Save data as...', parent=file_menu)
         save_parameters_action = QAction(self.style().standardIcon(QStyle.SP_DialogSaveButton), 'Save parameters as...', parent=file_menu)
-        open_server_editor = QAction(self.style().standardIcon(QStyle.SP_DirOpenIcon), 'Open Server Editor', parent=file_menu)
         file_menu.addAction(open_data_action)
         file_menu.addAction(open_parameters_action)
         file_menu.addAction(save_data_action)
         file_menu.addAction(save_parameters_action)
-        file_menu.addAction(open_server_editor)
         file_menu.addAction('E&xit', self.close)
         self.setMenuBar(menubar)
 
@@ -80,7 +77,6 @@ class MainWindow(QMainWindow):
         open_data_action.triggered.connect(self.open_data)
         save_parameters_action.triggered.connect(self.save_parameters)
         open_parameters_action.triggered.connect(self.open_parameters)
-        open_server_editor.triggered.connect(self.open_server_editor)
 
         self.setWindowTitle('Tsuchinoko')
         self.setWindowIcon(QIcon(path('tsuchinoko.png')))
@@ -441,7 +437,3 @@ class MainWindow(QMainWindow):
         return True
 
     stop_server = close_demo
-
-    def open_server_editor(self):
-        self.editor_window = ServerEditor(main_window=self)
-        self.editor_window.show()

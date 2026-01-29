@@ -2,9 +2,9 @@
 from time import perf_counter
 
 import numpy as np
-from qtpy.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer
 from loguru import logger
-from qtpy.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox
 from pyqtgraph import InfiniteLine, mkPen, PlotWidget, HistogramLUTWidget, mkBrush, functions as fn, FileDialog
 
 from tsuchinoko.graphics_items.clouditem import CloudItem
