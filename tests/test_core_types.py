@@ -104,3 +104,15 @@ def test_core_class_has_docstring():
 def test_core_init_has_docstring():
     """Verify Core.__init__ has docstring."""
     assert Core.__init__.__doc__ is not None
+
+
+def test_core_methods_have_docstrings():
+    """Verify Core public methods have docstrings."""
+    methods = [
+        'set_execution_engine', 'set_adaptive_engine', 'main',
+        'experiment_loop', 'experiment_iteration', 'update_graph',
+        'initialize_data', 'save_checkpoint'
+    ]
+    for method_name in methods:
+        method = getattr(Core, method_name)
+        assert method.__doc__ is not None, f"{method_name} should have docstring"

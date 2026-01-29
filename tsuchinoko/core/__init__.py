@@ -173,13 +173,31 @@ class Core:
         else:
             logger.warning(f'No transition mapping for {current} → {value}')
 
-    def set_execution_engine(self, engine: ExecutionEngine):
+    def set_execution_engine(self, engine: ExecutionEngine) -> None:
+        """Set the execution engine for performing measurements.
+
+        Args:
+            engine: ExecutionEngine instance to use for measurements
+        """
         self.execution_engine = engine
 
-    def set_adaptive_engine(self, engine: AdaptiveEngine):
+    def set_adaptive_engine(self, engine: AdaptiveEngine) -> None:
+        """Set the adaptive engine for determining targets.
+
+        Args:
+            engine: AdaptiveEngine instance for optimization
+        """
         self.adaptive_engine = engine
 
     def main(self, debug: bool = False) -> None:
+        """Run the main async event loop.
+
+        Creates a new event loop and runs the _main() coroutine until
+        the core state becomes Exiting.
+
+        Args:
+            debug: If True, enable asyncio debug mode
+        """
         loop = events.new_event_loop()  # <---- this ensures the current loop is replaced
         try:
             events.set_event_loop(loop)
@@ -230,6 +248,12 @@ class Core:
                 await self.notify_clients()
 
     def experiment_loop(self) -> None:
+        """Background thread running the experiment iteration loop.
+
+        Continuously calls experiment_iteration() while in Running state.
+        Handles checkpointing, pause triggers, and exception recovery.
+        Exits when state becomes Stopping, Inactive, or Exiting.
+        """
         while True:
             if self.state == CoreState.Running:
                 logger.info(f'Iteration: {self.data._completed_iterations}, Data count: {len(self.data)}')
@@ -256,6 +280,17 @@ class Core:
                 time.sleep(.1)
 
     def experiment_iteration(self) -> None:
+        """Execute a single experiment iteration.
+
+        One iteration consists of:
+        1. Get current position from execution engine
+        2. Request optimal targets from adaptive engine
+        3. Update execution engine with new targets
+        4. Collect measurements from execution engine
+        5. Update adaptive engine with new data
+        6. Optionally compute visualization metrics
+        7. Train the adaptive model
+        """
         with self.data.iteration():
             if self._has_fresh_data:
                 with log_time('getting position', cumulative_key='getting position'):
@@ -312,6 +347,17 @@ class Core:
         raise NotImplementedError('Updating graphs on server not supported yet.')
 
     def update_graph(self, new_graph: Graph) -> None:
+        """Update a graph configuration by ID.
+
+        Searches for a graph with matching ID in execution, adaptive,
+        and local graph lists, then replaces it with the new version.
+
+        Args:
+            new_graph: Graph instance with updated configuration
+
+        Raises:
+            ValueError: If no graph with matching ID is found
+        """
         execution_graphs = getattr(self.execution_engine, 'graphs', []) or []
         adaptive_graphs = getattr(self.adaptive_engine, 'graphs', []) or []
         self_graphs = self._graphs
@@ -325,11 +371,29 @@ class Core:
             raise ValueError('Graph not found in graphs lists.')
 
     def initialize_data(self, x: List[tuple], y: List[float], v: List[float]) -> None:
+        """Initialize the experiment with pre-existing data.
+
+        Used to seed the adaptive engine with historical measurements
+        before starting a new experiment run.
+
+        Args:
+            x: List of position tuples
+            y: List of score/objective values
+            v: List of variance values
+        """
         with log_time('updating engine with initial measurements'):
             self.data = Data(dimensionality=len(x[0]), positions=x, scores=y, variances=v)
             self.adaptive_engine.update_measurements(self.data)
 
     def save_checkpoint(self, directory: str = user_state_dir) -> None:
+        """Save current data state to a checkpoint file.
+
+        Creates a YAML file with the current data dictionary.
+        Filename follows checkpoint_template with iteration number.
+
+        Args:
+            directory: Directory to save checkpoint files
+        """
         checkpoint_file_path = os.path.join(directory,
                                             self.checkpoint_template.format(n=self.data._completed_iterations))
         os.makedirs(os.path.dirname(checkpoint_file_path), exist_ok=True)
