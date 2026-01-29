@@ -401,13 +401,36 @@ class Core:
 
 
 class ZMQCore(Core):
+    """ZMQ-enabled Core providing network server functionality.
+
+    Extends Core with a ZMQ REP socket server that handles client
+    requests. Each request type has a corresponding respond_* method
+    that processes the request and returns an appropriate response.
+
+    The server uses async polling to check for incoming messages
+    during the main loop's notify_clients() calls.
+
+    Attributes:
+        context: ZMQ async context
+        poller: ZMQ async poller for socket events
+    """
+
     def __init__(self, *args, **kwargs):
+        """Initialize ZMQCore with network components.
+
+        Socket and poller are initialized lazily on first use.
+        """
         super(ZMQCore, self).__init__(*args, **kwargs)
         # self.start_server()
         self.context = None
         self.poller = None
 
     def start_server(self) -> None:
+        """Initialize and bind the ZMQ server socket.
+
+        Creates a REP socket bound to tcp://*:5555 and registers
+        it with the poller for incoming message detection.
+        """
         import zmq
         from zmq.asyncio import Context, Poller
         self.poller = Poller()
@@ -499,7 +522,16 @@ class ZMQCore(Core):
         logger.critical(f'Queue lengths: {len(self._forced_measurement_queue.queue)} {len(self._forced_position_queue.queue)}')
         return ReplayResponse(True)
 
-    async def notify_clients(self):
+    async def notify_clients(self) -> None:
+        """Poll for and handle client requests.
+
+        Called by the main loop to check for pending requests.
+        For each received request:
+        1. Deserialize the request object
+        2. Find matching respond_* method
+        3. Execute responder and send response
+        4. Handle any errors with ExceptionResponse
+        """
         import zmq
         if not self.poller:
             self.start_server()
@@ -537,8 +569,13 @@ class ZMQCore(Core):
                     time.sleep(.1)
 
     def exit_later(self) -> None:
+        """Request core exit without waiting.
+
+        Sets state to Exiting, allowing current operations to complete.
+        """
         self.state = CoreState.Exiting
 
     def exit(self) -> None:
+        """Request exit and wait for experiment thread to finish."""
         self.exit_later()
         self.experiment_thread.join()

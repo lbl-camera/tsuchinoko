@@ -116,3 +116,14 @@ def test_core_methods_have_docstrings():
     for method_name in methods:
         method = getattr(Core, method_name)
         assert method.__doc__ is not None, f"{method_name} should have docstring"
+
+
+def test_zmqcore_has_docstring():
+    """Verify ZMQCore class has docstring."""
+    assert ZMQCore.__doc__ is not None
+    assert len(ZMQCore.__doc__) > 20
+
+
+def test_zmqcore_notify_clients_has_docstring():
+    """Verify ZMQCore.notify_clients has docstring."""
+    assert ZMQCore.notify_clients.__doc__ is not None
