@@ -125,7 +125,7 @@ class CloudWidget(QWidget):
                 return
             try:
                 del self.keysPressed[ev.key()]
-            except:
+            except KeyError:
                 self.keysPressed = {}
             self.eval_key_state()
         else:

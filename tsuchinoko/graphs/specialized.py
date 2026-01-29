@@ -130,8 +130,8 @@ class ReconstructionGraph(Image):
         #                        initial=getattr(self, 'last_recon', None))
         try:
             last_recon = getattr(engine.optimizer, 'last_recon', None)
-        except Exception:
-            last_recon = None
+        except AttributeError:
+            last_recon = None  # engine or optimizer may not be initialized
 
         # assign to data object with lock
         if last_recon is not None:
@@ -240,8 +240,8 @@ class ReconHistogram(Bar):
         #                        initial=getattr(self, 'last_recon', None))
         try:
             last_recon = getattr(engine.optimizer, 'last_recon', None)
-        except Exception:
-            last_recon = None
+        except AttributeError:
+            last_recon = None  # engine or optimizer may not be initialized
 
         if last_recon is not None:
             # calculate histogram
@@ -462,7 +462,7 @@ class InvertedRecon(Image):
 
         # filter and clip
         sinogram = median_filter(sinogram, 3)
-        sinogram = np.clip(sinogram, 3000, None)
+        # sinogram = np.clip(sinogram, 3000, None)
 
         # reconstruct
         theta = np.deg2rad(np.linspace(0, self.shape[1], self.shape[1] + 1))
