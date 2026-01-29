@@ -87,3 +87,20 @@ def test_zmqcore_respond_methods_have_type_hints():
         hints = get_type_hints(method)
         assert 'request' in hints, f"{method_name} should have 'request' parameter typed"
         assert 'return' in hints, f"{method_name} should have return type"
+
+
+def test_core_state_has_docstring():
+    """Verify CoreState enum has docstring."""
+    assert CoreState.__doc__ is not None
+    assert len(CoreState.__doc__) > 10
+
+
+def test_core_class_has_docstring():
+    """Verify Core class has docstring."""
+    assert Core.__doc__ is not None
+    assert len(Core.__doc__) > 20
+
+
+def test_core_init_has_docstring():
+    """Verify Core.__init__ has docstring."""
+    assert Core.__init__.__doc__ is not None

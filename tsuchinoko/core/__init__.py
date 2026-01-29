@@ -29,6 +29,23 @@ from ..utils.logging import log_time
 user_state_dir = user_state_dir('tsuchinoko', 'camera')
 
 class CoreState(Enum):
+    """Enumeration of possible states for the experiment core.
+
+    States represent the lifecycle of an experiment from connection
+    through execution and termination.
+
+    Attributes:
+        Connecting: Initial state, attempting to establish connection
+        Inactive: Connected but no experiment running
+        Starting: Experiment initialization in progress
+        Running: Experiment actively executing
+        Pausing: Transitioning from Running to Paused
+        Paused: Experiment temporarily halted, can resume
+        Resuming: Transitioning from Paused to Running
+        Stopping: Experiment termination in progress
+        Restarting: Stopping then immediately Starting
+        Exiting: Application shutdown in progress
+    """
     Connecting = auto()
     Inactive = auto()
     Starting = auto()
@@ -45,6 +62,22 @@ SLEEP_FOR_FRESH_DATA_TIME = .1
 
 
 class Core:
+    """Core experiment orchestrator managing adaptive optimization loops.
+
+    The Core class coordinates between execution engines (which perform
+    measurements) and adaptive engines (which determine optimal targets).
+    It manages the experiment lifecycle through a state machine and
+    handles data collection and checkpointing.
+
+    The core runs an async event loop that monitors state transitions
+    and delegates work to a background experiment thread when running.
+
+    Attributes:
+        execution_engine: Engine performing physical measurements
+        adaptive_engine: Engine determining next measurement targets
+        data: Accumulated experiment measurements and metrics
+        compute_metrics: Whether to compute visualization metrics each iteration
+    """
     # Import state machine lazily to avoid circular imports
     _state_machine_class = None
 
@@ -59,6 +92,16 @@ class Core:
                  execution_engine: ExecutionEngine = None,
                  adaptive_engine: AdaptiveEngine = None,
                  compute_metrics: bool = True):
+        """Initialize the experiment core.
+
+        Args:
+            execution_engine: Engine for performing measurements. Can be set
+                later via set_execution_engine().
+            adaptive_engine: Engine for determining targets. Can be set later
+                via set_adaptive_engine().
+            compute_metrics: If True, compute visualization metrics after
+                each measurement update. Disable for faster execution.
+        """
         self.execution_engine = execution_engine
         self.adaptive_engine = adaptive_engine
 
