@@ -116,7 +116,12 @@ class Configuration(Display):
         sigPushParameter: Emitted when a parameter value changes (path, value)
     """
 
+    #: Signal emitted to request current parameters from server.
+    #: Args: None
     sigRequestParameters = Signal()
+
+    #: Signal emitted when a parameter value changes.
+    #: Args: child_path (list), value (object)
     sigPushParameter = Signal(list, object)
 
     def __init__(self) -> None:
@@ -163,10 +168,19 @@ class StateManager(Display):
         sigSetComputeMetrics: Emitted with bool when metrics toggle changes
     """
 
+    #: Signal emitted when start/resume is requested. Args: None
     sigStart = Signal()
+
+    #: Signal emitted when stop is requested. Args: None
     sigStop = Signal()
+
+    #: Signal emitted when pause is requested. Args: None
     sigPause = Signal()
+
+    #: Signal emitted when replay is requested. Args: None
     sigReplay = Signal()
+
+    #: Signal emitted when metrics toggle changes. Args: compute_metrics (bool)
     sigSetComputeMetrics = Signal(bool)
 
     def __init__(self) -> None:
@@ -284,6 +298,8 @@ class GraphManager(Display):
         graphs: Dict mapping Graph instances to their widgets
     """
 
+    #: Signal emitted when a graph needs to be pushed to server.
+    #: Args: graph (Graph)
     sigPush = Signal(object)
 
     def __init__(self) -> None:
