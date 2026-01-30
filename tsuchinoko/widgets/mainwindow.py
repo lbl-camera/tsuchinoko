@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QMainWindow, QApplication, QStyle, QFileDialog, QM
 
 from tsuchinoko.assets import path
 from tsuchinoko.adaptive import Data
+from tsuchinoko.config import get_config
 from tsuchinoko.core import CoreState
 from tsuchinoko.core.messages import (
     Message, StateResponse, GetParametersResponse, FullDataResponse,
@@ -70,7 +71,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle('Tsuchinoko')
         self.setWindowIcon(QIcon(path('tsuchinoko.png')))
-        self.resize(1700, 1000)
+        config = get_config()
+        self.resize(config.ui.window_width, config.ui.window_height)
 
         self.log_widget = Log()
         self.configuration_widget = Configuration()
