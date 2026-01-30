@@ -28,10 +28,21 @@ def non_accumulating_widget(qtbot):
 
 @pytest.fixture
 def sample_data():
-    """Create sample data with positions, scores, and variances."""
+    """Create sample data with non-collinear positions, scores, and variances.
+
+    Points are arranged in a grid pattern to avoid Delaunay triangulation
+    errors that occur with collinear points.
+    """
     data = Data(dimensionality=2)
-    for i in range(10):
-        data.inject_new([((i * 10, i * 10), float(i), 0.1 * i, {})])
+    # Use a grid pattern to ensure non-collinear points for Delaunay triangulation
+    positions = [
+        (0, 0), (10, 0), (20, 0),
+        (0, 10), (10, 10), (20, 10),
+        (0, 20), (10, 20), (20, 20),
+        (10, 30)  # 10th point
+    ]
+    for i, pos in enumerate(positions):
+        data.inject_new([(pos, float(i), 0.1 * i, {})])
     return data
 
 
@@ -130,3 +141,40 @@ class TestCloudWidgetPlayback:
     def test_keys_pressed_empty(self, cloud_widget):
         """Test keysPressed dict is initially empty."""
         assert cloud_widget.keysPressed == {}
+
+
+class TestCloudWidgetUpdate:
+    """Tests for CloudWidget data updates."""
+
+    def test_update_data(self, cloud_widget, sample_data):
+        """Test update_data populates the widget."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+
+        assert cloud_widget.cache is not None
+        assert 'x' in cloud_widget.cache
+        assert 'y' in cloud_widget.cache
+        assert 'v' in cloud_widget.cache
+
+    def test_update_data_cache_values(self, cloud_widget, sample_data):
+        """Test update_data caches correct values."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+
+        assert len(cloud_widget.cache['x']) == 10
+        assert len(cloud_widget.cache['y']) == 10
+        assert len(cloud_widget.cache['v']) == 10
+
+    def test_update_data_timeline_bounds(self, cloud_widget, sample_data):
+        """Test update_data sets timeline bounds."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+
+        bounds = cloud_widget.timeline.bounds()
+        assert bounds is not None
+
+    def test_nframes(self, cloud_widget, sample_data):
+        """Test nframes() returns correct count."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+        assert cloud_widget.nframes() == 10
+
+    def test_nframes_empty(self, cloud_widget):
+        """Test nframes() returns None when no data."""
+        assert cloud_widget.nframes() is None
