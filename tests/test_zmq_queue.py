@@ -1,7 +1,10 @@
 # tests/test_zmq_queue.py
 """Tests for zmq_queue CustomQueue class."""
+import os
+import tempfile
 import pytest
 import zmq
+import numpy as np
 from unittest.mock import patch, MagicMock
 
 from tsuchinoko.utils.zmq_queue import CustomQueue
@@ -192,3 +195,72 @@ class TestCustomQueueUtilities:
         mock_queue.msg('test message', threshold=3)
         captured = capsys.readouterr()
         assert 'test message' not in captured.out
+
+
+class TestCustomQueueFileOps:
+    """Tests for CustomQueue file operations."""
+
+    @pytest.fixture
+    def mock_queue_with_tempdir(self):
+        """Create a CustomQueue with a temp directory for saves."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch('tsuchinoko.utils.zmq_queue.zmq.Context') as MockContext:
+                mock_context = MagicMock()
+                mock_socket = MagicMock()
+                MockContext.return_value = mock_context
+                mock_context.socket.return_value = mock_socket
+                q = CustomQueue(
+                    from_port=5551,
+                    to_port=5552,
+                    name='test',
+                    save_dir=tmpdir,
+                    verbosity=0
+                )
+                yield q, tmpdir
+
+    def test_interrupted_no_files(self, mock_queue_with_tempdir):
+        """Test interrupted() returns False when no files exist."""
+        q, tmpdir = mock_queue_with_tempdir
+        result = q.interrupted()
+        assert result is False
+
+    def test_interrupted_only_received(self, mock_queue_with_tempdir):
+        """Test interrupted() returns True when only received exists."""
+        q, tmpdir = mock_queue_with_tempdir
+        # Create received file
+        np.save(os.path.join(tmpdir, 'test-received.npy'), [1, 2, 3])
+        result = q.interrupted()
+        assert result is True
+
+    def test_interrupted_sent_newer(self, mock_queue_with_tempdir):
+        """Test interrupted() returns False when sent is newer."""
+        q, tmpdir = mock_queue_with_tempdir
+        import time
+        # Create received file
+        np.save(os.path.join(tmpdir, 'test-received.npy'), [1, 2, 3])
+        time.sleep(0.1)  # Ensure different timestamps
+        # Create sent file (newer)
+        np.save(os.path.join(tmpdir, 'test-sent.npy'), [4, 5, 6])
+        result = q.interrupted()
+        assert result is False
+
+    def test_load_received(self, mock_queue_with_tempdir):
+        """Test load() reads received file."""
+        q, tmpdir = mock_queue_with_tempdir
+        test_data = np.array([1, 2, 3])
+        np.save(os.path.join(tmpdir, 'test-received.npy'), test_data)
+
+        result = q.load(stype='received')
+        np.testing.assert_array_equal(result, test_data)
+
+    def test_clear_removes_files(self, mock_queue_with_tempdir):
+        """Test clear() removes saved files."""
+        q, tmpdir = mock_queue_with_tempdir
+        # Create files
+        np.save(os.path.join(tmpdir, 'test-received.npy'), [1])
+        np.save(os.path.join(tmpdir, 'test-sent.npy'), [2])
+
+        q.clear()
+
+        assert not os.path.exists(os.path.join(tmpdir, 'test-received.npy'))
+        assert not os.path.exists(os.path.join(tmpdir, 'test-sent.npy'))
