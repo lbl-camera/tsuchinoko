@@ -4,7 +4,10 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 from tsuchinoko.network.async_manager import AsyncNetworkManager
-from tsuchinoko.core.messages import ConnectRequest, ConnectResponse, StateRequest, StateResponse
+from tsuchinoko.core.messages import (
+    ConnectRequest, ConnectResponse, StateRequest, StateResponse,
+    PauseRequest, StartRequest, StopRequest
+)
 from tsuchinoko.core import CoreState
 from tsuchinoko.config import reset_config, get_config
 
@@ -283,3 +286,144 @@ class TestAsyncNetworkManagerConnectedProperty:
             await manager.connect()
             await manager.close()
             assert manager.connected is False
+
+
+class TestAsyncRequestMethods:
+    """Tests for typed async request methods."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_state(self):
+        """Test async get_state method."""
+        with patch('tsuchinoko.network.async_manager.zmq.asyncio.Context') as mock_ctx_class:
+            mock_ctx = MagicMock()
+            mock_socket = AsyncMock()
+            mock_ctx_class.return_value = mock_ctx
+            mock_ctx.socket.return_value = mock_socket
+            mock_socket.recv_pyobj = AsyncMock(
+                return_value=StateResponse(CoreState.Running, True)
+            )
+
+            manager = AsyncNetworkManager()
+            await manager.connect()
+
+            state, compute_metrics = await manager.async_get_state()
+
+            assert state == CoreState.Running
+            assert compute_metrics is True
+            # Verify a StateRequest was sent
+            call_args = mock_socket.send_pyobj.call_args
+            assert isinstance(call_args[0][0], StateRequest)
+
+    @pytest.mark.asyncio
+    async def test_async_pause(self):
+        """Test async pause method."""
+        with patch('tsuchinoko.network.async_manager.zmq.asyncio.Context') as mock_ctx_class:
+            mock_ctx = MagicMock()
+            mock_socket = AsyncMock()
+            mock_ctx_class.return_value = mock_ctx
+            mock_ctx.socket.return_value = mock_socket
+            mock_socket.recv_pyobj = AsyncMock(
+                return_value=StateResponse(CoreState.Pausing, False)
+            )
+
+            manager = AsyncNetworkManager()
+            await manager.connect()
+
+            state, compute_metrics = await manager.async_pause()
+
+            assert state == CoreState.Pausing
+            assert compute_metrics is False
+            # Verify a PauseRequest was sent
+            call_args = mock_socket.send_pyobj.call_args
+            assert isinstance(call_args[0][0], PauseRequest)
+
+    @pytest.mark.asyncio
+    async def test_async_start(self):
+        """Test async start method."""
+        with patch('tsuchinoko.network.async_manager.zmq.asyncio.Context') as mock_ctx_class:
+            mock_ctx = MagicMock()
+            mock_socket = AsyncMock()
+            mock_ctx_class.return_value = mock_ctx
+            mock_ctx.socket.return_value = mock_socket
+            mock_socket.recv_pyobj = AsyncMock(
+                return_value=StateResponse(CoreState.Starting, True)
+            )
+
+            manager = AsyncNetworkManager()
+            await manager.connect()
+
+            state, compute_metrics = await manager.async_start()
+
+            assert state == CoreState.Starting
+            assert compute_metrics is True
+            # Verify a StartRequest was sent
+            call_args = mock_socket.send_pyobj.call_args
+            assert isinstance(call_args[0][0], StartRequest)
+
+    @pytest.mark.asyncio
+    async def test_async_stop(self):
+        """Test async stop method."""
+        with patch('tsuchinoko.network.async_manager.zmq.asyncio.Context') as mock_ctx_class:
+            mock_ctx = MagicMock()
+            mock_socket = AsyncMock()
+            mock_ctx_class.return_value = mock_ctx
+            mock_ctx.socket.return_value = mock_socket
+            mock_socket.recv_pyobj = AsyncMock(
+                return_value=StateResponse(CoreState.Stopping, True)
+            )
+
+            manager = AsyncNetworkManager()
+            await manager.connect()
+
+            state, compute_metrics = await manager.async_stop()
+
+            assert state == CoreState.Stopping
+            assert compute_metrics is True
+            # Verify a StopRequest was sent
+            call_args = mock_socket.send_pyobj.call_args
+            assert isinstance(call_args[0][0], StopRequest)
+
+    @pytest.mark.asyncio
+    async def test_async_connect_to_server(self):
+        """Test async connect_to_server method."""
+        with patch('tsuchinoko.network.async_manager.zmq.asyncio.Context') as mock_ctx_class:
+            mock_ctx = MagicMock()
+            mock_socket = AsyncMock()
+            mock_ctx_class.return_value = mock_ctx
+            mock_ctx.socket.return_value = mock_socket
+            mock_socket.recv_pyobj = AsyncMock(
+                return_value=ConnectResponse(CoreState.Inactive, False)
+            )
+
+            manager = AsyncNetworkManager()
+            await manager.connect()
+
+            state, compute_metrics = await manager.async_connect_to_server()
+
+            assert state == CoreState.Inactive
+            assert compute_metrics is False
+            # Verify a ConnectRequest was sent
+            call_args = mock_socket.send_pyobj.call_args
+            assert isinstance(call_args[0][0], ConnectRequest)
+
+    @pytest.mark.asyncio
+    async def test_async_methods_auto_connect(self):
+        """Test that async methods auto-connect if not connected."""
+        with patch('tsuchinoko.network.async_manager.zmq.asyncio.Context') as mock_ctx_class:
+            mock_ctx = MagicMock()
+            mock_socket = AsyncMock()
+            mock_ctx_class.return_value = mock_ctx
+            mock_ctx.socket.return_value = mock_socket
+            mock_socket.recv_pyobj = AsyncMock(
+                return_value=StateResponse(CoreState.Running, True)
+            )
+
+            manager = AsyncNetworkManager()
+            assert manager.connected is False
+
+            # Call async method without explicitly connecting first
+            await manager.async_get_state()
+
+            # Should have auto-connected
+            assert manager.connected is True
+            mock_socket.connect.assert_called_once()

@@ -3,15 +3,18 @@
 Provides non-blocking network communication with the Tsuchinoko server
 using ZMQ's asyncio integration for seamless async/await patterns.
 """
-from typing import Optional
 import asyncio
+from typing import Optional, Tuple
 
 import zmq
 import zmq.asyncio
 from loguru import logger
 
 from tsuchinoko.core import CoreState
-from tsuchinoko.core.messages import Message, ConnectRequest, ConnectResponse
+from tsuchinoko.core.messages import (
+    Message, ConnectRequest, ConnectResponse, StateRequest, StateResponse,
+    PauseRequest, StartRequest, StopRequest
+)
 from tsuchinoko.config import get_config, NetworkConfig
 
 
@@ -156,3 +159,63 @@ class AsyncNetworkManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit - closes connection."""
         await self.close()
+
+    async def async_get_state(self) -> Tuple[CoreState, bool]:
+        """Get current server state asynchronously.
+
+        Returns:
+            Tuple of (CoreState, compute_metrics) from server
+
+        Raises:
+            asyncio.TimeoutError: If response not received within timeout
+        """
+        response = await self.send_request(StateRequest())
+        return response.payload
+
+    async def async_pause(self) -> Tuple[CoreState, bool]:
+        """Pause the experiment asynchronously.
+
+        Returns:
+            Tuple of (CoreState, compute_metrics) after pause request
+
+        Raises:
+            asyncio.TimeoutError: If response not received within timeout
+        """
+        response = await self.send_request(PauseRequest())
+        return response.payload
+
+    async def async_start(self) -> Tuple[CoreState, bool]:
+        """Start the experiment asynchronously.
+
+        Returns:
+            Tuple of (CoreState, compute_metrics) after start request
+
+        Raises:
+            asyncio.TimeoutError: If response not received within timeout
+        """
+        response = await self.send_request(StartRequest())
+        return response.payload
+
+    async def async_stop(self) -> Tuple[CoreState, bool]:
+        """Stop the experiment asynchronously.
+
+        Returns:
+            Tuple of (CoreState, compute_metrics) after stop request
+
+        Raises:
+            asyncio.TimeoutError: If response not received within timeout
+        """
+        response = await self.send_request(StopRequest())
+        return response.payload
+
+    async def async_connect_to_server(self) -> Tuple[CoreState, bool]:
+        """Connect and get initial server state.
+
+        Returns:
+            Tuple of (CoreState, compute_metrics) from server
+
+        Raises:
+            asyncio.TimeoutError: If response not received within timeout
+        """
+        response = await self.send_request(ConnectRequest())
+        return response.payload
