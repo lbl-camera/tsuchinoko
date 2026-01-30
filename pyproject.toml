@@ -47,7 +47,7 @@ dynamic = ["version"]
 [project.optional-dependencies]
 dev = ["pyinstaller", "pillow"]
 docs = ["matplotlib", "sphinx", "sphinx-markdown-tables", "numpydoc", "sphinx_copybutton", "myst_parser", "sphinx_rtd_theme", "sphinx_rtd_dark_mode"]
-tests = ["pillow", "pytest", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixtures"]
+tests = ["pillow", "pytest", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixtures", "pytest-asyncio"]
 
 [project.urls]
 Homepage = "https://tsuchinoko.readthedocs.io/"
@@ -91,3 +91,7 @@ exclude = '''
   | tests/data
 )/
 '''
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
