@@ -23,6 +23,7 @@ dependencies = [
   "appdirs",
   "pillow", # required by server demo
   "transitions",  # state machine library
+  "pydantic>=2.0",  # configuration validation
 ]
 requires-python = ">=3.9"
 authors = [
