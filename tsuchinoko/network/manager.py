@@ -10,6 +10,7 @@ import zmq
 from zmq.error import ZMQError, Again
 from loguru import logger
 
+from tsuchinoko.config import NetworkConfig
 from tsuchinoko.core import CoreState
 from tsuchinoko.core.messages import (
     Message, ConnectRequest, StateRequest, PauseRequest, StartRequest,
@@ -44,6 +45,23 @@ class NetworkManager:
         self._state_getter: Optional[Callable[[], CoreState]] = None
         self._on_connection_lost: Optional[Callable[[], None]] = None
         self._on_connected: Optional[Callable[[], None]] = None
+
+    @classmethod
+    def from_config(cls, config: NetworkConfig) -> 'NetworkManager':
+        """Create NetworkManager from configuration.
+
+        Args:
+            config: NetworkConfig instance
+
+        Returns:
+            Configured NetworkManager instance
+        """
+        return cls(
+            address=config.address,
+            port=config.port,
+            socket_linger=config.socket_linger,
+            recv_timeout_ms=config.recv_timeout_ms
+        )
 
     def set_state_getter(self, getter: Callable[[], CoreState]):
         """Set a callback to get the current application state."""

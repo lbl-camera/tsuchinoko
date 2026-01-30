@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch, call
 from queue import Empty
 
 from tsuchinoko.network import NetworkManager
+from tsuchinoko.config import NetworkConfig
 from tsuchinoko.core import CoreState
 from tsuchinoko.core.messages import (
     ConnectRequest, StateRequest, PauseRequest, StartRequest, StopRequest,
@@ -504,3 +505,24 @@ class TestNetworkManagerCreateDataRequest:
         """Test _create_data_request() returns FullDataRequest by default."""
         request = network_manager._create_data_request()
         assert isinstance(request, FullDataRequest)
+
+
+class TestNetworkManagerConfig:
+    """Tests for NetworkManager configuration integration."""
+
+    def test_init_from_config(self):
+        """Test NetworkManager can be initialized from NetworkConfig."""
+        config = NetworkConfig(
+            address='custom.host',
+            port=7777,
+            socket_linger=10,
+            recv_timeout_ms=10000
+        )
+
+        with patch('tsuchinoko.network.manager.zmq.Context'):
+            manager = NetworkManager.from_config(config)
+
+            assert manager.address == 'custom.host'
+            assert manager.port == 7777
+            assert manager.socket_linger == 10
+            assert manager.recv_timeout_ms == 10000
