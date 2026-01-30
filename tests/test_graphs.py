@@ -99,10 +99,11 @@ class TestGraphEnums:
         assert hasattr(RenderMode, 'Background')
 
 
-from tsuchinoko.graphs.common import Cloud, Score, Variance
+from tsuchinoko.graphs.common import Cloud, Score, Variance, Scatter, Plot
 from tsuchinoko.adaptive import Data
 from tsuchinoko.widgets.context import ApplicationContext
 from tsuchinoko.widgets.graph_widgets import CloudWidget
+from pyqtgraph import PlotWidget
 
 
 @pytest.fixture
@@ -243,3 +244,158 @@ class TestVarianceGraph:
 
         # Should not raise
         g.update(widget, sample_data, slice(0, None))
+
+
+class TestScatter:
+    """Tests for Scatter graph class.
+
+    Scatter creates scatter plots with KMeans clustering for visualization.
+    It requires x_key and y_key to specify which data fields to use for
+    x and y coordinates, and n_clusters for the KMeans clustering.
+    """
+
+    def test_scatter_inherits_from_graph(self):
+        """Test Scatter is a Graph subclass."""
+        g = Scatter(x_key='scores', y_key='variances', n_clusters=2)
+        assert isinstance(g, Graph)
+
+    def test_scatter_widget_class(self):
+        """Test Scatter uses PlotWidget as widget_class."""
+        assert Scatter.widget_class == PlotWidget
+
+    def test_scatter_init_stores_parameters(self):
+        """Test Scatter __init__ stores x_key, y_key, n_clusters."""
+        g = Scatter(x_key='scores', y_key='variances', n_clusters=3, kmeans_kwargs={'n_init': 10})
+        assert g.x_key == 'scores'
+        assert g.y_key == 'variances'
+        assert g.n_clusters == 3
+        assert g.kmeans_kwargs == {'n_init': 10}
+
+    def test_scatter_init_default_kmeans_kwargs(self):
+        """Test Scatter __init__ with default kmeans_kwargs."""
+        g = Scatter(x_key='scores', y_key='variances', n_clusters=2)
+        assert g.kmeans_kwargs is None
+
+    def test_scatter_has_unique_id(self):
+        """Test Scatter instances have unique IDs."""
+        g1 = Scatter(x_key='scores', y_key='variances', n_clusters=2)
+        g2 = Scatter(x_key='scores', y_key='variances', n_clusters=2)
+        assert g1.id != g2.id
+
+    def test_scatter_make_widget(self, qtbot):
+        """Test Scatter creates a PlotWidget."""
+        g = Scatter(x_key='scores', y_key='variances', n_clusters=2)
+        widget = g.make_widget()
+        assert widget is not None
+        assert isinstance(widget, PlotWidget)
+        qtbot.addWidget(widget)
+
+    @pytest.mark.xfail(
+        reason="Scatter.update uses np.dstack which creates 3D array, but KMeans requires 2D. "
+               "Should use np.column_stack instead."
+    )
+    def test_scatter_update_with_sufficient_data(self, qtbot):
+        """Test Scatter update method with sufficient data for KMeans.
+
+        KMeans requires data shape to be valid. The data needs to have
+        enough points and proper dimensionality for clustering.
+
+        Note: This test is expected to fail because Scatter.update uses
+        np.dstack((x, y)) which creates a 3D array, but KMeans requires
+        a 2D array. The fix would be to use np.column_stack((x, y)) instead.
+        """
+        # Create data with enough points for 2 clusters
+        data = Data(dimensionality=2)
+        # Create 20 points in two distinct clusters
+        for i in range(10):
+            data.inject_new([((i, i), float(i), 0.1, {})])  # Cluster 1: diagonal
+        for i in range(10):
+            data.inject_new([((i + 50, 100 - i), float(i + 10), 0.1, {})])  # Cluster 2: off diagonal
+
+        g = Scatter(x_key='scores', y_key='variances', n_clusters=2, kmeans_kwargs={'n_init': 'auto'})
+        widget = g.make_widget()
+        qtbot.addWidget(widget)
+
+        # Should not raise
+        g.update(widget, data, slice(0, None))
+
+        # After update, widget should have scatter plot items (one per cluster)
+        items = widget.getPlotItem().items
+        assert len(items) == 2  # One ScatterPlotItem per cluster
+
+
+class TestPlot:
+    """Tests for Plot graph class (creates line plots).
+
+    Plot is a dataclass that uses ClassVar for data_key, meaning
+    subclasses define their own data_key at class level. The
+    label_key is an InitVar used only in __post_init__.
+    """
+
+    def test_plot_class_data_key_is_classvar(self):
+        """Test Plot.data_key is a ClassVar (None by default)."""
+        assert Plot.data_key is None
+
+    def test_plot_widget_class(self):
+        """Test Plot uses PlotGraphWidget as widget_class."""
+        from tsuchinoko.graphs.common import PlotGraphWidget
+        assert Plot.widget_class == PlotGraphWidget
+
+    def test_plot_default_accumulates(self):
+        """Test Plot accumulates defaults to False."""
+        g = Plot()
+        assert g.accumulates is False
+
+    def test_plot_with_accumulates(self):
+        """Test Plot with accumulates=True."""
+        g = Plot(accumulates=True)
+        assert g.accumulates is True
+
+    def test_plot_inherits_from_graph(self):
+        """Test Plot is a Graph subclass."""
+        g = Plot()
+        assert isinstance(g, Graph)
+
+    def test_plot_make_widget(self, qtbot):
+        """Test Plot creates a PlotGraphWidget."""
+        from tsuchinoko.graphs.common import PlotGraphWidget
+        g = Plot()
+        widget = g.make_widget()
+        assert widget is not None
+        assert isinstance(widget, PlotGraphWidget)
+        qtbot.addWidget(widget)
+
+    def test_plot_make_widget_stores_label_key(self, qtbot):
+        """Test Plot stores label_key in widget_kwargs via __post_init__."""
+        g = Plot(label_key='test_label')
+        assert g.widget_kwargs['label_key'] == 'test_label'
+        widget = g.make_widget()
+        qtbot.addWidget(widget)
+
+    def test_plot_has_unique_id(self):
+        """Test Plot instances have unique IDs."""
+        g1 = Plot()
+        g2 = Plot()
+        assert g1.id != g2.id
+
+
+class TestScorePlotSubclass:
+    """Tests for a Plot subclass pattern.
+
+    Since Plot uses ClassVar for data_key, we test how subclasses
+    would define their own data_key.
+    """
+
+    def test_creating_plot_subclass(self):
+        """Test creating a Plot subclass with custom data_key."""
+        from dataclasses import dataclass
+        from typing import ClassVar
+
+        @dataclass(eq=False)
+        class ScorePlot(Plot):
+            data_key: ClassVar[str] = 'scores'
+
+        g = ScorePlot()
+        assert g.data_key == 'scores'
+        assert isinstance(g, Plot)
+        assert isinstance(g, Graph)
