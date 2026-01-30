@@ -178,3 +178,65 @@ class TestCloudWidgetUpdate:
     def test_nframes_empty(self, cloud_widget):
         """Test nframes() returns None when no data."""
         assert cloud_widget.nframes() is None
+
+
+class TestCloudWidgetKeyboard:
+    """Tests for CloudWidget keyboard controls."""
+
+    def test_space_stops_playback(self, qtbot, cloud_widget, sample_data):
+        """Test space bar stops playback when playing."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+        # Start playing
+        cloud_widget.play(10)
+        assert cloud_widget.play_timer.isActive()
+        # Simulate space press to stop
+        qtbot.keyPress(cloud_widget, Qt.Key.Key_Space)
+        assert not cloud_widget.play_timer.isActive()
+
+    def test_space_resumes_playback(self, qtbot, cloud_widget, sample_data):
+        """Test space bar resumes playback when paused."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+        # Start playing then pause
+        cloud_widget.play(10)
+        cloud_widget.play(0)
+        assert not cloud_widget.play_timer.isActive()
+        assert cloud_widget._paused_play_rate == 10
+        # Simulate space press to resume
+        qtbot.keyPress(cloud_widget, Qt.Key.Key_Space)
+        assert cloud_widget.play_timer.isActive()
+
+    def test_home_jumps_to_start(self, qtbot, cloud_widget, sample_data):
+        """Test Home key jumps to start."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+        cloud_widget.set_current_index(5)  # Move to middle
+        qtbot.keyPress(cloud_widget, Qt.Key.Key_Home)
+        assert cloud_widget.timeline.getXPos() == 0
+
+    def test_end_jumps_to_end(self, qtbot, cloud_widget, sample_data):
+        """Test End key jumps to end."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+        cloud_widget.set_current_index(0)  # Start at beginning
+        qtbot.keyPress(cloud_widget, Qt.Key.Key_End)
+        assert cloud_widget.timeline.getXPos() == 9  # Last frame
+
+    def test_set_current_index(self, cloud_widget, sample_data):
+        """Test set_current_index clamps to valid range."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+        # Set to middle
+        cloud_widget.set_current_index(5)
+        assert cloud_widget.timeline.getXPos() == 5
+        # Test clamping to max
+        cloud_widget.set_current_index(100)
+        assert cloud_widget.timeline.getXPos() == 9
+        # Test clamping to min
+        cloud_widget.set_current_index(-5)
+        assert cloud_widget.timeline.getXPos() == 0
+
+    def test_jump_frames(self, cloud_widget, sample_data):
+        """Test jump_frames moves timeline."""
+        cloud_widget.update_data(sample_data, slice(0, None))
+        cloud_widget.set_current_index(5)
+        cloud_widget.jump_frames(2)
+        assert cloud_widget.timeline.getXPos() == 7
+        cloud_widget.jump_frames(-3)
+        assert cloud_widget.timeline.getXPos() == 4
