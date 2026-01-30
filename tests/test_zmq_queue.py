@@ -1,7 +1,10 @@
 # tests/test_zmq_queue.py
 """Tests for zmq_queue CustomQueue class."""
 import pytest
+import zmq
 from unittest.mock import patch, MagicMock
+
+from tsuchinoko.utils.zmq_queue import CustomQueue
 
 
 class TestCustomQueueInit:
@@ -14,8 +17,6 @@ class TestCustomQueueInit:
             mock_socket = MagicMock()
             MockContext.return_value = mock_context
             mock_context.socket.return_value = mock_socket
-
-            from tsuchinoko.utils.zmq_queue import CustomQueue
 
             q = CustomQueue(
                 from_port=5551,
@@ -40,8 +41,6 @@ class TestCustomQueueInit:
             MockContext.return_value = mock_context
             mock_context.socket.return_value = mock_socket
 
-            from tsuchinoko.utils.zmq_queue import CustomQueue
-
             q = CustomQueue(
                 from_port=5551,
                 to_port=5552,
@@ -54,49 +53,42 @@ class TestCustomQueueInit:
     def test_init_creates_push_socket(self):
         """Test that init creates and binds a PUSH socket."""
         with patch('tsuchinoko.utils.zmq_queue.zmq.Context') as MockContext:
-            with patch('tsuchinoko.utils.zmq_queue.zmq.PUSH', 8):  # ZMQ PUSH constant
-                mock_context = MagicMock()
-                mock_socket = MagicMock()
-                MockContext.return_value = mock_context
-                mock_context.socket.return_value = mock_socket
+            mock_context = MagicMock()
+            mock_socket = MagicMock()
+            MockContext.return_value = mock_context
+            mock_context.socket.return_value = mock_socket
 
-                from tsuchinoko.utils.zmq_queue import CustomQueue
+            q = CustomQueue(
+                from_port=5551,
+                to_port=5552,
+                to_ip='*',
+                verbosity=0
+            )
 
-                q = CustomQueue(
-                    from_port=5551,
-                    to_port=5552,
-                    to_ip='*',
-                    verbosity=0
-                )
-
-                # Should create a socket with PUSH type
-                mock_context.socket.assert_any_call(8)
-                # Should bind to the to_port
-                mock_socket.bind.assert_called_once_with("tcp://*:5552")
+            # Should create a socket with PUSH type
+            mock_context.socket.assert_any_call(zmq.PUSH)
+            # Should bind to the to_port
+            mock_socket.bind.assert_called_once_with("tcp://*:5552")
 
     def test_init_creates_pull_socket(self):
         """Test that init creates and connects a PULL socket."""
         with patch('tsuchinoko.utils.zmq_queue.zmq.Context') as MockContext:
-            with patch('tsuchinoko.utils.zmq_queue.zmq.PUSH', 8):
-                with patch('tsuchinoko.utils.zmq_queue.zmq.PULL', 7):  # ZMQ PULL constant
-                    mock_context = MagicMock()
-                    mock_socket = MagicMock()
-                    MockContext.return_value = mock_context
-                    mock_context.socket.return_value = mock_socket
+            mock_context = MagicMock()
+            mock_socket = MagicMock()
+            MockContext.return_value = mock_context
+            mock_context.socket.return_value = mock_socket
 
-                    from tsuchinoko.utils.zmq_queue import CustomQueue
+            q = CustomQueue(
+                from_port=5551,
+                to_port=5552,
+                from_ip='localhost',
+                verbosity=0
+            )
 
-                    q = CustomQueue(
-                        from_port=5551,
-                        to_port=5552,
-                        from_ip='localhost',
-                        verbosity=0
-                    )
-
-                    # Should create a socket with PULL type
-                    mock_context.socket.assert_any_call(7)
-                    # Should connect to the from_port
-                    mock_socket.connect.assert_called_once_with("tcp://localhost:5551")
+            # Should create a socket with PULL type
+            mock_context.socket.assert_any_call(zmq.PULL)
+            # Should connect to the from_port
+            mock_socket.connect.assert_called_once_with("tcp://localhost:5551")
 
     def test_init_stores_save_dir(self):
         """Test that init stores save_dir parameter."""
@@ -105,8 +97,6 @@ class TestCustomQueueInit:
             mock_socket = MagicMock()
             MockContext.return_value = mock_context
             mock_context.socket.return_value = mock_socket
-
-            from tsuchinoko.utils.zmq_queue import CustomQueue
 
             q = CustomQueue(
                 from_port=5551,
@@ -124,8 +114,6 @@ class TestCustomQueueInit:
             mock_socket = MagicMock()
             MockContext.return_value = mock_context
             mock_context.socket.return_value = mock_socket
-
-            from tsuchinoko.utils.zmq_queue import CustomQueue
 
             q = CustomQueue(
                 from_port=5551,
