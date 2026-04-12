@@ -11,33 +11,25 @@ try:
 except (ImportError, ModuleNotFoundError) as ex:
     raise ImportError("You probably haven't installed tsuchinoko yet: pip install -e .") from ex
 
-try:
-    from pyqtgraph import mkQApp
-    from . import parameters  # registers parameter types
-    from . import patches
-    from .utils import runengine
-    _qt_available = True
-except ImportError:
-    _qt_available = False
-
-
 @click.command()
 @click.argument('core_address', required=False, default='localhost')
 def launch_client(core_address='localhost'):
-    if not _qt_available:
-        raise RuntimeError("PySide6/pyqtgraph is required to launch the client.")
+    """Launch the Qt GUI client (requires tsuchinoko[gui])."""
+    try:
+        from pyqtgraph import mkQApp
+        from . import parameters, patches
+    except ImportError:
+        raise click.ClickException("GUI requires PySide6: pip install tsuchinoko[gui]")
+
     import ctypes
     if os.name == 'nt':
-        # https://stackoverflow.com/questions/67599432/setting-the-same-icon-as-application-icon-in-task-bar-for-pyqt5-application
-        myappid = 'camera.tsuchinoko'  # arbitrary string
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)  # Allows taskbar icon to be shown on windows
+        myappid = 'camera.tsuchinoko'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     from .widgets.mainwindow import MainWindow
     qapp = mkQApp('Tsuchinoko')
-
     main_window = MainWindow(core_address)
     main_window.show()
-
     sys.exit(qapp.exec_())
 
 

@@ -1,36 +1,5 @@
-"""Tests for the lightweight ParameterTree (pyqtgraph replacement).
-
-Imports from tsuchinoko.parameters.tree directly, bypassing the Qt-heavy
-tsuchinoko package __init__ by pre-populating sys.modules with stubs.
-"""
-import sys
-import types
-from pathlib import Path
+"""Tests for the lightweight ParameterTree (pyqtgraph replacement)."""
 import pytest
-
-# ---------------------------------------------------------------------------
-# Lightweight stub helpers to prevent tsuchinoko's Qt-laden __init__ from
-# running when we import a single leaf module.
-# ---------------------------------------------------------------------------
-
-def _stub(name):
-    """Return (creating if necessary) a stub module registered in sys.modules."""
-    if name not in sys.modules:
-        sys.modules[name] = types.ModuleType(name)
-    return sys.modules[name]
-
-
-# Stub the entire tsuchinoko package so its __init__.py never executes.
-_tsuchinoko_pkg = _stub('tsuchinoko')
-_tsuchinoko_pkg.__path__ = [str(Path(__file__).parent.parent / 'tsuchinoko')]
-_tsuchinoko_pkg.__package__ = 'tsuchinoko'
-_tsuchinoko_pkg.__spec__ = None
-
-# Stub tsuchinoko.parameters package (its __init__ imports pyqtgraph too).
-_params_pkg = _stub('tsuchinoko.parameters')
-_params_pkg.__path__ = [str(Path(__file__).parent.parent / 'tsuchinoko' / 'parameters')]
-_params_pkg.__package__ = 'tsuchinoko.parameters'
-_params_pkg.__spec__ = None
 
 
 

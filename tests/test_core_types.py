@@ -36,13 +36,6 @@ def test_core_notify_clients_has_type_hints():
     assert 'return' in hints, "Return type should be annotated"
 
 
-def test_core_update_graph_has_type_hints():
-    """Verify Core.update_graph() has proper type annotations."""
-    hints = get_type_hints(Core.update_graph)
-    assert 'new_graph' in hints, "Parameter 'new_graph' should have type hint"
-    assert 'return' in hints, "Return type should be annotated"
-
-
 def test_core_initialize_data_has_type_hints():
     """Verify Core.initialize_data() has proper type annotations."""
     hints = get_type_hints(Core.initialize_data)
@@ -110,7 +103,7 @@ def test_core_methods_have_docstrings():
     """Verify Core public methods have docstrings."""
     methods = [
         'set_execution_engine', 'set_adaptive_engine', 'main',
-        'experiment_loop', 'experiment_iteration', 'update_graph',
+        'experiment_loop', 'experiment_iteration',
         'initialize_data', 'save_checkpoint'
     ]
     for method_name in methods:

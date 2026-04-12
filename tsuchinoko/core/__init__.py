@@ -359,3 +359,10 @@ class Core:
                                             self.checkpoint_template.format(n=self.data._completed_iterations))
         os.makedirs(os.path.dirname(checkpoint_file_path), exist_ok=True)
         dump(self.data.as_dict(), open(checkpoint_file_path, 'w'))
+
+
+# Backward compatibility — ZMQCore moved to zmq_core submodule
+try:
+    from .zmq_core import ZMQCore
+except ImportError:
+    pass  # zmq not installed

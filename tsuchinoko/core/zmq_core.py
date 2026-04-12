@@ -119,15 +119,10 @@ class ZMQCore(Core):
     def respond_ConnectRequest(self, request: ConnectRequest) -> ConnectResponse:
         return ConnectResponse(self.state, self.compute_metrics)
 
-    def respond_PullGraphsRequest(self, request: PullGraphsRequest) -> GraphsResponse:
-        return GraphsResponse(self.graphs)
+    def respond_PullGraphsRequest(self, request):
+        return GraphsResponse([])
 
-    def respond_PushGraphsRequest(self, request: PushGraphsRequest) -> Message:
-        for graph in request.graphs:
-            try:
-                self.update_graph(graph)
-            except ValueError as ex:
-                return ExceptionResponse("Graph ID not found in server's graphs.")
+    def respond_PushGraphsRequest(self, request):
         return StateResponse(self.state, self.compute_metrics)
 
     def respond_SetComputeMetricsRequest(self, request: SetComputeMetricsRequest) -> StateResponse:
