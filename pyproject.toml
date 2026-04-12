@@ -5,25 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "tsuchinoko"
 dependencies = [
-  "pyside6<6.9.1",  # 6.9.1 has issues with graphics items
-  "bluesky",
-  "ophyd",
-  "pyqtgraph",
-  "gpCAM~=8.2.3",  # pinned to moderate release cycle
-  "fvgp~=4.6.5",   # pinned to moderate release cycle
+  "gpCAM~=8.2.3",
+  "fvgp~=4.6.5",
   "numpy",
   "scipy",
-  "qtmodern",
-  "click",
-  "pyopengl",
-  "pyopengl-accelerate",
-  "qtconsole",
   "scikit-learn",
+  "click",
   "loguru",
   "appdirs",
-  "pillow", # required by server demo
-  "transitions",  # state machine library
-  "pydantic>=2.0",  # configuration validation
+  "transitions",
+  "pydantic>=2.0",
+  "pyyaml",
 ]
 requires-python = ">=3.9"
 authors = [
@@ -32,10 +24,10 @@ authors = [
 maintainers = [
   {name = "Ronald J. Pandolfi", email = "ronpandolfi@lbl.gov"}
 ]
-description = "A Qt application for adaptive experiment tuning and execution "
+description = "An adaptive experiment service powered by Gaussian Processes"
 readme = "README.md"
 license = "GPL-3.0-only"
-keywords = ["autonomous", "self driving", "adaptive", "gui", "qt"]
+keywords = ["autonomous", "self driving", "adaptive", "gaussian process", "optimization"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
@@ -45,6 +37,18 @@ classifiers = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
+gui = [
+  "pyside6<6.9.1",
+  "pyqtgraph",
+  "qtmodern",
+  "pyopengl",
+  "pyopengl-accelerate",
+  "qtconsole",
+  "bluesky",
+  "ophyd",
+  "zmq",
+  "pillow",
+]
 dev = ["pyinstaller", "pillow"]
 docs = ["matplotlib", "sphinx", "sphinx-markdown-tables", "numpydoc", "sphinx_copybutton", "myst_parser", "sphinx_rtd_theme", "sphinx_rtd_dark_mode"]
 tests = ["pillow", "pytest", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixtures", "pytest-asyncio"]
@@ -57,11 +61,12 @@ Repository = "https://github.com/lbl-camera/tsuchinoko.git"
 Changelog = "https://github.com/lbl-camera/tsuchinoko/commits/master/"
 
 [project.scripts]
+tsuchinoko = "tsuchinoko.cli:main"
 tsuchinoko_demo = "tsuchinoko:launch_server"
 tsuchinoko_bootstrap = "tsuchinoko:bootstrap"
 
 [project.gui-scripts]
-tsuchinoko = "tsuchinoko:launch_client"
+tsuchinoko-gui = "tsuchinoko:launch_client"
 
 #[project.entry-points."spam.magical"]
 #tomatoes = "spam:main_tomatoes"
