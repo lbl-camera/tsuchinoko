@@ -1,9 +1,9 @@
 from functools import cached_property
 
 import numpy as np
-from pyqtgraph.parametertree.parameterTypes import SimpleParameter, ListParameter, GroupParameter
 
 from tsuchinoko.adaptive import Engine, Data
+from tsuchinoko.parameters.tree import SimpleParameter, GroupParameter
 
 
 class RandomInProcess(Engine):

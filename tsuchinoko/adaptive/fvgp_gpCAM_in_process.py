@@ -2,10 +2,8 @@ import sys
 
 import numpy as np
 
-from gpcam.gp_optimizer import  fvGPOptimizer
+from gpcam.gp_optimizer import fvGPOptimizer
 from .gpCAM_in_process import GPCAMInProcessEngine
-from ..graphs.common import GPCamPosteriorCovariance, GPCamAcquisitionFunction, GPCamPosteriorMean, Table, \
-    GPCamHyperparameterPlot, Score
 
 
 class FvgpGPCAMInProcessEngine(GPCAMInProcessEngine):
@@ -17,17 +15,6 @@ class FvgpGPCAMInProcessEngine(GPCAMInProcessEngine):
         self.kwargs = kwargs
         self.output_number = output_number
         super(FvgpGPCAMInProcessEngine, self).__init__(dimensionality, parameter_bounds, hyperparameters, hyperparameter_bounds, **kwargs)
-
-        if dimensionality == 2:
-            self.graphs = [GPCamPosteriorCovariance(),
-                           GPCamAcquisitionFunction(),
-                           GPCamPosteriorMean(),
-                           GPCamHyperparameterPlot(),
-                           Score(),
-                           Table()]
-        elif dimensionality > 2:
-            self.graphs = [GPCamPosteriorCovariance(),
-                           Table()]
 
     # TODO: refactor this into base
     def init_optimizer(self):

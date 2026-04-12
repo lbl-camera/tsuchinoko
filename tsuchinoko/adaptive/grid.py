@@ -1,12 +1,10 @@
 from functools import cached_property
 from itertools import product
-import time
 
 import numpy as np
-from pyqtgraph.parametertree.parameterTypes import SimpleParameter, ListParameter, GroupParameter
 
 from tsuchinoko.adaptive import Engine, Data
-from tsuchinoko.graphs.common import Variance, Score
+from tsuchinoko.parameters.tree import SimpleParameter, GroupParameter
 
 
 def unit_cells(dims=2, slow_dim=-1, sort=True):
@@ -59,7 +57,6 @@ class Grid(Engine):
                 self.parameters[('bounds', f'axis_{i}_{edge}')] = parameter_bounds[i][j]
 
         self.reset()
-        self.graphs = [Variance(), Score(), ]
 
 
     @cached_property
