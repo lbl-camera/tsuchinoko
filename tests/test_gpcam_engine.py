@@ -82,16 +82,12 @@ class TestInitialization:
         assert gpcam_engine_2d.dimensionality == 2
         assert gpcam_engine_2d.num_hyperparameters == 3
         assert gpcam_engine_2d.optimizer is not None
-        # 2D engines should have specific graphs
-        assert len(gpcam_engine_2d.graphs) > 0
 
     def test_init_3d(self, gpcam_engine_3d):
         """Test 3D (high-dimensional) engine initializes correctly."""
         assert gpcam_engine_3d.dimensionality == 3
         assert gpcam_engine_3d.num_hyperparameters == 4
         assert gpcam_engine_3d.optimizer is not None
-        # Higher-dimensional engines should have different graphs
-        assert len(gpcam_engine_3d.graphs) > 0
 
     def test_init_custom_acquisition(self):
         """Test engine with custom acquisition function."""
@@ -348,22 +344,6 @@ class TestParameterProperty:
         # Check hyperparameter bounds
         assert gpcam_engine_2d.parameters[('hyperparameters', 'hyperparameter_0_min')] == 0.1
         assert gpcam_engine_2d.parameters[('hyperparameters', 'hyperparameter_0_max')] == 1e5
-
-    def test_graphs_property_2d(self, gpcam_engine_2d):
-        """Test correct graphs for 2D dimensionality."""
-        graphs = gpcam_engine_2d.graphs
-
-        # 2D should have specific graph types
-        graph_names = [g.name for g in graphs]
-        assert 'Variance' in graph_names
-        assert 'Score' in graph_names
-
-    def test_graphs_property_3d(self, gpcam_engine_3d):
-        """Test correct graphs for 3D dimensionality."""
-        graphs = gpcam_engine_3d.graphs
-
-        # Higher-dimensional should have different graphs
-        assert len(graphs) > 0
 
     def test_hyperparameter_callback(self, gpcam_engine_2d, sample_data_2d):
         """Test that changing hyperparameters updates optimizer."""

@@ -27,7 +27,7 @@ class Signal:
 
     def emit(self, *args, exclude: Optional[Callable] = None) -> None:
         for cb in list(self._callbacks):
-            if cb is not exclude:
+            if exclude is None or cb != exclude:
                 cb(*args)
 
 

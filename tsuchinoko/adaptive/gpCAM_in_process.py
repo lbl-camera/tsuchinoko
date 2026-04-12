@@ -4,15 +4,12 @@ from functools import cached_property
 from typing import Callable
 
 import numpy as np
-from pyqtgraph.parametertree.parameterTypes import SimpleParameter, GroupParameter, ListParameter
 from loguru import logger
 
 from gpcam.gp_optimizer import GPOptimizer
 from . import Engine, Data
 from .acquisition_functions import explore_target_100, radical_gradient
-from ..graphs.common import Variance, GPCamPosteriorCovariance, Score, GPCamAcquisitionFunction, GPCamPosteriorMean, \
-    Table, HighDimensionalityGPCamPosteriorMean, GPCamHyperparameterPlot
-from ..parameters import TrainingParameter
+from ..parameters.tree import SimpleParameter, GroupParameter, ListParameter, TrainingParameter
 
 gpcam_acquisition_functions = {s: s for s in ['variance', 'shannon_ig', 'ucb', 'maximum', 'minimum', 'covariance', 'gradient', 'explore_target_100']}
 gpcam_acquisition_functions['explore_target_100'] = explore_target_100
@@ -53,22 +50,6 @@ class GPCAMInProcessEngine(Engine):
             self.parameters.child('hyperparameters', f'hyperparameter_{i}').setValue(hyperparameters[i], blockSignal=self._set_hyperparameter)
 
         self.reset()
-
-        if dimensionality == 2:
-            self.graphs = [GPCamPosteriorCovariance(),
-                           GPCamAcquisitionFunction(),
-                           GPCamPosteriorMean(),
-                           # GPCamAverageCovariance(),
-                           GPCamHyperparameterPlot(),
-                           Table(),
-                           Variance(),
-                           Score()]
-        elif dimensionality > 2:
-            self.graphs = [GPCamPosteriorCovariance(),
-                           HighDimensionalityGPCamPosteriorMean(dimensions=dimensionality, bounds=parameter_bounds),
-                           # GPCamAverageCovariance(),
-                           GPCamHyperparameterPlot(),
-                           Table()]
 
     def init_optimizer(self):
         opts = self.gp_opts.copy()
@@ -141,11 +122,7 @@ class GPCAMInProcessEngine(Engine):
         self.optimizer.init_gp(hyperparameters, **opts)
 
     def update_metrics(self, data: Data):
-        for graph in self.graphs:
-            try:
-                graph.compute(data, self)
-            except Exception as ex:
-                logger.exception(ex)
+        pass
 
     def request_targets(self, position, **kwargs):
         self.last_position = position
