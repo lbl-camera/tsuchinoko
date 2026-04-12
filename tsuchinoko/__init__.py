@@ -1,4 +1,3 @@
-import ctypes
 import importlib
 import os
 import runpy
@@ -6,20 +5,28 @@ import sys
 
 
 import click
-from pyqtgraph import mkQApp
 
-from . import parameters  # registers parameter types
-from . import patches
-from .utils import runengine
 try:
     from ._version import __version__
 except (ImportError, ModuleNotFoundError) as ex:
     raise ImportError("You probably haven't installed tsuchinoko yet: pip install -e .") from ex
 
+try:
+    from pyqtgraph import mkQApp
+    from . import parameters  # registers parameter types
+    from . import patches
+    from .utils import runengine
+    _qt_available = True
+except ImportError:
+    _qt_available = False
+
 
 @click.command()
 @click.argument('core_address', required=False, default='localhost')
 def launch_client(core_address='localhost'):
+    if not _qt_available:
+        raise RuntimeError("PySide6/pyqtgraph is required to launch the client.")
+    import ctypes
     if os.name == 'nt':
         # https://stackoverflow.com/questions/67599432/setting-the-same-icon-as-application-icon-in-task-bar-for-pyqt5-application
         myappid = 'camera.tsuchinoko'  # arbitrary string

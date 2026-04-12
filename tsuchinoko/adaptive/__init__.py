@@ -6,9 +6,6 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Iterable, Set, List, Union, Dict, Any, Iterator, Optional
 
 from loguru import logger
-from pyqtgraph.parametertree import Parameter
-
-from tsuchinoko.graphs import Graph
 from tsuchinoko.utils.mutex import RWLock
 
 
@@ -188,8 +185,6 @@ class Engine(ABC):
     """
 
     dimensionality: int = None
-    parameters: Parameter = None
-    graphs: List['Graph'] = None
     last_position: tuple = None
 
     @abstractmethod
@@ -230,10 +225,6 @@ class Engine(ABC):
         """
         ...
 
-    @abstractmethod
     def update_metrics(self, data: Data):
-        """
-        Calculates various metrics to drive visualizations for the client. The data object is expected to be mutated to
-        include these new values.
-        """
-        ...
+        """Compute visualization metrics. No-op by default; override for Tiled publication."""
+        pass
