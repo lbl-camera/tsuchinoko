@@ -6,6 +6,7 @@ hardcoded magic numbers throughout the codebase.
 from typing import Optional
 from pydantic import BaseModel, Field
 from tsuchinoko.nats.config import NATSConfig
+from tsuchinoko.tiled.config import TiledConfig
 
 
 class NetworkConfig(BaseModel):
@@ -36,6 +37,7 @@ class AppConfig(BaseModel):
     ui: UIConfig = Field(default_factory=UIConfig)
     core: CoreConfig = Field(default_factory=CoreConfig)
     nats: NATSConfig = Field(default_factory=NATSConfig)
+    tiled: TiledConfig = Field(default_factory=TiledConfig)
 
 
 _config: Optional[AppConfig] = None

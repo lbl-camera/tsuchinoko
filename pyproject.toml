@@ -17,6 +17,7 @@ dependencies = [
   "pydantic>=2.0",
   "pyyaml",
   "nats-py>=2.0",
+  "tiled[client]",
 ]
 requires-python = ">=3.9"
 authors = [
@@ -52,7 +53,7 @@ gui = [
 ]
 dev = ["pyinstaller", "pillow"]
 docs = ["matplotlib", "sphinx", "sphinx-markdown-tables", "numpydoc", "sphinx_copybutton", "myst_parser", "sphinx_rtd_theme", "sphinx_rtd_dark_mode"]
-tests = ["pillow", "pytest", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixtures", "pytest-asyncio"]
+tests = ["pillow", "pytest", "coverage", "coveralls", "codecov", "pylint", "pytest-qt", "pytest-cov", "pytest-lazy-fixtures", "pytest-asyncio", "tiled[server]"]
 
 [project.urls]
 Homepage = "https://tsuchinoko.readthedocs.io/"
