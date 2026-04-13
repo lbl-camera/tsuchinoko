@@ -5,6 +5,7 @@ hardcoded magic numbers throughout the codebase.
 """
 from typing import Optional
 from pydantic import BaseModel, Field
+from tsuchinoko.nats.config import NATSConfig
 
 
 class NetworkConfig(BaseModel):
@@ -34,6 +35,7 @@ class AppConfig(BaseModel):
     network: NetworkConfig = Field(default_factory=NetworkConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     core: CoreConfig = Field(default_factory=CoreConfig)
+    nats: NATSConfig = Field(default_factory=NATSConfig)
 
 
 _config: Optional[AppConfig] = None

@@ -16,6 +16,7 @@ dependencies = [
   "transitions",
   "pydantic>=2.0",
   "pyyaml",
+  "nats-py>=2.0",
 ]
 requires-python = ">=3.9"
 authors = [
