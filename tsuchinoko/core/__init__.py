@@ -81,7 +81,8 @@ class Core:
                  execution_engine: ExecutionEngine = None,
                  adaptive_engine: AdaptiveEngine = None,
                  compute_metrics: bool = True,
-                 nats_config=None):
+                 nats_config=None,
+                 tiled_publisher=None):
         """Initialize the experiment core.
 
         Args:
@@ -93,6 +94,8 @@ class Core:
                 each measurement update. Disable for faster execution.
             nats_config: Optional NATSConfig for NATS connectivity.
                 If None or url is empty, NATS is not used.
+            tiled_publisher: Optional TiledPublisher for writing GP outputs
+                to Tiled after each iteration. If None, no Tiled publication.
         """
         self.execution_engine = execution_engine
         self.adaptive_engine = adaptive_engine
@@ -122,6 +125,10 @@ class Core:
         self._nats_client = None
         self._nats_service = None
         self._event_queue = asyncio.Queue()
+
+        # Tiled (optional)
+        self._tiled_publisher = tiled_publisher
+        self._last_targets = []
 
     @property
     def state(self) -> CoreState:
@@ -334,6 +341,7 @@ class Core:
                     logger.info(f'targets: {targets}')
                 else:
                     targets = [self._forced_position_queue.get()]
+                self._last_targets = targets
 
             if self._forced_measurement_queue.empty():
                 if self._has_fresh_data:
@@ -359,6 +367,21 @@ class Core:
             if self._has_fresh_data:
                 with log_time('training', cumulative_key='training'):
                     self.adaptive_engine.train()
+
+                # Publish GP outputs to Tiled
+                if self._tiled_publisher:
+                    try:
+                        import numpy as np
+                        self._tiled_publisher.write_iteration(
+                            self.data._completed_iterations,
+                            self.adaptive_engine,
+                            targets=np.asarray(self._last_targets) if self._last_targets else np.array([]),
+                        )
+                        self.emit_event("tsuchinoko.gp.updated", {
+                            "iteration": self.data._completed_iterations,
+                        })
+                    except Exception as e:
+                        logger.warning(f"Tiled publication failed: {e}")
             else:
                 logger.info('Current data is stale. Waiting for an update with fresh data.')
 
