@@ -1,6 +1,6 @@
 # Phase 2: NATS Integration — Design Spec
 
-**Status:** Draft
+**Status:** Phase 2 complete
 **Date:** 2026-04-12
 **Authors:** Ron Pandolfi, Ayaka (Claude)
 **Parent:** `docs/design/2026-04-12-tsuchinoko-rescope.md`
