@@ -1,6 +1,6 @@
 # Phase 3: Tiled Integration — Design Spec
 
-**Status:** Draft
+**Status:** Phase 3 complete
 **Date:** 2026-04-12
 **Authors:** Ron Pandolfi, Ayaka (Claude)
 **Parent:** `docs/design/2026-04-12-tsuchinoko-rescope.md`
