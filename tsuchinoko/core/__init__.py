@@ -4,7 +4,7 @@ import threading
 import time
 from asyncio import events
 from enum import Enum, auto
-from queue import Queue
+from queue import Queue, Empty
 from typing import List
 
 from loguru import logger
@@ -80,7 +80,8 @@ class Core:
     def __init__(self,
                  execution_engine: ExecutionEngine = None,
                  adaptive_engine: AdaptiveEngine = None,
-                 compute_metrics: bool = True):
+                 compute_metrics: bool = True,
+                 nats_config=None):
         """Initialize the experiment core.
 
         Args:
@@ -90,6 +91,8 @@ class Core:
                 via set_adaptive_engine().
             compute_metrics: If True, compute visualization metrics after
                 each measurement update. Disable for faster execution.
+            nats_config: Optional NATSConfig for NATS connectivity.
+                If None or url is empty, NATS is not used.
         """
         self.execution_engine = execution_engine
         self.adaptive_engine = adaptive_engine
@@ -113,6 +116,12 @@ class Core:
         self.data = Data()
 
         self.experiment_thread = None
+
+        # NATS (optional)
+        self._nats_config = nats_config
+        self._nats_client = None
+        self._nats_service = None
+        self._event_queue = asyncio.Queue()
 
     @property
     def state(self) -> CoreState:
@@ -199,41 +208,73 @@ class Core:
                 events.set_event_loop(None)
                 loop.close()
 
-    async def _main(self, min_response_sleep: float = .1) -> None:
-        while self.state != CoreState.Exiting:
+    async def _main(self) -> None:
+        # Connect to NATS if configured
+        if self._nats_config and self._nats_config.url:
+            from tsuchinoko.nats.client import NATSClient
+            from tsuchinoko.nats.service import NATSService
 
-            if self.state == CoreState.Running:
-                pass
-                # await sleep(min_response_sleep)  # short-circuit case
-            elif self.state == CoreState.Starting:
-                if not len(self.data):
-                    self.data = Data(dimensionality=self.adaptive_engine.dimensionality)
-                self.adaptive_engine.reset()
-                self.experiment_thread = threading.Thread(target=self.experiment_loop, args=())  # must hold ref
-                self.experiment_thread.start()
-                self.state = CoreState.Running
+            self._nats_client = NATSClient()
+            try:
+                await self._nats_client.connect(self._nats_config)
+                if self._nats_config.lucid_prefix:
+                    try:
+                        await self._nats_client.authenticate(
+                            self._nats_config.lucid_prefix,
+                            self._nats_config.app_name,
+                            self._nats_config.app_version,
+                            self._nats_config.auth_timeout,
+                        )
+                    except Exception as e:
+                        logger.warning(f"LUCID auth failed (continuing without): {e}")
+                self._nats_service = NATSService(self, self._nats_client)
+                await self._nats_service.start()
+            except Exception as e:
+                logger.warning(f"NATS connection failed (continuing without): {e}")
+                self._nats_client = None
 
-            elif self.state == CoreState.Inactive:
-                pass
-                # await sleep(min_response_sleep)
+        try:
+            while self.state != CoreState.Exiting:
+                # Drain outbound events
+                await self._drain_events()
 
-            elif self.state == CoreState.Paused:
-                pass
-                # await sleep(min_response_sleep)
+                # State transitions
+                if self.state == CoreState.Starting:
+                    if not len(self.data):
+                        self.data = Data(dimensionality=self.adaptive_engine.dimensionality)
+                    self.adaptive_engine.reset()
+                    self.experiment_thread = threading.Thread(
+                        target=self.experiment_loop, daemon=True
+                    )
+                    self.experiment_thread.start()
+                    self.state = CoreState.Running
 
-            elif self.state == CoreState.Pausing:
-                self.state = CoreState.Paused
+                elif self.state == CoreState.Pausing:
+                    self.state = CoreState.Paused
 
-            elif self.state == CoreState.Resuming:
-                self.state = CoreState.Running
+                elif self.state == CoreState.Resuming:
+                    self.state = CoreState.Running
 
-            elif self.state == CoreState.Stopping:
-                self.state = CoreState.Inactive
-                self.data = Data()
-                # await sleep(min_response_sleep)
+                elif self.state == CoreState.Stopping:
+                    self.state = CoreState.Inactive
+                    self.data = Data()
 
-            if self.state not in [CoreState.Stopping, CoreState.Exiting, CoreState.Resuming, CoreState.Restarting]:
-                await self.notify_clients()
+                await asyncio.sleep(0.05)
+        finally:
+            if self._nats_service:
+                await self._nats_service.stop()
+            if self._nats_client:
+                await self._nats_client.close()
+
+    async def _drain_events(self) -> None:
+        """Drain the event queue and publish via NATS."""
+        while not self._event_queue.empty():
+            try:
+                subject, payload = self._event_queue.get_nowait()
+                if self._nats_client and self._nats_client.is_connected:
+                    await self._nats_client.publish(subject, payload)
+            except Exception:
+                break
 
     def experiment_loop(self) -> None:
         """Background thread running the experiment iteration loop.
@@ -321,15 +362,18 @@ class Core:
             else:
                 logger.info('Current data is stale. Waiting for an update with fresh data.')
 
-    async def notify_clients(self) -> None:
-        """Hook for subclasses. Base implementation sleeps to prevent busy-wait."""
-        await asyncio.sleep(0.1)
-
     def exit(self) -> None:
         """Request exit and wait for experiment thread to finish."""
         self.state = CoreState.Exiting
         if self.experiment_thread:
             self.experiment_thread.join()
+
+    def emit_event(self, subject: str, payload: dict) -> None:
+        """Queue an event for async publishing. Thread-safe."""
+        try:
+            self._event_queue.put_nowait((subject, payload))
+        except Exception:
+            pass  # Queue full or loop not running — drop silently
 
     def initialize_data(self, x: List[tuple], y: List[float], v: List[float]) -> None:
         """Initialize the experiment with pre-existing data.
