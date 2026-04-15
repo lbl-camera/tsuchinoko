@@ -24,6 +24,7 @@ class TiledPublisher:
         """Write evaluation grid (once, at experiment start)."""
         run = self._client[self._run_uid]
         self._adaptive = run.create_container(key="adaptive")
+        self._adaptive.update_metadata({"adaptive_engine": "tsuchinoko"})
         config = self._adaptive.create_container(key="config")
 
         if self._dimensionality <= self.MAX_GRID_DIMENSIONALITY:
@@ -80,6 +81,17 @@ class TiledPublisher:
                         *[self._grid_resolution] * self._dimensionality
                     )
                     iter_container.write_array(var_vals, key="posterior_variance")
+
+                    try:
+                        acq = engine.optimizer.evaluate_acquisition_function(
+                            self._grid_points
+                        )
+                        acq_vals = np.asarray(acq).reshape(
+                            *[self._grid_resolution] * self._dimensionality
+                        )
+                        iter_container.write_array(acq_vals, key="acquisition_function")
+                    except Exception as e:
+                        logger.warning(f"Could not write acquisition function: {e}")
             except Exception as e:
                 logger.warning(f"Could not write posterior: {e}")
 

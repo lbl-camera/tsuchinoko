@@ -38,6 +38,7 @@ def _make_mock_engine(dimensionality=2):
     engine.optimizer.get_hyperparameters.return_value = np.array([100.0, 10.0, 10.0])
     engine.optimizer.posterior_mean.return_value = {"f(x)": np.random.rand(50 * 50)}
     engine.optimizer.posterior_covariance.return_value = {"v(x)": np.random.rand(50 * 50)}
+    engine.optimizer.evaluate_acquisition_function.return_value = np.random.rand(50 * 50)
     engine.parameters = MagicMock()
     engine.parameters.__getitem__ = MagicMock(side_effect=lambda key: {
         ("bounds", "axis_0_min"): 0.0, ("bounds", "axis_0_max"): 100.0,
@@ -127,3 +128,42 @@ def test_posterior_shape(tiled_client, run_with_adaptive):
     run = tiled_client[run_with_adaptive]
     mean_arr = run["adaptive"]["iter_001"]["posterior_mean"].read()
     assert mean_arr.shape == (50, 50)
+
+
+def test_write_config_stamps_metadata(tiled_client, run_with_adaptive):
+    """write_config() should stamp adaptive_engine metadata on the adaptive container."""
+    publisher = TiledPublisher(tiled_client, run_with_adaptive, dimensionality=2)
+    engine = _make_mock_engine(dimensionality=2)
+    publisher.write_config(engine)
+    run = tiled_client[run_with_adaptive]
+    adaptive_meta = run["adaptive"].metadata
+    assert adaptive_meta.get("adaptive_engine") == "tsuchinoko"
+
+
+def test_write_iteration_includes_acquisition_function(tiled_client, run_with_adaptive):
+    """write_iteration() should write acquisition_function array for dim <= 3."""
+    publisher = TiledPublisher(tiled_client, run_with_adaptive, dimensionality=2)
+    engine = _make_mock_engine(dimensionality=2)
+    publisher.write_config(engine)
+    targets = np.array([0.5, 0.8])
+    publisher.write_iteration(1, engine, targets)
+    run = tiled_client[run_with_adaptive]
+    iter_container = run["adaptive"]["iter_001"]
+    assert "acquisition_function" in iter_container
+    acq_arr = iter_container["acquisition_function"].read()
+    assert acq_arr.shape == (50, 50)
+
+
+def test_high_dimensionality_skips_acquisition_function(tiled_client):
+    """D=4: acquisition_function should not be written."""
+    tiled_client.create_container(key="run_acq")
+    publisher = TiledPublisher(tiled_client, "run_acq", dimensionality=4)
+    engine = MagicMock()
+    engine.optimizer = MagicMock()
+    engine.optimizer.gp = True
+    engine.optimizer.get_hyperparameters.return_value = np.array([100.0, 10.0, 10.0, 10.0, 10.0])
+    publisher.write_config(engine)
+    publisher.write_iteration(1, engine, np.array([0.7]))
+    run = tiled_client["run_acq"]
+    iter_container = run["adaptive"]["iter_001"]
+    assert "acquisition_function" not in iter_container
