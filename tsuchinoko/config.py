@@ -39,6 +39,15 @@ class AdaptiveConfig(BaseModel):
         default=[(0.0, 100.0), (0.0, 100.0)],
         description="Per-axis (min, max) bounds",
     )
+    # gpCAM-specific (ignored for random engine)
+    hyperparameters: list[float] = Field(
+        default=[100.0, 10.0, 10.0],
+        description="GP kernel hyperparameters: [variance, length_scale_0, ...]",
+    )
+    hyperparameter_bounds: list[tuple[float, float]] = Field(
+        default=[(0.1, 1e5), (0.1, 1e5), (0.1, 1e5)],
+        description="Per-hyperparameter (min, max) bounds",
+    )
 
 
 class AppConfig(BaseModel):

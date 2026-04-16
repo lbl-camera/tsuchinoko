@@ -43,6 +43,8 @@ def run(nats_url, lucid_prefix, config_path):
         adaptive_engine = GPCAMInProcessEngine(
             dimensionality=ac.dimensionality,
             parameter_bounds=ac.parameter_bounds,
+            hyperparameters=ac.hyperparameters,
+            hyperparameter_bounds=ac.hyperparameter_bounds,
         )
     elif ac.engine_type == "random":
         from tsuchinoko.adaptive.random_in_process import RandomInProcess
