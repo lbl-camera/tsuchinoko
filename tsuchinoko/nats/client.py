@@ -84,6 +84,15 @@ class NATSClient:
         if self._nc and self.is_connected and self._loop:
             asyncio.run_coroutine_threadsafe(self.publish(subject, payload), self._loop)
 
+    def request_threadsafe(self, subject: str, payload: dict, timeout: float = 5.0) -> dict:
+        """Blocking request/reply from a non-async thread."""
+        if not (self._nc and self.is_connected and self._loop):
+            raise RuntimeError("NATS not connected")
+        future = asyncio.run_coroutine_threadsafe(
+            self.request(subject, payload, timeout), self._loop,
+        )
+        return future.result(timeout=timeout + 1)
+
     async def _on_error(self, exc: Exception) -> None:
         logger.error(f"NATS error: {exc}")
 

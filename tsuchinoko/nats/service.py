@@ -97,7 +97,13 @@ class NATSService:
                 return
 
             from tsuchinoko.tiled.connect import connect_tiled
-            tiled_client = connect_tiled(effective_url, token=auth_token, proxy_url=proxy_url)
+            tiled_client = connect_tiled(
+                effective_url,
+                token=auth_token,
+                proxy_url=proxy_url,
+                nats_client=self._client,
+                lucid_prefix=lucid_prefix,
+            )
 
             # Wire TiledReader into LUCIDEngine
             from tsuchinoko.execution.lucid import LUCIDEngine
