@@ -234,6 +234,16 @@ class Core:
                         )
                     except Exception as e:
                         logger.warning(f"LUCID auth failed (continuing without): {e}")
+
+                # Auto-create LUCIDEngine when no execution engine was provided
+                if self.execution_engine is None:
+                    from tsuchinoko.execution.lucid import LUCIDEngine
+                    self.execution_engine = LUCIDEngine(
+                        nats_client=self._nats_client,
+                        lucid_prefix=self._nats_config.lucid_prefix,
+                    )
+                    logger.info("Auto-created LUCIDEngine (awaiting bind_run)")
+
                 self._nats_service = NATSService(self, self._nats_client)
                 await self._nats_service.start()
             except Exception as e:

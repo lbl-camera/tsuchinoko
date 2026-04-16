@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 ACTIONS = [
     {"suffix": "experiment.configure", "description": "Set up experiment parameters"},
+    {"suffix": "experiment.bind_run", "description": "Bind a bluesky run for Tiled I/O"},
     {"suffix": "experiment.start", "description": "Begin the adaptive loop"},
     {"suffix": "experiment.pause", "description": "Pause the loop"},
     {"suffix": "experiment.resume", "description": "Resume from pause"},
@@ -41,6 +42,7 @@ class NATSService:
     async def start(self) -> None:
         handler_map = {
             "experiment.configure": self._handle_configure,
+            "experiment.bind_run": self._handle_bind_run,
             "experiment.start": self._handle_start,
             "experiment.pause": self._handle_pause,
             "experiment.resume": self._handle_resume,
@@ -70,6 +72,59 @@ class NATSService:
 
     async def _reply(self, msg, data: dict) -> None:
         await msg.respond(json.dumps(data).encode())
+
+    async def _handle_bind_run(self, msg) -> None:
+        """Bind a bluesky run: create TiledReader + TiledPublisher."""
+        try:
+            data = json.loads(msg.data)
+            run_uid = data["run_uid"]
+            tiled_url = data.get("tiled_url", "")
+            motor_names = data.get("motor_names", [])
+            detector_name = data.get("detector_name", "det")
+
+            from tsuchinoko.config import get_config
+            config = get_config()
+            effective_url = tiled_url or config.tiled.url
+
+            if not effective_url:
+                await self._reply(msg, {"status": "error", "message": "No tiled_url"})
+                return
+
+            from tiled.client import from_uri
+            tiled_client = from_uri(effective_url)
+
+            # Wire TiledReader into LUCIDEngine
+            from tsuchinoko.execution.lucid import LUCIDEngine
+            if isinstance(self._core.execution_engine, LUCIDEngine):
+                from tsuchinoko.tiled.reader import TiledReader
+                reader = TiledReader(
+                    tiled_client, run_uid, motor_names, detector_name,
+                )
+                self._core.execution_engine.bind_run(reader)
+
+            # Wire TiledPublisher into Core
+            from tsuchinoko.tiled.writer import TiledPublisher
+            dim = self._core.adaptive_engine.dimensionality
+            publisher = TiledPublisher(tiled_client, run_uid, dim)
+            publisher.write_config(self._core.adaptive_engine)
+            self._core._tiled_publisher = publisher
+
+            # Subscribe to {lucid_prefix}.adaptive.measured for unblocking
+            lucid_prefix = data.get("lucid_prefix", config.nats.lucid_prefix)
+            measured_subject = f"{lucid_prefix}.adaptive.measured"
+
+            async def on_measured(nats_msg):
+                if isinstance(self._core.execution_engine, LUCIDEngine):
+                    self._core.execution_engine.signal_measurements_ready()
+
+            sub = await self._client.subscribe(measured_subject, on_measured)
+            self._subscriptions.append(sub)
+
+            logger.info(f"Bound run {run_uid[:8]}… (tiled={effective_url})")
+            await self._reply(msg, {"status": "ok", "run_uid": run_uid})
+        except Exception as e:
+            logger.exception(e)
+            await self._reply(msg, {"status": "error", "message": str(e)})
 
     async def _handle_configure(self, msg) -> None:
         try:

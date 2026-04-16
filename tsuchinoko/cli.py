@@ -19,7 +19,6 @@ def main():
 def run(nats_url, lucid_prefix, tiled_url, config_path):
     """Run the Tsuchinoko adaptive experiment service."""
     from tsuchinoko.config import AppConfig, set_config
-    from tsuchinoko.nats.config import NATSConfig
     from tsuchinoko.core import Core
 
     if config_path:
@@ -40,12 +39,33 @@ def run(nats_url, lucid_prefix, tiled_url, config_path):
 
     set_config(config)
 
-    logger.info(f"Tsuchinoko starting (NATS: {'enabled' if config.nats.url else 'disabled'})")
-    if config.nats.url:
-        logger.info(f"  NATS URL: {config.nats.url}")
-        logger.info(f"  LUCID prefix: {config.nats.lucid_prefix}")
+    # Create adaptive engine from config
+    ac = config.adaptive
+    if ac.engine_type == "gpcam":
+        from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
+        adaptive_engine = GPCAMInProcessEngine(
+            dimensionality=ac.dimensionality,
+            parameter_bounds=ac.parameter_bounds,
+        )
+    elif ac.engine_type == "random":
+        from tsuchinoko.adaptive.random_in_process import RandomInProcess
+        adaptive_engine = RandomInProcess(
+            dimensionality=ac.dimensionality,
+            parameter_bounds=ac.parameter_bounds,
+        )
+    else:
+        raise click.BadParameter(f"Unknown engine type: {ac.engine_type}")
 
-    core = Core(nats_config=config.nats)
+    logger.info(f"Tsuchinoko starting (engine={ac.engine_type}, dim={ac.dimensionality})")
+    logger.info(f"  NATS: {config.nats.url or 'disabled'}")
+    if config.nats.url:
+        logger.info(f"  LUCID prefix: {config.nats.lucid_prefix}")
+    logger.info(f"  Tiled: {config.tiled.url or 'disabled'}")
+
+    core = Core(
+        adaptive_engine=adaptive_engine,
+        nats_config=config.nats,
+    )
     try:
         core.main()
     except KeyboardInterrupt:

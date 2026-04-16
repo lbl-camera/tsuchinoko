@@ -50,8 +50,9 @@ def mock_nats_client():
 def lucid_engine(tiled_client, populated_run, mock_nats_client):
     reader = TiledReader(tiled_client, populated_run,
                          motor_names=["x_motor", "y_motor"], detector_name="detector")
-    return LUCIDEngine(nats_client=mock_nats_client, tiled_reader=reader,
-                       lucid_prefix="test.lucid", run_uid=populated_run)
+    engine = LUCIDEngine(nats_client=mock_nats_client, lucid_prefix="test.lucid",
+                         tiled_reader=reader)
+    return engine
 
 
 def test_update_targets(lucid_engine, mock_nats_client):
@@ -63,7 +64,6 @@ def test_update_targets(lucid_engine, mock_nats_client):
     subject, payload = mock_nats_client.publish_threadsafe.call_args[0]
 
     assert subject == "tsuchinoko.targets"
-    assert payload["run_uid"] == "run_001"
     assert payload["targets"] == [[1.0, 2.0], [3.0, 4.0]]
     assert payload["iteration"] == 1
 
@@ -72,8 +72,8 @@ def test_get_position_default(mock_nats_client, tiled_client, populated_run):
     """Returns (0, 0) before any targets are published."""
     reader = TiledReader(tiled_client, populated_run,
                          motor_names=["x_motor", "y_motor"], detector_name="detector")
-    engine = LUCIDEngine(nats_client=mock_nats_client, tiled_reader=reader,
-                         lucid_prefix="test.lucid", run_uid=populated_run)
+    engine = LUCIDEngine(nats_client=mock_nats_client, lucid_prefix="test.lucid",
+                         tiled_reader=reader)
     assert engine.get_position() == (0, 0)
 
 

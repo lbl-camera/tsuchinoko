@@ -31,6 +31,16 @@ class CoreConfig(BaseModel):
     checkpoint_interval: int = Field(0, ge=0)
 
 
+class AdaptiveConfig(BaseModel):
+    """Adaptive engine configuration for headless CLI usage."""
+    engine_type: str = Field("gpcam", description="Engine type: gpcam or random")
+    dimensionality: int = Field(2, ge=1)
+    parameter_bounds: list[tuple[float, float]] = Field(
+        default=[(0.0, 100.0), (0.0, 100.0)],
+        description="Per-axis (min, max) bounds",
+    )
+
+
 class AppConfig(BaseModel):
     """Application-wide configuration."""
     network: NetworkConfig = Field(default_factory=NetworkConfig)
@@ -38,6 +48,7 @@ class AppConfig(BaseModel):
     core: CoreConfig = Field(default_factory=CoreConfig)
     nats: NATSConfig = Field(default_factory=NATSConfig)
     tiled: TiledConfig = Field(default_factory=TiledConfig)
+    adaptive: AdaptiveConfig = Field(default_factory=AdaptiveConfig)
 
 
 _config: Optional[AppConfig] = None

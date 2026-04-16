@@ -19,17 +19,26 @@ class LUCIDEngine(Engine):
 
     Publishes targets via NATS, waits for LUCID's measurement signal,
     then reads results from Tiled.
+
+    The engine can be created before the bluesky run exists.  Call
+    :meth:`bind_run` once the run UID and Tiled reader are available
+    (typically from a ``tsuchinoko.experiment.bind_run`` NATS message).
     """
 
-    def __init__(self, nats_client: NATSClient, tiled_reader: TiledReader,
-                 lucid_prefix: str, run_uid: str) -> None:
+    def __init__(self, nats_client: NATSClient,
+                 lucid_prefix: str,
+                 tiled_reader: TiledReader | None = None) -> None:
         self._nats_client = nats_client
         self._tiled_reader = tiled_reader
         self._lucid_prefix = lucid_prefix
-        self._run_uid = run_uid
         self._position: tuple = (0, 0)
         self._measured_event = threading.Event()
         self._iteration = 0
+
+    def bind_run(self, tiled_reader: TiledReader) -> None:
+        """Bind a TiledReader for an active bluesky run."""
+        self._tiled_reader = tiled_reader
+        logger.info("LUCIDEngine bound to run")
 
     def update_targets(self, targets: List[Tuple]) -> None:
         """Publish targets to NATS for LUCID to measure."""
@@ -38,7 +47,6 @@ class LUCIDEngine(Engine):
             self._position = tuple(targets[-1])
 
         self._nats_client.publish_threadsafe("tsuchinoko.targets", {
-            "run_uid": self._run_uid,
             "targets": [list(t) for t in targets],
             "iteration": self._iteration,
         })
