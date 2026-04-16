@@ -14,9 +14,8 @@ def main():
 @main.command()
 @click.option("--nats-url", default="", help="NATS broker URL (e.g. nats://localhost:4222). Empty = no NATS.")
 @click.option("--lucid-prefix", default="als.7011", help="LUCID instance topic prefix.")
-@click.option("--tiled-url", default="", help="Tiled server URL. Empty = no Tiled publication.")
 @click.option("--config", "config_path", default=None, type=click.Path(exists=True), help="YAML config file.")
-def run(nats_url, lucid_prefix, tiled_url, config_path):
+def run(nats_url, lucid_prefix, config_path):
     """Run the Tsuchinoko adaptive experiment service."""
     from tsuchinoko.config import AppConfig, set_config
     from tsuchinoko.core import Core
@@ -34,8 +33,6 @@ def run(nats_url, lucid_prefix, tiled_url, config_path):
         config.nats.url = nats_url
     if lucid_prefix != "als.7011":
         config.nats.lucid_prefix = lucid_prefix
-    if tiled_url:
-        config.tiled.url = tiled_url
 
     set_config(config)
 
