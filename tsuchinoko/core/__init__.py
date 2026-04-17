@@ -358,6 +358,12 @@ class Core:
                     with log_time('updating targets', cumulative_key='updating targets'):
                         self.execution_engine.update_targets(targets)
                     self._has_fresh_data = False
+                elif self._last_targets is not None:
+                    # Re-publish last targets to avoid deadlock when
+                    # measurements came back empty (e.g. LUCID hasn't
+                    # finished measuring yet).
+                    with log_time('re-publishing targets', cumulative_key='updating targets'):
+                        self.execution_engine.update_targets(self._last_targets)
                 with log_time('getting measurements', cumulative_key='getting measurements'):
                     new_measurements = self.execution_engine.get_measurements()
                 logger.info(f'new measurements: {new_measurements}')
@@ -385,13 +391,13 @@ class Core:
                         self._tiled_publisher.write_iteration(
                             self.data._completed_iterations,
                             self.adaptive_engine,
-                            targets=np.asarray(self._last_targets) if self._last_targets else np.array([]),
+                            targets=np.asarray(self._last_targets) if len(self._last_targets) else np.array([]),
                         )
                         self.emit_event("tsuchinoko.gp.updated", {
                             "iteration": self.data._completed_iterations,
                         })
                     except Exception as e:
-                        logger.warning(f"Tiled publication failed: {e}")
+                        logger.error(f"Tiled publication failed: {e}", exc_info=True)
             else:
                 logger.info('Current data is stale. Waiting for an update with fresh data.')
 
