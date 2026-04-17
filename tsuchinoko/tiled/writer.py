@@ -118,6 +118,14 @@ class TiledPublisher:
         if not data:
             return
 
+        # _RunWriter crashes if any declared array data_key is absent
+        # from an event (empty arr_lst → min() fails). Fill missing
+        # keys with empty lists so every event is complete.
+        for key in self._build_data_keys():
+            if key not in data:
+                data[key] = []
+                timestamps[key] = now
+
         self._emit_event(data, timestamps, now)
         logger.info("Wrote iteration {} to Tiled (seq_num={})", iteration, self._seq_num)
 
@@ -227,6 +235,18 @@ class TiledPublisher:
             }
         }
 
+    @staticmethod
+    def _extract_array(result: Any) -> np.ndarray:
+        """Extract array from gpCAM result (dict or raw array)."""
+        if isinstance(result, dict):
+            # Try known keys: "f(x)", "v(x)", "mean", first value
+            for key in ("f(x)", "v(x)", "mean", "variance"):
+                if key in result:
+                    return np.asarray(result[key])
+            # Fall back to first value in dict
+            return np.asarray(next(iter(result.values())))
+        return np.asarray(result)
+
     def _collect_posterior(
         self,
         engine: Any,
@@ -240,20 +260,20 @@ class TiledPublisher:
                 return
 
             pm = engine.optimizer.posterior_mean(self._grid_points)
-            data["posterior_mean"] = np.asarray(pm["f(x)"]).ravel().tolist()
+            data["posterior_mean"] = self._extract_array(pm).ravel().tolist()
             timestamps["posterior_mean"] = now
 
             pv = engine.optimizer.posterior_covariance(
                 self._grid_points, variance_only=True
             )
-            data["posterior_variance"] = np.asarray(pv["v(x)"]).ravel().tolist()
+            data["posterior_variance"] = self._extract_array(pv).ravel().tolist()
             timestamps["posterior_variance"] = now
 
             try:
                 acq = engine.optimizer.evaluate_acquisition_function(
                     self._grid_points
                 )
-                data["acquisition_function"] = np.asarray(acq).ravel().tolist()
+                data["acquisition_function"] = self._extract_array(acq).ravel().tolist()
                 timestamps["acquisition_function"] = now
             except Exception as e:
                 logger.warning("Could not write acquisition function: {}", e)
