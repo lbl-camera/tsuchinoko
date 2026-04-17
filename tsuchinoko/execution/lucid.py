@@ -43,7 +43,7 @@ class LUCIDEngine(Engine):
     def update_targets(self, targets: List[Tuple]) -> None:
         """Publish targets to NATS for LUCID to measure."""
         self._iteration += 1
-        if targets:
+        if len(targets):
             self._position = tuple(targets[-1])
 
         self._nats_client.publish_threadsafe("tsuchinoko.targets", {
@@ -57,8 +57,10 @@ class LUCIDEngine(Engine):
 
     def get_measurements(self) -> List[Tuple]:
         """Block until LUCID signals measurements ready, then read from Tiled."""
-        self._measured_event.wait(timeout=300)
+        self._measured_event.wait(timeout=10)
         self._measured_event.clear()
+        if self._tiled_reader is None:
+            return []
         return self._tiled_reader.read_new()
 
     def signal_measurements_ready(self) -> None:
