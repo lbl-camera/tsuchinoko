@@ -24,12 +24,18 @@ class TiledReader:
         """Read rows added since last call. Returns list of (pos, val, var, metrics)."""
         try:
             run = self._client[self._run_uid]
+            if hasattr(run, "refresh"):
+                run.refresh()
             primary = run["primary"]
         except (KeyError, Exception) as e:
             logger.warning(f"Cannot read primary stream: {e}")
             return []
 
-        if self._detector_name not in primary:
+        try:
+            keys = list(primary)
+        except Exception:
+            keys = []
+        if self._detector_name not in keys:
             return []
 
         detector_data = primary[self._detector_name].read()
