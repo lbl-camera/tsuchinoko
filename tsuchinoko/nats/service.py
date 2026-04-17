@@ -71,6 +71,8 @@ class NATSService:
         logger.info("NATSService stopped")
 
     async def _reply(self, msg, data: dict) -> None:
+        if not msg.reply:
+            return
         await msg.respond(json.dumps(data).encode())
 
     async def _handle_bind_run(self, msg) -> None:
@@ -95,6 +97,8 @@ class NATSService:
             if not effective_url:
                 await self._reply(msg, {"status": "error", "message": "No tiled_url"})
                 return
+
+            lucid_prefix = data.get("lucid_prefix", config.nats.lucid_prefix)
 
             from tsuchinoko.tiled.connect import connect_tiled
             tiled_client = connect_tiled(
@@ -122,7 +126,6 @@ class NATSService:
             self._core._tiled_publisher = publisher
 
             # Subscribe to {lucid_prefix}.adaptive.measured for unblocking
-            lucid_prefix = data.get("lucid_prefix", config.nats.lucid_prefix)
             measured_subject = f"{lucid_prefix}.adaptive.measured"
 
             async def on_measured(nats_msg):
@@ -131,6 +134,11 @@ class NATSService:
 
             sub = await self._client.subscribe(measured_subject, on_measured)
             self._subscriptions.append(sub)
+
+            # Auto-start: LUCID expects tsuchinoko to begin after bind_run
+            from tsuchinoko.core import CoreState
+            if self._core.state == CoreState.Inactive:
+                self._core.state = CoreState.Starting
 
             logger.info(f"Bound run {run_uid[:8]}… (tiled={effective_url})")
             await self._reply(msg, {"status": "ok", "run_uid": run_uid})

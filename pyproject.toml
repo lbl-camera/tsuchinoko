@@ -18,6 +18,8 @@ dependencies = [
   "pyyaml",
   "nats-py>=2.0",
   "tiled[client]",
+  "bluesky-tiled-plugins",
+  "httpx[socks]",
 ]
 requires-python = ">=3.9"
 authors = [
