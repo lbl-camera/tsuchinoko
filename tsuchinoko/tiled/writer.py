@@ -239,12 +239,15 @@ class TiledPublisher:
     def _extract_array(result: Any) -> np.ndarray:
         """Extract array from gpCAM result (dict or raw array)."""
         if isinstance(result, dict):
-            # Try known keys: "f(x)", "v(x)", "mean", first value
-            for key in ("f(x)", "v(x)", "mean", "variance"):
+            # Try known keys across gpCAM versions
+            for key in ("f(x)", "m(x)", "m(x)_flat", "v(x)", "v(x)_flat",
+                        "mean", "variance"):
                 if key in result:
                     return np.asarray(result[key])
-            # Fall back to first value in dict
-            return np.asarray(next(iter(result.values())))
+            # Fall back to first non-input value
+            for key, val in result.items():
+                if key not in ("x", "x_pred"):
+                    return np.asarray(val)
         return np.asarray(result)
 
     def _collect_posterior(
