@@ -78,14 +78,15 @@ class NATSService:
     async def _handle_bind_run(self, msg) -> None:
         """Bind a bluesky run: create TiledReader + TiledPublisher.
 
-        Expects payload from LUCID with Tiled credentials (URL + Keycloak
-        token), so Tsuchinoko never authenticates independently.
+        Expects payload from LUCID with Tiled credentials (URL + API key
+        from LUCID's session-key cache, sent as ``tiled_api_key``), so
+        Tsuchinoko never authenticates independently.
         """
         try:
             data = json.loads(msg.data)
             run_uid = data["run_uid"]
             tiled_url = data.get("tiled_url", "")
-            auth_token = data.get("auth_token")
+            tiled_api_key = data.get("tiled_api_key")
             proxy_url = data.get("proxy_url")
             motor_names = data.get("motor_names", [])
             detector_name = data.get("detector_name", "det")
@@ -103,10 +104,8 @@ class NATSService:
             from tsuchinoko.tiled.connect import connect_tiled
             tiled_client = connect_tiled(
                 effective_url,
-                token=auth_token,
+                api_key=tiled_api_key,
                 proxy_url=proxy_url,
-                nats_client=self._client,
-                lucid_prefix=lucid_prefix,
             )
 
             # Wire TiledReader into LUCIDEngine
