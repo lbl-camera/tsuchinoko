@@ -19,6 +19,7 @@ ACTIONS = [
     {"suffix": "experiment.pause", "description": "Pause the loop"},
     {"suffix": "experiment.resume", "description": "Resume from pause"},
     {"suffix": "experiment.stop", "description": "Stop and finalize"},
+    {"suffix": "experiment.upload_design_code", "description": "Upload an agent-authored callable (acquisition/kernel/prior_mean/noise)"},
     {"suffix": "engine.set_parameter", "description": "Update a single engine parameter"},
     {"suffix": "engine.get_parameters", "description": "Retrieve current engine parameters"},
     {"suffix": "status", "description": "Query current state and progress"},
@@ -47,6 +48,7 @@ class NATSService:
             "experiment.pause": self._handle_pause,
             "experiment.resume": self._handle_resume,
             "experiment.stop": self._handle_stop,
+            "experiment.upload_design_code": self._handle_upload_design_code,
             "engine.set_parameter": self._handle_set_parameter,
             "engine.get_parameters": self._handle_get_parameters,
             "status": self._handle_status,
@@ -193,6 +195,25 @@ class NATSService:
         except Exception as e:
             logger.exception(e)
             await self._reply(msg, {"status": "error", "message": str(e)})
+
+    async def _handle_upload_design_code(self, msg) -> None:
+        from tsuchinoko.nats.user_designs import UserDesignError, write_design
+        try:
+            data = json.loads(msg.data)
+            name = data["name"]
+            kind = data["kind"]
+            code = data["code"]
+            ref, path = write_design(name, kind, code)
+            await self._reply(msg, {
+                "status": "ok",
+                "ref": ref,
+                "path": str(path),
+            })
+        except UserDesignError as exc:
+            await self._reply(msg, {"status": "error", "message": str(exc)})
+        except Exception as exc:
+            logger.exception(exc)
+            await self._reply(msg, {"status": "error", "message": str(exc)})
 
     async def _handle_set_parameter(self, msg) -> None:
         try:
