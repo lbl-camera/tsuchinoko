@@ -50,16 +50,6 @@ datas_dst.append("debugpy")
 datas_src.append(os.path.join(pyqode.python.backend.__path__[0], '*.py'))
 datas_dst.append("pyqode/python/backend/")
 
-# functorch and torch (mac only)
-#if sys.platform == 'darwin':
-#    functorch = glob.glob(os.path.join(functorch.__path__[0], '.dylibs', '*.dylib'))
-#    datas_src.extend(functorch)
-#    datas_dst.extend('functorch/.dylibs' for dylib in functorch)
-
-#    torch = glob.glob(os.path.join(torch.__path__[0], 'lib', '*.dylib'))
-#    datas_src.extend(torch)
-#    datas_dst.extend('torch/lib' for dylib in torch)
-
 print('extras:')
 print(list(zip(datas_src, datas_dst)))
 
@@ -77,7 +67,9 @@ a = Analysis(
                    'tsuchinoko.examples.server_demo',
                    'tsuchinoko.examples.server_demo_bluesky',
                    'tsuchinoko.examples.vector_metric_demo',
-                   'event_model'],
+                   'event_model',
+                   'gpcam',
+                   'fvgp'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
