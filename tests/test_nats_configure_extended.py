@@ -68,18 +68,32 @@ async def test_configure_full_typed_payload(monkeypatch, tmp_path):
     await svc._handle_configure(msg)
     reply = json.loads(msg.respond.call_args.args[0])
     assert reply["status"] == "ok"
-    # The full typed-payload assertion is exercised end-to-end at the engine
-    # level in the user-ref test below; here we just confirm the wire reply.
+    # Non-bounds typed fields land on the engine via setattr. Confirm at
+    # least a representative subset stuck, so a regression that silently
+    # drops fields is caught.
+    assert core.adaptive_engine.dimensionality == 2
+    assert core.adaptive_engine.kernel == "matern_3_2"
+    assert core.adaptive_engine.acquisition_function == "ucb"
+    assert core.adaptive_engine.noise_variances == 0.01
+    assert core.adaptive_engine.initial_points == 12
+    assert core.adaptive_engine.training_method == "global"
+    assert core.adaptive_engine.hyperparameters == [1.0, 0.5, 0.5]
+    # parameter_bounds is applied via engine.parameters[...] = ..., not setattr
+    bounds_keys = [
+        c.args[0]
+        for c in core.adaptive_engine.parameters.__setitem__.call_args_list
+    ]
+    assert ("bounds", "axis_0_min") in bounds_keys
+    assert ("bounds", "axis_1_max") in bounds_keys
 
 
 @pytest.mark.asyncio
 async def test_configure_user_ref_resolves(monkeypatch, tmp_path):
-    monkeypatch.setenv("TSUCHINOKO_USER_DIR", str(tmp_path))
+    svc, core = _service(monkeypatch, tmp_path)  # sets TSUCHINOKO_USER_DIR
     from tsuchinoko.nats.user_designs import write_design
     code = "def acquisition_function(x, gp, **_):\n    return [0.0]\n"
     write_design("my_ucb", "acquisition", code)
 
-    svc, core = _service(monkeypatch, tmp_path)
     msg = FakeMsg({
         "parameter_bounds": [[0, 1]],
         "acquisition_function": "user:my_ucb",
