@@ -88,3 +88,14 @@ Data*.npy
 
 # hatch versioning
 */_version.py
+# Experiment output / artifacts (not source)
+*.mp4
+*.npy
+*.pstat
+nul
+
+# Editor / IDE state
+.aider-desk/
+
+# Top-level scratch image outputs
+/*.png
