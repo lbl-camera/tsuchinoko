@@ -87,12 +87,14 @@ async def test_configure_user_ref_resolves(monkeypatch, tmp_path):
     await svc._handle_configure(msg)
     reply = json.loads(msg.respond.call_args.args[0])
     assert reply["status"] == "ok"
-    # The resolved callable was assigned to the engine. MagicMock's
-    # __setattr__ isn't directly recordable on this Python version, so
-    # confirm via the assigned attribute itself: the engine attribute
-    # should now be the resolved callable, not a string ref.
     assigned = core.adaptive_engine.acquisition_function
-    assert callable(assigned)
+    # Stronger than callable() — the user's function returns [0.0] for any
+    # input; a MagicMock auto-generated callable would return a MagicMock,
+    # and a regression that never assigned would leave the MagicMock auto-
+    # attribute in place.
+    assert assigned([0.0], None) == [0.0]
+    # And the original ref string was replaced — defends against a regression
+    # that stores the raw "user:<name>" string instead of resolving it.
     assert assigned != "user:my_ucb"
 
 
@@ -108,3 +110,25 @@ async def test_configure_unknown_user_ref(monkeypatch, tmp_path):
     reply = json.loads(msg.respond.call_args.args[0])
     assert reply["status"] == "error"
     assert "does_not_exist" in reply["message"]
+
+
+@pytest.mark.asyncio
+async def test_configure_bad_user_ref_does_not_mutate_engine(monkeypatch, tmp_path):
+    """If a user:<name> ref is missing, no engine state should change before
+    the error reply. Regression test for transactional ordering."""
+    monkeypatch.setenv("TSUCHINOKO_USER_DIR", str(tmp_path))
+    svc, core = _service(monkeypatch, tmp_path)
+    msg = FakeMsg({
+        "parameter_bounds": [[0.0, 10.0]],
+        "kernel": "user:does_not_exist",
+    })
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "error"
+    # parameter_bounds writes go through engine.parameters[...] = ...
+    # If we mutated before resolving, this call_count would be > 0.
+    setitem_calls = core.adaptive_engine.parameters.__setitem__.call_count
+    assert setitem_calls == 0, (
+        f"engine.parameters was mutated {setitem_calls}× before user-ref "
+        f"resolution failed — configure is no longer transactional"
+    )

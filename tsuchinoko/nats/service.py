@@ -182,6 +182,16 @@ class NATSService:
                 })
                 return
 
+            # Resolve user:<name> refs FIRST so a missing ref aborts before
+            # any engine mutation. Keeps configure transactional from the
+            # caller's POV: status=error implies engine unchanged.
+            resolved: dict[str, object] = {}
+            for key, kind in self._CONFIGURE_KIND_BY_KEY.items():
+                value = data.get(key)
+                if isinstance(value, str) and value.startswith("user:"):
+                    resolved[key] = resolve_user_ref(value, kind)
+
+            # Resolution succeeded — now apply everything.
             engine = self._core.adaptive_engine
 
             if "parameter_bounds" in data:
@@ -189,17 +199,6 @@ class NATSService:
                     engine.parameters[("bounds", f"axis_{i}_min")] = lo
                     engine.parameters[("bounds", f"axis_{i}_max")] = hi
 
-            # Resolve user:<name> refs before any engine mutation that could
-            # be confusing on partial failure. We loop twice to keep failures
-            # transactional from the caller's POV.
-            resolved: dict[str, object] = {}
-            for key, kind in self._CONFIGURE_KIND_BY_KEY.items():
-                value = data.get(key)
-                if isinstance(value, str) and value.startswith("user:"):
-                    resolved[key] = resolve_user_ref(value, kind)
-
-            # Apply remaining typed fields to the engine. We use setattr —
-            # the adaptive engine surfaces these as Python attributes.
             for key in (
                 "dimensionality", "kernel", "acquisition_function",
                 "prior_mean", "noise_function", "noise_variances",
@@ -207,8 +206,7 @@ class NATSService:
                 "x_out",
             ):
                 if key in data:
-                    value = resolved.get(key, data[key])
-                    setattr(engine, key, value)
+                    setattr(engine, key, resolved.get(key, data[key]))
 
             await self._reply(msg, {"status": "ok"})
         except UserDesignError as exc:
