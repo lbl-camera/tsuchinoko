@@ -34,6 +34,28 @@ EVENTS = [
 
 
 class NATSService:
+    # Recognised configure keys (strict: unknown keys are an error)
+    _CONFIGURE_KEYS = frozenset({
+        "parameter_bounds",
+        "dimensionality",
+        "kernel",
+        "acquisition_function",
+        "prior_mean",
+        "noise_function",
+        "noise_variances",
+        "initial_points",
+        "training_method",
+        "hyperparameters",
+        "x_out",
+    })
+
+    _CONFIGURE_KIND_BY_KEY = {
+        "acquisition_function": "acquisition",
+        "kernel": "kernel",
+        "prior_mean": "prior_mean",
+        "noise_function": "noise",
+    }
+
     def __init__(self, core: Core, client: NATSClient) -> None:
         self._core = core
         self._client = client
@@ -149,16 +171,52 @@ class NATSService:
 
     async def _handle_configure(self, msg) -> None:
         try:
+            from tsuchinoko.nats.user_designs import UserDesignError, resolve_user_ref
             data = json.loads(msg.data)
+
+            unknown = set(data) - self._CONFIGURE_KEYS
+            if unknown:
+                await self._reply(msg, {
+                    "status": "error",
+                    "message": f"unknown configure field(s): {sorted(unknown)}",
+                })
+                return
+
+            engine = self._core.adaptive_engine
+
             if "parameter_bounds" in data:
-                bounds = data["parameter_bounds"]
-                for i, (lo, hi) in enumerate(bounds):
-                    self._core.adaptive_engine.parameters[("bounds", f"axis_{i}_min")] = lo
-                    self._core.adaptive_engine.parameters[("bounds", f"axis_{i}_max")] = hi
+                for i, (lo, hi) in enumerate(data["parameter_bounds"]):
+                    engine.parameters[("bounds", f"axis_{i}_min")] = lo
+                    engine.parameters[("bounds", f"axis_{i}_max")] = hi
+
+            # Resolve user:<name> refs before any engine mutation that could
+            # be confusing on partial failure. We loop twice to keep failures
+            # transactional from the caller's POV.
+            resolved: dict[str, object] = {}
+            for key, kind in self._CONFIGURE_KIND_BY_KEY.items():
+                value = data.get(key)
+                if isinstance(value, str) and value.startswith("user:"):
+                    resolved[key] = resolve_user_ref(value, kind)
+
+            # Apply remaining typed fields to the engine. We use setattr —
+            # the adaptive engine surfaces these as Python attributes.
+            for key in (
+                "dimensionality", "kernel", "acquisition_function",
+                "prior_mean", "noise_function", "noise_variances",
+                "initial_points", "training_method", "hyperparameters",
+                "x_out",
+            ):
+                if key in data:
+                    value = resolved.get(key, data[key])
+                    setattr(engine, key, value)
+
             await self._reply(msg, {"status": "ok"})
-        except Exception as e:
-            logger.exception(e)
-            await self._reply(msg, {"status": "error", "message": str(e)})
+        except UserDesignError as exc:
+            logger.debug("configure rejected: {}", exc)
+            await self._reply(msg, {"status": "error", "message": str(exc)})
+        except Exception as exc:
+            logger.exception(exc)
+            await self._reply(msg, {"status": "error", "message": str(exc)})
 
     async def _handle_start(self, msg) -> None:
         try:
