@@ -197,8 +197,8 @@ class NATSService:
             await self._reply(msg, {"status": "error", "message": str(e)})
 
     async def _handle_upload_design_code(self, msg) -> None:
-        from tsuchinoko.nats.user_designs import UserDesignError, write_design
         try:
+            from tsuchinoko.nats.user_designs import UserDesignError, write_design
             data = json.loads(msg.data)
             name = data["name"]
             kind = data["kind"]
@@ -210,6 +210,7 @@ class NATSService:
                 "path": str(path),
             })
         except UserDesignError as exc:
+            logger.debug("upload_design_code rejected: {}", exc)
             await self._reply(msg, {"status": "error", "message": str(exc)})
         except Exception as exc:
             logger.exception(exc)

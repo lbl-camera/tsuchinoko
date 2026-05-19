@@ -39,16 +39,16 @@ def _make_nats_msg(data: dict, reply: str = "_INBOX.test"):
 
 
 class TestServiceLifecycle:
-    async def test_start_registers_11_subscriptions(self):
+    async def test_start_registers_all_subscriptions(self):
         core = _make_mock_core()
         client = _make_mock_client()
         service = NATSService(core, client)
 
         await service.start()
 
-        # 8 action handlers + discover + meta.actions + meta.events = 11
-        assert client.subscribe.await_count == 11
-        assert len(service._subscriptions) == 11
+        # action handlers + discover + meta.actions + meta.events
+        assert client.subscribe.await_count == len(ACTIONS) + 3
+        assert len(service._subscriptions) == len(ACTIONS) + 3
 
     async def test_stop_unsubscribes_all(self):
         core = _make_mock_core()
@@ -69,7 +69,7 @@ class TestServiceLifecycle:
         await service.start()
         await service.stop()
 
-        assert len(subs_created) == 11
+        assert len(subs_created) == len(ACTIONS) + 3
         for sub in subs_created:
             sub.unsubscribe.assert_awaited_once()
         assert len(service._subscriptions) == 0
@@ -206,8 +206,8 @@ class TestDiscovery:
         reply = json.loads(msg.respond.call_args[0][0])
         assert reply["app_name"] == "tsuchinoko"
         assert reply["prefix"] == "tsuchinoko"
-        assert reply["actions_count"] == 8
-        assert reply["events_count"] == 4
+        assert reply["actions_count"] == len(ACTIONS)
+        assert reply["events_count"] == len(EVENTS)
         assert "instance_id" in reply
         assert len(reply["instance_id"]) == 36  # UUID format
 
@@ -220,7 +220,7 @@ class TestDiscovery:
         await service._handle_meta_actions(msg)
 
         reply = json.loads(msg.respond.call_args[0][0])
-        assert len(reply["actions"]) == 8
+        assert len(reply["actions"]) == len(ACTIONS)
         suffixes = {a["suffix"] for a in reply["actions"]}
         assert "experiment.configure" in suffixes
         assert "experiment.start" in suffixes
@@ -240,7 +240,7 @@ class TestDiscovery:
         await service._handle_meta_events(msg)
 
         reply = json.loads(msg.respond.call_args[0][0])
-        assert len(reply["events"]) == 4
+        assert len(reply["events"]) == len(EVENTS)
         suffixes = {e["suffix"] for e in reply["events"]}
         assert "state" in suffixes
         assert "targets" in suffixes
