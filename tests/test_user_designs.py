@@ -1,6 +1,5 @@
 """Tests for tsuchinoko.nats.user_designs."""
 import os
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -54,15 +53,11 @@ def test_kinds_and_expected_callables_aligned():
 
 def test_write_design_creates_file_and_returns_ref(monkeypatch, tmp_path):
     monkeypatch.setenv("TSUCHINOKO_USER_DIR", str(tmp_path))
-    code = textwrap.dedent("""
-        import numpy as np
-        def acquisition_function(x, gp, **_):
-            return np.zeros(len(x))
-    """).strip()
+    code = "def acquisition_function(x, gp, **_):\n    return 0.0\n"
     ref, path = write_design("my_ucb", "acquisition", code)
     assert ref == "user:my_ucb"
     assert path == tmp_path / "user_designs" / "acquisition" / "my_ucb.py"
-    assert path.read_text().strip() == code
+    assert path.read_text() == code
 
 
 def test_write_design_rejects_syntax_error(monkeypatch, tmp_path):

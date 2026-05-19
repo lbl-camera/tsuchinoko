@@ -13,7 +13,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 KINDS: tuple[str, ...] = ("acquisition", "kernel", "prior_mean", "noise")
 
@@ -97,7 +99,7 @@ def write_design(name: str, kind: str, code: str) -> tuple[str, Path]:
     return f"user:{name}", path
 
 
-def resolve_user_ref(ref: str, kind: str):
+def resolve_user_ref(ref: str, kind: str) -> Callable[..., Any]:
     """Import the callable referenced by ``"user:<name>"``.
 
     Looks under ``<user_designs_root>/<kind>/<name>.py``. Raises
