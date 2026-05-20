@@ -36,11 +36,13 @@ class TiledPublisher:
         run_uid: str,
         dimensionality: int,
         grid_resolution: int = 50,
+        max_targets_per_iter: int = 1,
     ) -> None:
         self._client = tiled_client
         self._run_uid = run_uid
         self._dimensionality = dimensionality
         self._grid_resolution = grid_resolution
+        self._max_targets_per_iter = max_targets_per_iter
         self._writer: _RunWriter | None = None
         self._desc_uid: str | None = None
         self._grid_points: np.ndarray | None = None
@@ -57,8 +59,12 @@ class TiledPublisher:
         """
         run = self._client[self._run_uid]
 
-        # Point a _RunWriter at the existing run (skip start doc)
-        self._writer = _RunWriter(self._client, batch_size=1)
+        # Point a _RunWriter at the existing run (skip start doc).
+        # max_array_size=0 forces every declared array data_key to zarr
+        # storage; the targets key has small shape sum (e.g. [1*D]=2)
+        # which would otherwise route to the internal SQL table and
+        # break readers that expect adaptive[key] to be an array node.
+        self._writer = _RunWriter(self._client, batch_size=1, max_array_size=0)
         self._writer.root_node = run
 
         # Emit descriptor
@@ -103,10 +109,25 @@ class TiledPublisher:
         except Exception as e:
             logger.warning("Could not get hyperparameters: {}", e)
 
-        # Targets
+        # Targets — store as a fixed-length flat array of N_max * D
+        # floats per iteration with unused rows NaN-padded.  The
+        # (N_max, D) logical shape is recorded in data_keys
+        # ("target_shape"), paralleling how posterior arrays declare
+        # both a flat ``shape`` and a logical ``grid_shape``.
+        n_max = self._max_targets_per_iter
+        d = self._dimensionality
+        buf = np.full((n_max, d), np.nan, dtype=float)
         if len(targets) > 0:
-            data["targets"] = np.asarray(targets).ravel().tolist()
-            timestamps["targets"] = now
+            arr = np.asarray(targets, dtype=float).reshape(-1, d)
+            if len(arr) > n_max:
+                logger.warning(
+                    "Iteration {}: {} targets exceeds max_targets_per_iter={}; "
+                    "truncating", iteration, len(arr), n_max,
+                )
+                arr = arr[:n_max]
+            buf[: len(arr)] = arr
+        data["targets"] = buf.ravel().tolist()
+        timestamps["targets"] = now
 
         # Posterior grids (D <= 3 only)
         if (
@@ -157,9 +178,13 @@ class TiledPublisher:
             },
             "targets": {
                 "dtype": "array",
-                "shape": [100],
+                "shape": [self._max_targets_per_iter * self._dimensionality],
                 "source": "tsuchinoko",
                 "dtype_numpy": "<f8",
+                "target_shape": [
+                    self._max_targets_per_iter,
+                    self._dimensionality,
+                ],
             },
         }
 

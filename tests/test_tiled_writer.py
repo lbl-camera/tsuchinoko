@@ -112,7 +112,8 @@ def test_write_iteration(tiled_client, run_uid):
     engine = _make_mock_engine()
     publisher.write_config(engine)
 
-    publisher.write_iteration(1, engine, np.array([0.5, 0.8, 0.3]))
+    # One (x, y) target this iteration
+    publisher.write_iteration(1, engine, np.array([[0.5, 0.8]]))
 
     adaptive = tiled_client[run_uid]["adaptive"]
     assert "posterior_mean" in adaptive
@@ -127,7 +128,7 @@ def test_write_multiple_iterations(tiled_client, run_uid):
     publisher.write_config(engine)
 
     for i in range(1, 4):
-        publisher.write_iteration(i, engine, np.array([0.5]))
+        publisher.write_iteration(i, engine, np.array([[0.5, 0.1]]))
 
     adaptive = tiled_client[run_uid]["adaptive"]
     internal = adaptive["internal"]
@@ -147,7 +148,7 @@ def test_high_dimensionality_skips_posterior(tiled_client):
 
     publisher = TiledPublisher(tiled_client, "run_hd", dimensionality=4)
     publisher.write_config(engine)
-    publisher.write_iteration(1, engine, np.array([0.7]))
+    publisher.write_iteration(1, engine, np.array([[0.1, 0.2, 0.3, 0.4]]))
 
     adaptive = tiled_client["run_hd"]["adaptive"]
     assert "posterior_mean" not in adaptive
@@ -159,7 +160,88 @@ def test_acquisition_function(tiled_client, run_uid):
     publisher = TiledPublisher(tiled_client, run_uid, dimensionality=2)
     engine = _make_mock_engine()
     publisher.write_config(engine)
-    publisher.write_iteration(1, engine, np.array([0.5]))
+    publisher.write_iteration(1, engine, np.array([[0.5, 0.5]]))
 
     adaptive = tiled_client[run_uid]["adaptive"]
     assert "acquisition_function" in adaptive
+
+
+def test_targets_data_key_declares_target_shape(tiled_client, run_uid):
+    """data_keys['targets'] should record the (N_max, D) logical shape."""
+    publisher = TiledPublisher(
+        tiled_client, run_uid, dimensionality=2, max_targets_per_iter=3,
+    )
+    publisher.write_config(_make_mock_engine())
+
+    dk = dict(tiled_client[run_uid]["adaptive"].metadata)["data_keys"]
+    assert dk["targets"]["shape"] == [3 * 2]
+    assert dk["targets"]["target_shape"] == [3, 2]
+
+
+@pytest.mark.integration
+def test_targets_stored_as_padded_flat_array(tiled_client, run_uid):
+    """With N_max=3, D=2 and one target, storage is length 6 with 4 NaNs."""
+    publisher = TiledPublisher(
+        tiled_client, run_uid, dimensionality=2, max_targets_per_iter=3,
+    )
+    engine = _make_mock_engine()
+    publisher.write_config(engine)
+    publisher.write_iteration(1, engine, np.array([[0.5, 0.8]]))
+    publisher.flush()
+
+    adaptive = tiled_client[run_uid]["adaptive"]
+    flat = np.asarray(adaptive["targets"].read())
+    assert flat.shape == (1, 6)  # (n_events, N_max * D)
+    # First (x, y) is the target; remaining 4 floats are NaN
+    np.testing.assert_allclose(flat[0, :2], [0.5, 0.8])
+    assert np.all(np.isnan(flat[0, 2:]))
+
+
+@pytest.mark.integration
+def test_targets_supports_variable_N_per_iteration(tiled_client, run_uid):
+    """Across iterations, valid-row count can differ; padding fills the rest."""
+    publisher = TiledPublisher(
+        tiled_client, run_uid, dimensionality=2, max_targets_per_iter=3,
+    )
+    engine = _make_mock_engine()
+    publisher.write_config(engine)
+
+    publisher.write_iteration(1, engine, np.array([[0.1, 0.2]]))                  # N=1
+    publisher.write_iteration(2, engine, np.array([[0.3, 0.4], [0.5, 0.6]]))      # N=2
+    publisher.write_iteration(3, engine, np.array([[0.7, 0.8], [0.9, 1.0], [1.1, 1.2]]))  # N=3
+    publisher.flush()
+
+    adaptive = tiled_client[run_uid]["adaptive"]
+    flat = np.asarray(adaptive["targets"].read())
+    assert flat.shape == (3, 6)
+    # Iteration 1: 1 valid row, 2 NaN rows
+    assert np.isnan(flat[0]).sum() == 4
+    # Iteration 2: 2 valid rows, 1 NaN row
+    assert np.isnan(flat[1]).sum() == 2
+    # Iteration 3: full
+    assert not np.isnan(flat[2]).any()
+
+
+@pytest.mark.integration
+def test_targets_truncates_and_warns_when_N_exceeds_max(
+    tiled_client, run_uid, caplog,
+):
+    """Writing N > N_max truncates and logs a warning."""
+    import logging
+    publisher = TiledPublisher(
+        tiled_client, run_uid, dimensionality=2, max_targets_per_iter=2,
+    )
+    engine = _make_mock_engine()
+    publisher.write_config(engine)
+
+    with caplog.at_level(logging.WARNING):
+        publisher.write_iteration(
+            1, engine, np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]),
+        )
+    publisher.flush()
+
+    assert any("truncating" in r.message.lower() for r in caplog.records)
+    adaptive = tiled_client[run_uid]["adaptive"]
+    flat = np.asarray(adaptive["targets"].read())
+    assert flat.shape == (1, 4)
+    np.testing.assert_allclose(flat[0], [0.1, 0.2, 0.3, 0.4])
