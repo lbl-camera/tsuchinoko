@@ -1,5 +1,11 @@
 # Tsuchinoko Project Context
 
+## Skills
+
+Read the appropriate skill file before generating code that touches engine state:
+
+- **Live engine state / hyperparameter bounds / training schedule**: `skills/parameter-tree/SKILL.md`
+
 ## Development Plan
 See `CODEBASE_ANALYSIS.md` for a comprehensive codebase analysis and phased improvement plan covering:
 - Critical fixes (exception handling, blocking I/O, test coverage)
