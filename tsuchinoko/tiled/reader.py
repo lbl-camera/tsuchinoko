@@ -31,24 +31,28 @@ class TiledReader:
             logger.warning(f"Cannot read primary stream: {e}")
             return []
 
-        try:
-            keys = list(primary)
-        except Exception:
-            keys = []
-        if self._detector_name not in keys:
+        # Read the whole stream as one xarray.Dataset via the V3 table facet.
+        # This bundles every data_var into a single HTTP round-trip and skips
+        # the array endpoint's expected_shape check, which 500s whenever an
+        # event lands between the client's cached shape and the actual read.
+        ds = primary.read()
+
+        if self._detector_name not in ds.data_vars:
+            return []
+        missing_motors = [m for m in self._motor_names if m not in ds.data_vars]
+        if missing_motors:
+            logger.warning(f"Motor keys missing from stream: {missing_motors}")
             return []
 
-        detector_data = primary[self._detector_name].read()
+        detector_data = ds[self._detector_name].values
         total_rows = len(detector_data)
 
         if total_rows <= self._rows_read:
             return []
 
-        motor_arrays = []
-        for name in self._motor_names:
-            arr = primary[name].read()
-            motor_arrays.append(arr[self._rows_read:total_rows])
-
+        motor_arrays = [
+            ds[name].values[self._rows_read:total_rows] for name in self._motor_names
+        ]
         values = detector_data[self._rows_read:total_rows]
         n_new = total_rows - self._rows_read
 
