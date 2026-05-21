@@ -232,16 +232,28 @@ class NATSService:
                     resolved.get("acquisition_function"),
                 )
 
-            # Remaining typed fields land on the engine via setattr until
-            # the engine grows real consumers for them.
+            # In-place keys — the engine reads these fresh on each iteration,
+            # so no optimizer rebuild is required.
             for key in (
-                "dimensionality", "kernel",
-                "prior_mean", "noise_function", "noise_variances",
-                "initial_points", "training_method",
-                "x_out",
+                "dimensionality",
+                "initial_points", "training_method", "x_out",
             ):
                 if key in data:
+                    setattr(engine, key, data[key])
+
+            # Optimizer-rebuild keys — the engine reads these only at
+            # init_optimizer time, so we setattr and then trigger reset()
+            # so the GP is rebuilt with the new choices. Safe because
+            # configure happens before bind_run in the LUCID flow (no
+            # data to lose).
+            rebuild_keys = ("kernel", "prior_mean", "noise_function", "noise_variances")
+            needs_rebuild = False
+            for key in rebuild_keys:
+                if key in data:
                     setattr(engine, key, resolved.get(key, data[key]))
+                    needs_rebuild = True
+            if needs_rebuild and hasattr(engine, "reset"):
+                engine.reset()
 
             await self._reply(msg, {"status": "ok"})
         except UserDesignError as exc:
@@ -316,6 +328,53 @@ class NATSService:
                     for n in v
                 ):
                     errors.append(f"{key}: expected list of positive ints")
+
+        if "kernel" in data:
+            from tsuchinoko.adaptive.gpCAM_in_process import BUILTIN_KERNELS
+            k = data["kernel"]
+            if k is not None:
+                if not isinstance(k, str):
+                    errors.append("kernel: expected string or null")
+                elif not (k.startswith("user:") or k in BUILTIN_KERNELS):
+                    errors.append(
+                        f"kernel: unknown kernel {k!r}; expected one of "
+                        f"{sorted(BUILTIN_KERNELS)} or 'user:<name>'"
+                    )
+
+        for key in ("prior_mean", "noise_function"):
+            if key in data:
+                v = data[key]
+                if v is not None and not (isinstance(v, str) and v.startswith("user:")):
+                    errors.append(f"{key}: expected null or 'user:<name>'")
+
+        if "noise_variances" in data:
+            nv = data["noise_variances"]
+            ok = (
+                nv is None
+                or (isinstance(nv, (int, float)) and not isinstance(nv, bool))
+                or (isinstance(nv, list)
+                    and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in nv))
+            )
+            if not ok:
+                errors.append("noise_variances: expected null, number, or list of numbers")
+
+        if "initial_points" in data and data["initial_points"] is not None:
+            ip = data["initial_points"]
+            if not isinstance(ip, int) or isinstance(ip, bool) or ip < 0:
+                errors.append("initial_points: expected non-negative int or null")
+
+        if "training_method" in data and data["training_method"] is not None:
+            tm = data["training_method"]
+            if tm not in {"global", "local", "mcmc", "adam", "hgdl"}:
+                errors.append(
+                    "training_method: expected one of "
+                    "['adam', 'global', 'hgdl', 'local', 'mcmc'] or null"
+                )
+
+        if "x_out" in data and data["x_out"] is not None:
+            xo = data["x_out"]
+            if not isinstance(xo, list):
+                errors.append("x_out: expected list or null")
 
         return errors
 

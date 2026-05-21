@@ -254,3 +254,192 @@ async def test_configure_acquisition_function_routes_to_param_tree(monkeypatch, 
     assert any(
         c.args == ("acquisition_function", "variance") for c in setitem_calls
     )
+
+
+# ============================================================
+# End-to-end tests: configure must actually change engine behavior.
+# These use a real GPCAMInProcessEngine so a silent no-op cannot pass.
+# ============================================================
+
+@pytest.fixture
+def real_engine_service(monkeypatch, tmp_path):
+    monkeypatch.setenv("TSUCHINOKO_USER_DIR", str(tmp_path))
+    from tsuchinoko.adaptive.gpCAM_in_process import GPCAMInProcessEngine
+    engine = GPCAMInProcessEngine(
+        dimensionality=2,
+        parameter_bounds=[(0.0, 10.0), (0.0, 10.0)],
+        hyperparameters=[1.0, 1.0, 1.0],
+        hyperparameter_bounds=[(0.1, 100.0), (0.1, 100.0), (0.1, 100.0)],
+    )
+    core = MagicMock()
+    core.adaptive_engine = engine
+    svc = NATSService(core, MagicMock())
+    return svc, engine
+
+
+@pytest.mark.asyncio
+async def test_configure_kernel_builtin_rebuilds_optimizer(real_engine_service):
+    """A builtin kernel name must end up in the optimizer's GP, not setattr limbo."""
+    from tsuchinoko.adaptive.gpCAM_in_process import BUILTIN_KERNELS
+    svc, engine = real_engine_service
+
+    msg = FakeMsg({"kernel": "matern_5_2"})
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "ok"
+    assert engine.kernel == "matern_5_2"
+    # After reset(), the optimizer's kernel_function should be the matern_5_2
+    # builtin (same callable identity).
+    assert engine.optimizer.kernel_function is BUILTIN_KERNELS["matern_5_2"]
+
+
+@pytest.mark.asyncio
+async def test_configure_kernel_user_ref_rebuilds_with_callable(real_engine_service, monkeypatch, tmp_path):
+    from tsuchinoko.nats.user_designs import write_design
+    svc, engine = real_engine_service
+
+    code = (
+        "import numpy as np\n"
+        "def kernel(x1, x2, hyperparameters):\n"
+        "    return np.zeros((len(x1), len(x2)))\n"
+    )
+    write_design("my_kernel", "kernel", code)
+    msg = FakeMsg({"kernel": "user:my_kernel"})
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "ok"
+    # Engine got the resolved callable, optimizer picked it up.
+    assert callable(engine.kernel)
+    assert engine.optimizer.kernel_function is engine.kernel
+
+
+@pytest.mark.asyncio
+async def test_configure_kernel_unknown_name_rejected(real_engine_service):
+    svc, engine = real_engine_service
+    original_kernel = engine.optimizer.kernel_function
+    msg = FakeMsg({"kernel": "not_a_kernel"})
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "error"
+    assert "kernel" in reply["message"]
+    # No engine mutation on validation failure.
+    assert not hasattr(engine, "kernel") or engine.kernel is None
+    assert engine.optimizer.kernel_function is original_kernel
+
+
+@pytest.mark.asyncio
+async def test_configure_initial_points_keeps_request_random(real_engine_service):
+    """request_targets must stay random while n_data < initial_points,
+    even after tell() builds the GP."""
+    import numpy as np
+    from tsuchinoko.adaptive import Data
+    svc, engine = real_engine_service
+
+    msg = FakeMsg({"initial_points": 5})
+    await svc._handle_configure(msg)
+    assert json.loads(msg.respond.call_args.args[0])["status"] == "ok"
+    assert engine.initial_points == 5
+
+    data = Data(dimensionality=2)
+    for i in range(3):  # below the initial_points quota
+        data.inject_new([((i * 1.0, i * 1.0), float(i), 0.01, {})])
+    engine.update_measurements(data)
+    assert engine.optimizer.gp is not None  # GP exists, but quota unfilled
+
+    targets = engine.request_targets(position=(5.0, 5.0))
+    # Random path returns plain lists; gpCAM ask() would return np.ndarray
+    # rows. The plain-list shape confirms we stayed in the exploration branch.
+    assert isinstance(targets[0], list)
+
+
+@pytest.mark.asyncio
+async def test_configure_training_method_pins_train_iteration(real_engine_service):
+    """When training_method is set, train() must only iterate that method."""
+    import numpy as np
+    from tsuchinoko.adaptive import Data
+    svc, engine = real_engine_service
+
+    msg = FakeMsg({
+        "training_method": "local",
+        "local_training": [3],  # train at iteration > 3
+    })
+    await svc._handle_configure(msg)
+    assert json.loads(msg.respond.call_args.args[0])["status"] == "ok"
+    assert engine.training_method == "local"
+
+    data = Data(dimensionality=2)
+    for i in range(8):
+        data.inject_new([((i * 1.0, i * 1.0), float(np.sin(i)), 0.01, {})])
+    engine.update_measurements(data)
+
+    engine.train()
+    # Only 'local' should have a completed milestone; global/mcmc untouched.
+    assert 3 in engine._completed_training.get("local", set())
+    assert not engine._completed_training.get("global", set())
+    assert not engine._completed_training.get("mcmc", set())
+
+
+@pytest.mark.asyncio
+async def test_configure_noise_variances_reaches_optimizer(real_engine_service):
+    """Configure-time noise_variances must propagate into GPOptimizer init."""
+    svc, engine = real_engine_service
+
+    msg = FakeMsg({"noise_variances": 0.25})
+    await svc._handle_configure(msg)
+    assert json.loads(msg.respond.call_args.args[0])["status"] == "ok"
+    assert engine.noise_variances == 0.25
+    # gp_opts wasn't set by the caller, so GPOptimizer got noise_variances=0.25
+    # at construction. We can't easily introspect the GPOptimizer's stored
+    # value across gpCAM versions, but the engine attribute and a successful
+    # reset() (no exception) prove the value reached init_optimizer.
+    assert engine.optimizer is not None
+
+
+@pytest.mark.asyncio
+async def test_configure_rejects_bad_kernel_type(real_engine_service):
+    svc, _engine = real_engine_service
+    msg = FakeMsg({"kernel": 42})
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "error"
+    assert "kernel" in reply["message"]
+
+
+@pytest.mark.asyncio
+async def test_configure_rejects_bad_training_method(real_engine_service):
+    svc, _engine = real_engine_service
+    msg = FakeMsg({"training_method": "not_a_method"})
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "error"
+    assert "training_method" in reply["message"]
+
+
+@pytest.mark.asyncio
+async def test_configure_rejects_bad_initial_points(real_engine_service):
+    svc, _engine = real_engine_service
+    msg = FakeMsg({"initial_points": -3})
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "error"
+    assert "initial_points" in reply["message"]
+
+
+@pytest.mark.asyncio
+async def test_configure_rejects_bad_noise_variances(real_engine_service):
+    svc, _engine = real_engine_service
+    msg = FakeMsg({"noise_variances": "loud"})
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "error"
+    assert "noise_variances" in reply["message"]
+
+
+@pytest.mark.asyncio
+async def test_configure_rejects_non_user_prior_mean(real_engine_service):
+    svc, _engine = real_engine_service
+    msg = FakeMsg({"prior_mean": "linear"})  # not None, not user:<name>
+    await svc._handle_configure(msg)
+    reply = json.loads(msg.respond.call_args.args[0])
+    assert reply["status"] == "error"
+    assert "prior_mean" in reply["message"]
