@@ -4,6 +4,7 @@ from functools import cached_property
 from typing import Callable
 
 import numpy as np
+from gpcam import kernels as _gpcam_kernels
 from loguru import logger
 
 from gpcam.gp_optimizer import GPOptimizer
@@ -21,6 +22,42 @@ def prepend_update_acquisition_functions(acquisition_functions:dict):
     gpcam_acquisition_functions.clear()
     gpcam_acquisition_functions.update(acquisition_functions)
     gpcam_acquisition_functions.update(cpy)
+
+
+def _anisotropic_kernel(scalar_kernel):
+    """Wrap a gpcam.kernels scalar kernel as a full kernel_function(x1, x2, hps).
+
+    Mirrors fvgp.GP._default_kernel: hps[0] is the signal variance and
+    hps[1:1+D] are per-axis length scales.
+    """
+    def kernel_function(x1, x2, hps):
+        x1 = np.asarray(x1)
+        x2 = np.asarray(x2)
+        d = x1.shape[1]
+        if len(hps) < 1 + d:
+            raise ValueError(
+                f"kernel expects {1 + d} hyperparameters (1 amplitude + {d} length scales); got {len(hps)}"
+            )
+        distance_matrix = np.zeros((len(x1), len(x2)))
+        for i in range(d):
+            distance_matrix += np.abs(
+                np.subtract.outer(x1[:, i], x2[:, i]) / hps[1 + i]
+            ) ** 2
+        distance_matrix = np.sqrt(distance_matrix)
+        return hps[0] * scalar_kernel(distance_matrix, 1.0)
+    kernel_function.__name__ = f"anisotropic_{scalar_kernel.__name__}"
+    return kernel_function
+
+
+BUILTIN_KERNELS: dict[str, Callable] = {
+    'matern_1_2': _anisotropic_kernel(_gpcam_kernels.exponential_kernel),
+    'matern_3_2': _anisotropic_kernel(_gpcam_kernels.matern_kernel_diff1),
+    'matern_5_2': _anisotropic_kernel(_gpcam_kernels.matern_kernel_diff2),
+    'se': _anisotropic_kernel(_gpcam_kernels.squared_exponential_kernel),
+}
+# 'periodic' is intentionally omitted — gpCAM's periodic_kernel takes a
+# period argument that has no place in the configure schema. Use a
+# user:<name> ref to ship a custom kernel callable instead.
 
 
 class GPCAMInProcessEngine(Engine):
@@ -58,6 +95,33 @@ class GPCAMInProcessEngine(Engine):
 
         hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                       for i in range(self.num_hyperparameters)])
+
+        # Engine-level configure overrides (set by NATSService._handle_configure
+        # or by callers directly). Each maps to a GPOptimizer kwarg; gp_opts
+        # wins if the caller set the same key explicitly.
+        kernel = getattr(self, 'kernel', None)
+        if isinstance(kernel, str):
+            try:
+                kernel = BUILTIN_KERNELS[kernel]
+            except KeyError:
+                raise ValueError(
+                    f"unknown kernel name {kernel!r}; expected one of "
+                    f"{sorted(BUILTIN_KERNELS)} or a callable"
+                )
+        if callable(kernel):
+            opts.setdefault('kernel_function', kernel)
+
+        prior_mean = getattr(self, 'prior_mean', None)
+        if callable(prior_mean):
+            opts.setdefault('prior_mean_function', prior_mean)
+
+        noise_function = getattr(self, 'noise_function', None)
+        if callable(noise_function):
+            opts.setdefault('noise_function', noise_function)
+
+        noise_variances = getattr(self, 'noise_variances', None)
+        if noise_variances is not None:
+            opts.setdefault('noise_variances', noise_variances)
 
         self.optimizer = GPOptimizer(init_hyperparameters=hyperparameters,
                                      **opts)
@@ -136,8 +200,11 @@ class GPCAMInProcessEngine(Engine):
                     for i in range(self.dimensionality)])
         n = self.parameters['n']
 
-        # If the GP is not initialized, generate random targets
-        if not self.optimizer.gp:
+        # Random-exploration phase: either the GP isn't built yet, or the
+        # configure-time `initial_points` quota hasn't been filled.
+        initial_points = getattr(self, 'initial_points', None) or 0
+        n_data = len(self.optimizer.x_data) if self.optimizer.gp else 0
+        if not self.optimizer.gp or n_data < initial_points:
             return [[np.random.uniform(bounds[i][0], bounds[i][1]) for i in range(self.dimensionality)] for _ in range(n)]
         else:
             kwargs.update({key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']})
@@ -150,8 +217,20 @@ class GPCAMInProcessEngine(Engine):
                                       **kwargs)['x'].astype(float)
 
     def train(self):
-        for method in ['global', 'local', 'mcmc']:
-            train_at = set(child.value() for child in self.parameters.child(f'{method}_training').children())
+        # `training_method` (if set via configure) restricts training to a
+        # single gpCAM method. Default is to iterate every method that has
+        # its own schedule. adam/hgdl have no dedicated schedule param;
+        # they reuse global_training's milestones.
+        training_method = getattr(self, 'training_method', None)
+        if training_method:
+            schedule_method = training_method if training_method in ('global', 'local', 'mcmc') else 'global'
+            methods = [(training_method, schedule_method)]
+        else:
+            methods = [(m, m) for m in ('global', 'local', 'mcmc')]
+
+        for method, schedule_method in methods:
+            self._completed_training.setdefault(method, set())
+            train_at = set(child.value() for child in self.parameters.child(f'{schedule_method}_training').children())
 
             for N in train_at:
                 if len(self.optimizer.y_data) > N and N not in self._completed_training[method]:

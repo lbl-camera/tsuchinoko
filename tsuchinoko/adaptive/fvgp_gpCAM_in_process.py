@@ -34,5 +34,9 @@ class FvgpGPCAMInProcessEngine(GPCAMInProcessEngine):
                                            for i in range(self.num_hyperparameters)]))
 
     def request_targets(self, position, **kwargs):
-        kwargs.update({'x_out': np.arange(self.output_number)})
+        # configure-supplied x_out overrides the output_number-derived default
+        x_out = getattr(self, 'x_out', None)
+        if x_out is None:
+            x_out = np.arange(self.output_number)
+        kwargs.update({'x_out': np.asarray(x_out)})
         return super().request_targets(position, **kwargs)
