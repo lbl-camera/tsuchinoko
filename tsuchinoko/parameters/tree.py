@@ -194,3 +194,17 @@ class TrainingParameter(Parameter):
             'removable': True,
             'renamable': False,
         })
+
+    def setSchedule(self, values: Sequence[int]) -> None:
+        """Replace the schedule entries with the given integer milestones."""
+        self._children_map.clear()
+        self._children_list.clear()
+        for n in values:
+            self.addChild({
+                'name': str(uuid.uuid4()),
+                'title': 'N=',
+                'type': 'int',
+                'value': int(n),
+                'removable': True,
+                'renamable': False,
+            })

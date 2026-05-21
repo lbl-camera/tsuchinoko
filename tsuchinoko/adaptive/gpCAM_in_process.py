@@ -107,6 +107,11 @@ class GPCAMInProcessEngine(Engine):
         return GroupParameter(name='top', children=parameters)
 
     def _set_hyperparameter(self, parameter, value):
+        if not self.optimizer.gp:
+            # GP not built yet (no data told). init_optimizer reads
+            # hyperparameters from the parameter tree at init_gp() time,
+            # so the values still take effect once data arrives.
+            return
         hyperparameters = np.asarray([self.parameters[('hyperparameters', f'hyperparameter_{i}')]
                                            for i in range(self.num_hyperparameters)])
         self.optimizer.set_hyperparameters(hyperparameters)

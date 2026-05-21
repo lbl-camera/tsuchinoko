@@ -46,6 +46,10 @@ class NATSService:
         "initial_points",
         "training_method",
         "hyperparameters",
+        "hyperparameter_bounds",
+        "global_training",
+        "local_training",
+        "mcmc_training",
         "x_out",
     })
 
@@ -182,6 +186,16 @@ class NATSService:
                 })
                 return
 
+            engine = self._core.adaptive_engine
+
+            shape_errors = self._validate_configure(data, engine)
+            if shape_errors:
+                await self._reply(msg, {
+                    "status": "error",
+                    "message": "; ".join(shape_errors),
+                })
+                return
+
             # Resolve user:<name> refs FIRST so a missing ref aborts before
             # any engine mutation. Keeps configure transactional from the
             # caller's POV: status=error implies engine unchanged.
@@ -192,17 +206,38 @@ class NATSService:
                     resolved[key] = resolve_user_ref(value, kind)
 
             # Resolution succeeded — now apply everything.
-            engine = self._core.adaptive_engine
 
             if "parameter_bounds" in data:
                 for i, (lo, hi) in enumerate(data["parameter_bounds"]):
                     engine.parameters[("bounds", f"axis_{i}_min")] = lo
                     engine.parameters[("bounds", f"axis_{i}_max")] = hi
 
+            if "hyperparameter_bounds" in data:
+                for i, (lo, hi) in enumerate(data["hyperparameter_bounds"]):
+                    engine.parameters[("hyperparameters", f"hyperparameter_{i}_min")] = lo
+                    engine.parameters[("hyperparameters", f"hyperparameter_{i}_max")] = hi
+
+            if data.get("hyperparameters") is not None:
+                for i, value in enumerate(data["hyperparameters"]):
+                    engine.parameters[("hyperparameters", f"hyperparameter_{i}")] = value
+
+            for sched_key in ("global_training", "local_training", "mcmc_training"):
+                if sched_key in data:
+                    engine.parameters.child(sched_key).setSchedule(data[sched_key])
+
+            if "acquisition_function" in data:
+                self._apply_acquisition_function(
+                    engine,
+                    data["acquisition_function"],
+                    resolved.get("acquisition_function"),
+                )
+
+            # Remaining typed fields land on the engine via setattr until
+            # the engine grows real consumers for them.
             for key in (
-                "dimensionality", "kernel", "acquisition_function",
+                "dimensionality", "kernel",
                 "prior_mean", "noise_function", "noise_variances",
-                "initial_points", "training_method", "hyperparameters",
+                "initial_points", "training_method",
                 "x_out",
             ):
                 if key in data:
@@ -215,6 +250,104 @@ class NATSService:
         except Exception as exc:
             logger.exception(exc)
             await self._reply(msg, {"status": "error", "message": str(exc)})
+
+    @staticmethod
+    def _validate_configure(data: dict, engine) -> list[str]:
+        """Validate types/shapes of a configure payload.
+
+        Returns a list of error messages (empty on success). When the
+        engine's expected hyperparameter count is introspectable
+        (``num_hyperparameters`` is a real int), length checks run; when
+        it's not (e.g. a ``MagicMock`` engine in tests), those length
+        checks are skipped.
+        """
+        errors: list[str] = []
+
+        def _is_pair_list(x) -> bool:
+            return (
+                isinstance(x, list)
+                and all(
+                    isinstance(p, (list, tuple))
+                    and len(p) == 2
+                    and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in p)
+                    for p in x
+                )
+            )
+
+        if "parameter_bounds" in data and not _is_pair_list(data["parameter_bounds"]):
+            errors.append("parameter_bounds: expected list of [min, max] pairs")
+
+        if "hyperparameter_bounds" in data and not _is_pair_list(data["hyperparameter_bounds"]):
+            errors.append("hyperparameter_bounds: expected list of [min, max] pairs")
+
+        if "hyperparameters" in data and data["hyperparameters"] is not None:
+            hps = data["hyperparameters"]
+            if not isinstance(hps, list) or any(
+                not isinstance(v, (int, float)) or isinstance(v, bool) for v in hps
+            ):
+                errors.append("hyperparameters: expected list of numbers or null")
+
+        num_hp = getattr(engine, "num_hyperparameters", None)
+        if isinstance(num_hp, int):
+            hps = data.get("hyperparameters")
+            if isinstance(hps, list) and len(hps) != num_hp:
+                errors.append(
+                    f"hyperparameters: expected {num_hp} values, got {len(hps)}"
+                )
+            hpb = data.get("hyperparameter_bounds")
+            if isinstance(hpb, list) and len(hpb) != num_hp:
+                errors.append(
+                    f"hyperparameter_bounds: expected {num_hp} pairs, got {len(hpb)}"
+                )
+
+        dim = getattr(engine, "dimensionality", None)
+        if isinstance(dim, int):
+            pb = data.get("parameter_bounds")
+            if isinstance(pb, list) and len(pb) != dim:
+                errors.append(
+                    f"parameter_bounds: expected {dim} pairs, got {len(pb)}"
+                )
+
+        for key in ("global_training", "local_training", "mcmc_training"):
+            if key in data:
+                v = data[key]
+                if not isinstance(v, list) or any(
+                    not isinstance(n, int) or isinstance(n, bool) or n <= 0
+                    for n in v
+                ):
+                    errors.append(f"{key}: expected list of positive ints")
+
+        return errors
+
+    @staticmethod
+    def _apply_acquisition_function(engine, raw_value, resolved_value) -> None:
+        """Route acquisition_function to the place the engine actually reads it.
+
+        Builtins (string in ``gpcam_acquisition_functions``) go to the
+        ListParameter so ``request_targets`` picks them up. User-refs
+        (resolved to a callable) are registered under their ref name in
+        ``gpcam_acquisition_functions`` and the ref string is written to
+        the param tree, so the same lookup path keeps working.
+        """
+        if callable(resolved_value):
+            from tsuchinoko.adaptive.gpCAM_in_process import gpcam_acquisition_functions
+            ref = raw_value
+            gpcam_acquisition_functions[ref] = resolved_value
+            try:
+                acq_param = engine.parameters.child("acquisition_function")
+            except (AttributeError, KeyError):
+                setattr(engine, "acquisition_function", resolved_value)
+                return
+            limits = getattr(acq_param, "limits", None)
+            if isinstance(limits, list) and ref not in limits:
+                limits.append(ref)
+            engine.parameters["acquisition_function"] = ref
+            return
+
+        try:
+            engine.parameters["acquisition_function"] = raw_value
+        except (KeyError, AttributeError):
+            setattr(engine, "acquisition_function", raw_value)
 
     async def _handle_start(self, msg) -> None:
         try:
