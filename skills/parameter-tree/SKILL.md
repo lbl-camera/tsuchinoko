@@ -23,11 +23,40 @@ It also documents engine timing semantics — *when* a write you just made actua
 | `hyperparameters` (initial values), `hyperparameter_bounds` | `configure` |
 | `global_training`, `local_training`, `mcmc_training` (schedules) | `configure` |
 | `acquisition_function` (built-in name or `user:<ref>`) | `configure` |
+| `kernel` (built-in name or `user:<ref>`) | `configure` — see § Built-in kernels |
+| `prior_mean`, `noise_function` (`user:<ref>` only) | `configure` |
 | `noise_variances`, `x_out` | `configure` |
-| Live tweaks during a running experiment (any of the above) | `set_parameter` |
+| `initial_points`, `training_method` | `configure` |
+| Live tweaks during a running experiment (any tree-backed field) | `set_parameter` |
 | `n`, `pop_size`, `tol`, live `method` | `set_parameter` |
 
-Configure-supported keys also silently no-op for these (engine doesn't consume them yet, even with the v8.x configure rewrite): `kernel`, `prior_mean`, `noise_function`, `training_method`, `initial_points`. There's no parameter-tree path for them either — these need engine work, not a NATS workaround. If a user requests one, tell them it's not currently effective and link to the Tsuchinoko issue tracker.
+### Engine-attribute configure keys (rebuild semantics)
+
+Most configure keys map to parameter-tree leaves and take effect on the next iteration. Four keys are different — they map to engine attributes consumed by `init_optimizer()`, so configure setattr's them and then calls `engine.reset()` to rebuild the `GPOptimizer`:
+
+| Key | Triggers `reset()` | Why it can't be live-edited |
+|---|---|---|
+| `kernel` | yes | `kernel_function` is passed to `GPOptimizer.__init__` |
+| `prior_mean` | yes | `prior_mean_function` is passed to `GPOptimizer.__init__` |
+| `noise_function` | yes | `noise_function` is passed to `GPOptimizer.__init__` |
+| `noise_variances` | yes | passed to `GPOptimizer.__init__` |
+
+`reset()` discards accumulated data, so these are safe to set **before** `bind_run` but unsafe mid-run. The configure handler doesn't enforce this — it just calls `reset()`. Don't configure rebuild keys against a running engine unless you intend to lose the data.
+
+The remaining engine-attribute keys (`dimensionality`, `initial_points`, `training_method`, `x_out`) are re-read on each iteration / each training pass, so configure doesn't need to reset for them. They can also be set on a running engine (configure will work, but you'll usually want to stop first to also reset the iteration counter).
+
+### Built-in kernels
+
+Configure accepts these as strings (otherwise pass `"user:<name>"` after uploading via `tsuchinoko.experiment.upload_design_code`):
+
+| Name | Smoothness | gpCAM scalar wrapped |
+|---|---|---|
+| `matern_1_2` | rough (Ornstein-Uhlenbeck) | `exponential_kernel` |
+| `matern_3_2` | once differentiable (**default**) | `matern_kernel_diff1` |
+| `matern_5_2` | twice differentiable | `matern_kernel_diff2` |
+| `se` | infinitely smooth | `squared_exponential_kernel` |
+
+All four use the same anisotropic layout: `hps[0]` = signal variance, `hps[1:1+d]` = per-axis length scales — so switching between them at configure time does **not** change `num_hyperparameters`. `'periodic'` is intentionally omitted: its period argument doesn't fit the configure schema. Ship a periodic kernel as `user:<name>` instead (see gpCAM's `kernel-designer` skill for the source).
 
 ## NATS API
 
@@ -137,9 +166,13 @@ If iterations feel slow, check `len(data)` and whether you're using `method="glo
 Independent of whether the change came via `configure` or `set_parameter`:
 
 - **Axis bounds and `acquisition_function`/`method`/`n`/`pop_size`/`tol`**: read on every `request_targets()` call. Changes take effect on the next iteration.
+- **`initial_points`**: read on every `request_targets()` call. The engine stays in the random-exploration branch while `len(optimizer.x_data) < initial_points`, even after the GP is built. Lower it to exit exploration early; raise it to extend exploration.
+- **`training_method`**: read on every `train()` call. When set, only that gpCAM method iterates; `adam`/`hgdl` reuse the `global_training` schedule (no dedicated schedule param exists for those two).
+- **`x_out`** (`FvgpGPCAMInProcessEngine` only): read on every `request_targets()` call.
 - **Hyperparameter initial values**: read by `init_optimizer()`, which `reset()` calls. `reset()` runs on construction and on the `Stopping → Inactive → Starting` transition. **Changing initial hyperparameters mid-run does not re-seed the GP — those changes will be picked up at the next `Starting`.** (Note: `_set_hyperparameter` no-ops cleanly when the GP isn't built yet, so writing initials before `bind_run` is safe and they'll be applied at `init_gp()` time.)
 - **Hyperparameter bounds**: read inside `train()` — take effect on the next training milestone. (No need to restart.)
 - **Training-schedule milestones**: read inside `train()` — take effect immediately. Lowering a future milestone (e.g., adding `N=25` while at iteration 24) will trigger training on the next iteration.
+- **`kernel`/`prior_mean`/`noise_function`/`noise_variances`**: read by `init_optimizer()`. Configure setattr's then calls `reset()`, rebuilding the `GPOptimizer` from scratch — so the new choice is live immediately, **but accumulated data is discarded**. Only set these before `bind_run` unless you intend the reset.
 
 ## Common workflow
 
@@ -151,15 +184,20 @@ ipc.request("tsuchinoko.experiment.stop", {})
 # poll tsuchinoko.status until state == "Inactive"
 
 # 2. One configure call now covers axes, hyperparameter initials/bounds,
-#    training schedules, and the acquisition function.
+#    training schedules, the acquisition function, the kernel, and the
+#    rest of the GP setup.
 ipc.request("tsuchinoko.experiment.configure", {
     "parameter_bounds":     [[0, 5], [0, 5]],
     "dimensionality":       2,
     "hyperparameters":      [100.0, 4.0, 4.0],
     "hyperparameter_bounds": [[1, 2000], [1, 20], [1, 20]],
     "acquisition_function": "variance",
+    # optional GP choices (all trigger reset — safe pre-bind_run)
+    # "kernel":               "matern_5_2",
+    # "initial_points":       12,
+    # "training_method":      "local",
     # optional: tighter training cadence
-    # "local_training":      [15, 30, 60, 120],
+    # "local_training":       [15, 30, 60, 120],
 })
 
 # 3. If you need niche knobs not in configure (queue length, pop size, tol,
