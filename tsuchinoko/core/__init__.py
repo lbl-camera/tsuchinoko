@@ -224,25 +224,25 @@ class Core:
             self._nats_client = NATSClient()
             try:
                 await self._nats_client.connect(self._nats_config)
-                if self._nats_config.lucid_prefix:
+                if self._nats_config.lightfall_prefix:
                     try:
                         await self._nats_client.authenticate(
-                            self._nats_config.lucid_prefix,
+                            self._nats_config.lightfall_prefix,
                             self._nats_config.app_name,
                             self._nats_config.app_version,
                             self._nats_config.auth_timeout,
                         )
                     except Exception as e:
-                        logger.warning(f"LUCID auth failed (continuing without): {e}")
+                        logger.warning(f"Lightfall auth failed (continuing without): {e}")
 
-                # Auto-create LUCIDEngine when no execution engine was provided
+                # Auto-create LightfallEngine when no execution engine was provided
                 if self.execution_engine is None:
-                    from tsuchinoko.execution.lucid import LUCIDEngine
-                    self.execution_engine = LUCIDEngine(
+                    from tsuchinoko.execution.lightfall import LightfallEngine
+                    self.execution_engine = LightfallEngine(
                         nats_client=self._nats_client,
-                        lucid_prefix=self._nats_config.lucid_prefix,
+                        lightfall_prefix=self._nats_config.lightfall_prefix,
                     )
-                    logger.info("Auto-created LUCIDEngine (awaiting bind_run)")
+                    logger.info("Auto-created LightfallEngine (awaiting bind_run)")
 
                 self._nats_service = NATSService(self, self._nats_client)
                 await self._nats_service.start()
@@ -360,7 +360,7 @@ class Core:
                     self._has_fresh_data = False
                 elif self._last_targets is not None:
                     # Re-publish last targets to avoid deadlock when
-                    # measurements came back empty (e.g. LUCID hasn't
+                    # measurements came back empty (e.g. Lightfall hasn't
                     # finished measuring yet).
                     with log_time('re-publishing targets', cumulative_key='updating targets'):
                         self.execution_engine.update_targets(self._last_targets)

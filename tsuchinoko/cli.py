@@ -13,9 +13,9 @@ def main():
 
 @main.command()
 @click.option("--nats-url", default="", help="NATS broker URL (e.g. nats://localhost:4222). Empty = no NATS.")
-@click.option("--lucid-prefix", default="als.7011", help="LUCID instance topic prefix.")
+@click.option("--lightfall-prefix", default="als.7011", help="Lightfall instance topic prefix.")
 @click.option("--config", "config_path", default=None, type=click.Path(exists=True), help="YAML config file.")
-def run(nats_url, lucid_prefix, config_path):
+def run(nats_url, lightfall_prefix, config_path):
     """Run the Tsuchinoko adaptive experiment service."""
     from tsuchinoko.config import AppConfig, set_config
     from tsuchinoko.core import Core
@@ -31,8 +31,8 @@ def run(nats_url, lucid_prefix, config_path):
     # CLI flags override config file
     if nats_url:
         config.nats.url = nats_url
-    if lucid_prefix != "als.7011":
-        config.nats.lucid_prefix = lucid_prefix
+    if lightfall_prefix != "als.7011":
+        config.nats.lightfall_prefix = lightfall_prefix
 
     set_config(config)
 
@@ -58,7 +58,7 @@ def run(nats_url, lucid_prefix, config_path):
     logger.info(f"Tsuchinoko starting (engine={ac.engine_type}, dim={ac.dimensionality})")
     logger.info(f"  NATS: {config.nats.url or 'disabled'}")
     if config.nats.url:
-        logger.info(f"  LUCID prefix: {config.nats.lucid_prefix}")
+        logger.info(f"  Lightfall prefix: {config.nats.lightfall_prefix}")
     logger.info(f"  Tiled: {config.tiled.url or 'disabled'}")
 
     core = Core(
