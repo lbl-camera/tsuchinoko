@@ -245,3 +245,38 @@ def test_targets_truncates_and_warns_when_N_exceeds_max(
     flat = np.asarray(adaptive["targets"].read())
     assert flat.shape == (1, 4)
     np.testing.assert_allclose(flat[0], [0.1, 0.2, 0.3, 0.4])
+
+
+def test_empty_gp_outputs_are_skipped_not_written(tiled_client, run_uid):
+    """An engine whose GP outputs come back empty (e.g. RandomInProcess or a
+    not-yet-trained GP) must not crash write_iteration.
+
+    Zero-length values written to Tiled create a (1, 0) zarr array whose
+    chunk length is 0, which raises ZeroDivisionError server-side; the
+    half-written node then 409s every later iteration. Empty values must be
+    NaN-padded to their declared data_keys shape instead (an event may not
+    simply omit a declared key: _RunWriter crashes on absent keys).
+    """
+    publisher = TiledPublisher(tiled_client, run_uid, dimensionality=2)
+    engine = _make_mock_engine()
+    engine.optimizer.get_hyperparameters.return_value = np.array([])
+    engine.optimizer.posterior_mean.return_value = {"f(x)": np.array([])}
+    engine.optimizer.posterior_covariance.return_value = {"v(x)": np.array([])}
+    engine.optimizer.evaluate_acquisition_function.return_value = np.array([])
+    publisher.write_config(engine)
+
+    publisher.write_iteration(1, engine, np.array([[1.0, 2.0]]))
+    publisher.write_iteration(2, engine, np.array([[3.0, 4.0]]))
+    publisher.flush()
+
+    adaptive = tiled_client[run_uid]["adaptive"]
+    assert "targets" in adaptive.keys()
+    assert np.asarray(adaptive["targets"].read()).shape[0] == 2
+    # Empty GP outputs are NaN-padded to their declared shape, keeping the
+    # stream schema stable without ever writing a zero-length array.
+    hp = np.asarray(adaptive["hyperparameters"].read())
+    assert hp.shape == (2, 20)
+    assert np.isnan(hp).all()
+    pm = np.asarray(adaptive["posterior_mean"].read())
+    assert pm.shape == (2, 50 * 50)
+    assert np.isnan(pm).all()

@@ -139,12 +139,15 @@ class TiledPublisher:
         if not data:
             return
 
-        # _RunWriter crashes if any declared array data_key is absent
-        # from an event (empty arr_lst → min() fails). Fill missing
-        # keys with empty lists so every event is complete.
-        for key in self._build_data_keys():
-            if key not in data:
-                data[key] = []
+        # _RunWriter crashes if any declared array data_key is absent from an
+        # event (empty arr_lst → min() fails), and a ZERO-LENGTH value is just
+        # as fatal: it creates a (1, 0) zarr array whose chunk length is 0,
+        # raising ZeroDivisionError server-side (the half-written node then
+        # 409s every later iteration). So missing/empty keys are NaN-padded to
+        # their declared shape, keeping the stream schema stable per event.
+        for key, dk in self._build_data_keys().items():
+            if len(data.get(key) or ()) == 0:
+                data[key] = [float("nan")] * int(np.prod(dk["shape"]))
                 timestamps[key] = now
 
         self._emit_event(data, timestamps, now)
