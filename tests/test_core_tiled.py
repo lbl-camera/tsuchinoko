@@ -69,10 +69,13 @@ class TestCoreWithTiledPublisher:
 
         assert len(core.data) >= 5
 
+        # The publisher writes one event per iteration into the adaptive
+        # stream's internal table (plus posterior arrays for D <= 3). It has
+        # never written "iter_*" nodes; that expectation predates the current
+        # writer and passed only while nothing reached this assertion.
+        publisher.flush()
         adaptive = tiled_client["test_run"]["adaptive"]
-        children = list(adaptive)
-        iter_keys = [k for k in children if k.startswith("iter_")]
-        assert len(iter_keys) >= 1
+        assert len(adaptive.base["internal"].read()) >= 1
 
     def test_no_publisher_no_error(self, join_core):
         engine = GPCAMInProcessEngine(
