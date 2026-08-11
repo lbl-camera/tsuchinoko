@@ -16,6 +16,27 @@ from tsuchinoko.execution.simple import SimpleEngine
 from tsuchinoko.execution.threaded_in_process import ThreadedInProcessEngine
 
 
+@fixture(autouse=True)
+def local_dask_scheduler():
+    """Keep dask collections off any leaked distributed scheduler.
+
+    gpCAM builds a dask.distributed Client during the engine tests, and that
+    Client registers itself as the process-wide default. Every later test that
+    computes a dask collection — notably Tiled's array reads — then goes through
+    distributed and dies in its serializer:
+
+        TypeError: Could not serialize object of type _HLGExprSequence
+
+    which is why the tiled tests pass alone and fail in a full run. Pinning the
+    threaded scheduler affects only collections computed without an explicit
+    client, so gpCAM's own explicitly-passed client still works.
+    """
+    import dask
+
+    with dask.config.set(scheduler='threads'):
+        yield
+
+
 @fixture
 def join_core():
     """Join a Core.main thread, failing with the real reason if it stays alive.
