@@ -1,4 +1,4 @@
-"""Tests for TiledReader — incremental reads from a Tiled primary stream."""
+﻿"""Tests for TiledReader â€” incremental reads from a Tiled primary stream."""
 
 from __future__ import annotations
 
@@ -10,12 +10,28 @@ from tiled.catalog import in_memory
 from tiled.client import Context, from_context
 from tiled.server.app import build_app
 
+from tiled.structures.core import Spec
+
 from tsuchinoko.tiled.reader import TiledReader
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+def _create_stream(run, key):
+    """Create a stream node shaped like the ones bluesky's TiledWriter produces.
+
+    A plain container has no .read(); the "composite" spec is what makes the
+    client hand back a CompositeClient exposing the table facet TiledReader
+    uses. Building these with a bare create_container made every reader test
+    fail with "'Container' object has no attribute 'read'" against code that is
+    correct for real runs. Specs match bluesky's TiledWriter.descriptor().
+    """
+    return run.create_container(
+        key=key,
+        specs=[Spec("BlueskyEventStream", version="3.0"), Spec("composite")],
+    )
 
 @pytest.fixture
 def tiled_context():
@@ -35,7 +51,7 @@ def tiled_client(tiled_context):
 def populated_run(tiled_client):
     """Run with 5 measurements: x_motor, y_motor, detector."""
     run = tiled_client.create_container(key="run_001")
-    primary = run.create_container(key="primary")
+    primary = _create_stream(run, "primary")
     primary.write_array(np.array([10.0, 20.0, 30.0, 40.0, 50.0]), key="x_motor")
     primary.write_array(np.array([15.0, 25.0, 35.0, 45.0, 55.0]), key="y_motor")
     primary.write_array(np.array([0.5, 0.8, 0.3, 0.9, 0.1]), key="detector")
@@ -102,7 +118,7 @@ def test_incremental_read_after_new_data(tiled_client):
     already consumed the first 5 rows.
     """
     run = tiled_client.create_container(key="run_007")
-    primary = run.create_container(key="primary")
+    primary = _create_stream(run, "primary")
     primary.write_array(
         np.array([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0]), key="x_motor"
     )
@@ -151,7 +167,7 @@ def test_custom_variance(tiled_client, populated_run):
 def test_empty_run(tiled_client):
     """Returns empty list when the detector key is absent from primary."""
     run = tiled_client.create_container(key="run_empty")
-    _primary = run.create_container(key="primary")
+    _primary = _create_stream(run, "primary")
     # No arrays written
 
     reader = TiledReader(

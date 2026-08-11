@@ -1,4 +1,4 @@
-"""Integration tests requiring a real NATS broker at localhost:4222."""
+﻿"""Integration tests requiring a real NATS broker at localhost:4222."""
 
 import asyncio
 import json
@@ -122,7 +122,7 @@ class TestNATSServiceIntegration:
     async def test_action_round_trip(self, nats_url, nats_available):
         core = _make_core(nats_url, exit_at=[20])
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         await asyncio.sleep(1.5)
@@ -142,7 +142,7 @@ class TestNATSServiceIntegration:
     async def test_discovery(self, nats_url, nats_available):
         core = _make_core(nats_url, exit_at=[20])
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         await asyncio.sleep(1.5)
@@ -163,7 +163,7 @@ class TestNATSServiceIntegration:
     async def test_meta_actions(self, nats_url, nats_available):
         core = _make_core(nats_url, exit_at=[20])
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         await asyncio.sleep(1.5)

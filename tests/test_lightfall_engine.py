@@ -10,6 +10,8 @@ from tiled.catalog import in_memory
 from tiled.client import Context, from_context
 from tiled.server.app import build_app
 
+from tiled.structures.core import Spec
+
 from tsuchinoko.execution.lightfall import LightfallEngine
 from tsuchinoko.tiled.reader import TiledReader
 
@@ -31,7 +33,12 @@ def tiled_client(tiled_context):
 @pytest.fixture
 def populated_run(tiled_client):
     run = tiled_client.create_container(key="run_001")
-    primary = run.create_container(key="primary")
+    # "composite" spec => CompositeClient with .read(), matching what bluesky's
+    # TiledWriter creates for a real stream. A bare container has no .read().
+    primary = run.create_container(
+        key="primary",
+        specs=[Spec("BlueskyEventStream", version="3.0"), Spec("composite")],
+    )
     primary.write_array(np.array([10.0, 20.0, 30.0]), key="x_motor")
     primary.write_array(np.array([15.0, 25.0, 35.0]), key="y_motor")
     primary.write_array(np.array([0.5, 0.8, 0.3]), key="detector")

@@ -1,4 +1,4 @@
-from threading import Thread
+﻿from threading import Thread
 
 from pytest import fixture
 from PySide6.QtWidgets import QMessageBox, QFileDialog
@@ -50,7 +50,7 @@ def client_and_server(qtbot, dialog_response_no, random_engine, simple_execution
 
     with qtbot.waitCallback() as cb:
         client_window.subscribe(cb, ConnectResponse)
-        server_thread = Thread(target=core.main)
+        server_thread = Thread(target=core.main, daemon=True)
         server_thread.start()
         if client_window.state_manager_widget.state != CoreState.Connecting:
             cb()

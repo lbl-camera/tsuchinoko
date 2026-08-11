@@ -1,4 +1,4 @@
-"""Tests for Core with TiledPublisher integration."""
+﻿"""Tests for Core with TiledPublisher integration."""
 
 import tempfile
 import time
@@ -36,7 +36,7 @@ def tiled_client(tiled_context):
 
 
 class TestCoreWithTiledPublisher:
-    def test_publishes_after_iterations(self, tiled_client):
+    def test_publishes_after_iterations(self, tiled_client, join_core):
         tiled_client.create_container(key="test_run")
 
         engine = GPCAMInProcessEngine(
@@ -58,12 +58,11 @@ class TestCoreWithTiledPublisher:
         )
         core.exit_at = [5]
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
-        thread.join(timeout=60)
+        join_core(thread, core, timeout=60)
 
-        assert not thread.is_alive()
         assert len(core.data) >= 5
 
         adaptive = tiled_client["test_run"]["adaptive"]
@@ -71,7 +70,7 @@ class TestCoreWithTiledPublisher:
         iter_keys = [k for k in children if k.startswith("iter_")]
         assert len(iter_keys) >= 1
 
-    def test_no_publisher_no_error(self):
+    def test_no_publisher_no_error(self, join_core):
         engine = GPCAMInProcessEngine(
             dimensionality=2,
             parameter_bounds=[(0, 100), (0, 100)],
@@ -87,10 +86,9 @@ class TestCoreWithTiledPublisher:
         )
         core.exit_at = [3]
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
-        thread.join(timeout=30)
+        join_core(thread, core, timeout=30)
 
-        assert not thread.is_alive()
         assert len(core.data) >= 3

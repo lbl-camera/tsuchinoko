@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 from threading import Thread
 
 import pytest
@@ -14,6 +14,44 @@ from tsuchinoko.adaptive.random_in_process import RandomInProcess
 from tsuchinoko.core import CoreState, Core
 from tsuchinoko.execution.simple import SimpleEngine
 from tsuchinoko.execution.threaded_in_process import ThreadedInProcessEngine
+
+
+@fixture
+def join_core():
+    """Join a Core.main thread, failing with the real reason if it stays alive.
+
+    experiment_loop pauses the Core on any exception and pushes it onto
+    _exception_queue, and Core.main then spins in Paused forever, so a broken
+    engine otherwise surfaces only as "the thread is still alive".
+    """
+    def _join(thread, core, timeout):
+        thread.join(timeout=timeout)
+        if not thread.is_alive():
+            return
+
+        exceptions = []
+        while not core._exception_queue.empty():
+            exceptions.append(core._exception_queue.get())
+        detail = ('; '.join(repr(e) for e in exceptions) if exceptions
+                  else 'no exception was queued')
+        raise AssertionError(
+            f'Core did not exit within {timeout}s (state={core.state}, '
+            f'completed_iterations={core.data._completed_iterations}): {detail}')
+
+    return _join
+
+
+@fixture
+def loguru_messages():
+    """Collect loguru records emitted during a test.
+
+    pytest's caplog only sees the stdlib logging module, and tsuchinoko logs
+    through loguru, so caplog.records is always empty for our own warnings.
+    """
+    messages = []
+    sink_id = logger.add(messages.append, level='DEBUG', format='{message}')
+    yield messages
+    logger.remove(sink_id)
 
 
 @fixture
@@ -130,7 +168,7 @@ def core(request):
     core = Core()
     core.set_adaptive_engine(adaptive_engine)
     core.set_execution_engine(execution_engine)
-    server_thread = Thread(target=core.main)
+    server_thread = Thread(target=core.main, daemon=True)
     server_thread.start()
     core.state = CoreState.Starting
     logger.info('setup complete')
