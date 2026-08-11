@@ -48,7 +48,10 @@ def client_and_server(qtbot, dialog_response_no, random_engine, simple_execution
     core.set_execution_engine(simple_execution_engine)
     core.set_adaptive_engine(random_engine)
 
-    with qtbot.waitCallback() as cb:
+    # The client window is constructed (and starts connecting) before this
+    # server binds, so the handshake needs room on a loaded CI runner; locally
+    # it completes in well under a second.
+    with qtbot.waitCallback(timeout=30000) as cb:
         client_window.subscribe(cb, ConnectResponse)
         server_thread = Thread(target=core.main, daemon=True)
         server_thread.start()

@@ -255,6 +255,9 @@ class Core:
                 # Drain outbound events
                 await self._drain_events()
 
+                # Serve any transport that polls for client requests (ZMQCore).
+                await self.notify_clients()
+
                 # State transitions
                 if self.state == CoreState.Starting:
                     if not len(self.data):
@@ -282,6 +285,14 @@ class Core:
                 await self._nats_service.stop()
             if self._nats_client:
                 await self._nats_client.close()
+
+    async def notify_clients(self) -> None:
+        """Serve pending client requests, for transports that poll for them.
+
+        A no-op for the NATS core, which is push-based. ZMQCore overrides this
+        to poll its socket; the main loop must call it or that server never
+        binds and every client hangs on ConnectRequest.
+        """
 
     async def _drain_events(self) -> None:
         """Drain the event queue and publish via NATS."""
