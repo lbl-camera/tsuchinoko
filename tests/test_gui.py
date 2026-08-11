@@ -5,7 +5,9 @@ from PySide6.QtWidgets import QMessageBox, QFileDialog
 from PySide6 import QtCore
 from loguru import logger
 
-from tsuchinoko.core import ConnectResponse, ZMQCore, CoreState
+from tsuchinoko.core import CoreState
+from tsuchinoko.core.messages import ConnectResponse
+from tsuchinoko.core.zmq_core import ZMQCore
 from tsuchinoko.widgets.mainwindow import MainWindow
 
 # Disable logging to console when running tests
