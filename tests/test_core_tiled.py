@@ -2,6 +2,7 @@
 
 import tempfile
 import time
+from pathlib import Path
 from threading import Thread
 
 import numpy as np
@@ -24,7 +25,10 @@ def _measure(pos):
 @pytest.fixture
 def tiled_context():
     tmpdir = tempfile.mkdtemp()
-    catalog = in_memory(writable_storage=tmpdir)
+    # SQL storage as well as file storage: the publisher writes an appendable
+    # table, and SQLAdapter refuses a catalog offering only FileStorage.
+    sql_uri = f"sqlite:///{Path(tmpdir) / 'internal.db'}"
+    catalog = in_memory(writable_storage=[tmpdir, sql_uri])
     app = build_app(catalog)
     with Context.from_app(app) as ctx:
         yield ctx
