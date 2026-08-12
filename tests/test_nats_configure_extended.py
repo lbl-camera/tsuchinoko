@@ -190,7 +190,7 @@ async def test_configure_training_schedule_writes(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_configure_validates_hyperparameter_length(monkeypatch, tmp_path):
     """A real engine knows its num_hyperparameters; configure must reject a
-    wrong-length list rather than silently no-op'ing it (the LUCID footgun)."""
+    wrong-length list rather than silently no-op'ing it (the Lightfall footgun)."""
     from tsuchinoko.nats.service import NATSService
     from unittest.mock import MagicMock
     monkeypatch.setenv("TSUCHINOKO_USER_DIR", str(tmp_path))

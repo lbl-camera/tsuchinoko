@@ -17,11 +17,27 @@ gpcam_acquisition_functions['explore_target_100'] = explore_target_100
 gpcam_acquisition_functions['radical_gradient'] = radical_gradient
 
 
-def prepend_update_acquisition_functions(acquisition_functions:dict):
-    cpy = gpcam_acquisition_functions.copy()
-    gpcam_acquisition_functions.clear()
+#: Fallback when an engine declares no acquisition functions of its own. Named
+#: explicitly rather than taken from the registry's insertion order, which any
+#: caller can change.
+DEFAULT_ACQUISITION_FUNCTION = 'variance'
+
+
+def register_acquisition_functions(acquisition_functions: dict):
+    """Add acquisition functions to the process-wide registry.
+
+    The registry is shared on purpose — graphs and the NATS service resolve an
+    engine's acquisition function by name through it. It used to be rebuilt so
+    that newly-added entries came first, which silently changed the *default*
+    for every engine constructed afterwards, because the default was whatever
+    key happened to be first. Registration no longer reorders anything; each
+    engine records its own default instead.
+    """
     gpcam_acquisition_functions.update(acquisition_functions)
-    gpcam_acquisition_functions.update(cpy)
+
+
+#: Backwards-compatible alias for the previous name.
+prepend_update_acquisition_functions = register_acquisition_functions
 
 
 def _anisotropic_kernel(scalar_kernel):
@@ -75,8 +91,13 @@ class GPCAMInProcessEngine(Engine):
         self.gp_opts = gp_opts or {}
         self.ask_opts = ask_opts or {}
         self.num_hyperparameters = len(hyperparameters)
+        # An engine that declares acquisition functions defaults to the first of
+        # them; one that declares none is unaffected by what other engines have
+        # registered.
+        self.default_acquisition_function = DEFAULT_ACQUISITION_FUNCTION
         if acquisition_functions:
-            prepend_update_acquisition_functions(acquisition_functions)
+            register_acquisition_functions(acquisition_functions)
+            self.default_acquisition_function = next(iter(acquisition_functions))
 
         for i in range(dimensionality):
             for j, edge in enumerate(['min', 'max']):
@@ -140,7 +161,7 @@ class GPCAMInProcessEngine(Engine):
         bounds_parameters = [SimpleParameter(title=f'Axis #{i + 1} {edge}', name=f'axis_{i}_{edge}', type='float')
                              for i in range(self.dimensionality) for edge in ['min', 'max']]
         func_parameters = [ListParameter(title='Method', name='method', limits=['global', 'local', 'hgdl'], default='global'),
-                           ListParameter(title='Acquisition Function', name='acquisition_function', limits=list(gpcam_acquisition_functions.keys()), default=list(gpcam_acquisition_functions.keys())[0]),
+                           ListParameter(title='Acquisition Function', name='acquisition_function', limits=list(gpcam_acquisition_functions.keys()), default=self.default_acquisition_function),
                            SimpleParameter(title='Queue Length', name='n', value=1, type='int'),
                            SimpleParameter(title='Population Size (global only)', name='pop_size', value=20, type='int'),
                            SimpleParameter(title='Tolerance', name='tol', value=1e-6, type='float')]
@@ -210,10 +231,17 @@ class GPCAMInProcessEngine(Engine):
             kwargs.update({key: self.parameters[key] for key in ['acquisition_function', 'method', 'pop_size', 'tol']})
             kwargs.update({'input_set': bounds})
             kwargs.update(self.ask_opts)
+            # For n > 1 gpCAM optimizes all n targets jointly, so the starting
+            # point is the flat (n*D,) vector the underlying differential
+            # evolution works on. Passing the bare (D,) position only happened
+            # to work at n == 1:
+            #   ValueError: operands could not be broadcast together with
+            #   shapes (D,) (n*D,)
+            x0 = np.tile(np.asarray(position, dtype=float).ravel(), n)
             return self.optimizer.ask(position=position,
                                       n=n,
                                       acquisition_function=gpcam_acquisition_functions[kwargs.pop('acquisition_function')],
-                                      x0=np.asarray(position),
+                                      x0=x0,
                                       **kwargs)['x'].astype(float)
 
     def train(self):

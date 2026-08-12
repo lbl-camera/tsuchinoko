@@ -1,7 +1,8 @@
-"""Tests for Core with TiledPublisher integration."""
+﻿"""Tests for Core with TiledPublisher integration."""
 
 import tempfile
 import time
+from pathlib import Path
 from threading import Thread
 
 import numpy as np
@@ -24,7 +25,10 @@ def _measure(pos):
 @pytest.fixture
 def tiled_context():
     tmpdir = tempfile.mkdtemp()
-    catalog = in_memory(writable_storage=tmpdir)
+    # SQL storage as well as file storage: the publisher writes an appendable
+    # table, and SQLAdapter refuses a catalog offering only FileStorage.
+    sql_uri = f"sqlite:///{Path(tmpdir) / 'internal.db'}"
+    catalog = in_memory(writable_storage=[tmpdir, sql_uri])
     app = build_app(catalog)
     with Context.from_app(app) as ctx:
         yield ctx
@@ -36,7 +40,7 @@ def tiled_client(tiled_context):
 
 
 class TestCoreWithTiledPublisher:
-    def test_publishes_after_iterations(self, tiled_client):
+    def test_publishes_after_iterations(self, tiled_client, join_core):
         tiled_client.create_container(key="test_run")
 
         engine = GPCAMInProcessEngine(
@@ -58,20 +62,22 @@ class TestCoreWithTiledPublisher:
         )
         core.exit_at = [5]
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
-        thread.join(timeout=60)
+        join_core(thread, core, timeout=60)
 
-        assert not thread.is_alive()
         assert len(core.data) >= 5
 
+        # The publisher writes one event per iteration into the adaptive
+        # stream's internal table (plus posterior arrays for D <= 3). It has
+        # never written "iter_*" nodes; that expectation predates the current
+        # writer and passed only while nothing reached this assertion.
+        publisher.flush()
         adaptive = tiled_client["test_run"]["adaptive"]
-        children = list(adaptive)
-        iter_keys = [k for k in children if k.startswith("iter_")]
-        assert len(iter_keys) >= 1
+        assert len(adaptive.base["internal"].read()) >= 1
 
-    def test_no_publisher_no_error(self):
+    def test_no_publisher_no_error(self, join_core):
         engine = GPCAMInProcessEngine(
             dimensionality=2,
             parameter_bounds=[(0, 100), (0, 100)],
@@ -87,10 +93,9 @@ class TestCoreWithTiledPublisher:
         )
         core.exit_at = [3]
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
-        thread.join(timeout=30)
+        join_core(thread, core, timeout=30)
 
-        assert not thread.is_alive()
         assert len(core.data) >= 3

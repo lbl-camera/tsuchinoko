@@ -106,8 +106,8 @@ class NATSService:
     async def _handle_bind_run(self, msg) -> None:
         """Bind a bluesky run: create TiledReader + TiledPublisher.
 
-        Expects payload from LUCID with Tiled credentials (URL + API key
-        from LUCID's session-key cache, sent as ``tiled_api_key``), so
+        Expects payload from Lightfall with Tiled credentials (URL + API key
+        from Lightfall's session-key cache, sent as ``tiled_api_key``), so
         Tsuchinoko never authenticates independently.
         """
         try:
@@ -127,7 +127,7 @@ class NATSService:
                 await self._reply(msg, {"status": "error", "message": "No tiled_url"})
                 return
 
-            lucid_prefix = data.get("lucid_prefix", config.nats.lucid_prefix)
+            lightfall_prefix = data.get("lightfall_prefix", config.nats.lightfall_prefix)
 
             from tsuchinoko.tiled.connect import connect_tiled
             tiled_client = connect_tiled(
@@ -136,9 +136,9 @@ class NATSService:
                 proxy_url=proxy_url,
             )
 
-            # Wire TiledReader into LUCIDEngine
-            from tsuchinoko.execution.lucid import LUCIDEngine
-            if isinstance(self._core.execution_engine, LUCIDEngine):
+            # Wire TiledReader into LightfallEngine
+            from tsuchinoko.execution.lightfall import LightfallEngine
+            if isinstance(self._core.execution_engine, LightfallEngine):
                 from tsuchinoko.tiled.reader import TiledReader
                 reader = TiledReader(
                     tiled_client, run_uid, motor_names, detector_name,
@@ -152,17 +152,17 @@ class NATSService:
             publisher.write_config(self._core.adaptive_engine)
             self._core._tiled_publisher = publisher
 
-            # Subscribe to {lucid_prefix}.adaptive.measured for unblocking
-            measured_subject = f"{lucid_prefix}.adaptive.measured"
+            # Subscribe to {lightfall_prefix}.adaptive.measured for unblocking
+            measured_subject = f"{lightfall_prefix}.adaptive.measured"
 
             async def on_measured(nats_msg):
-                if isinstance(self._core.execution_engine, LUCIDEngine):
+                if isinstance(self._core.execution_engine, LightfallEngine):
                     self._core.execution_engine.signal_measurements_ready()
 
             sub = await self._client.subscribe(measured_subject, on_measured)
             self._subscriptions.append(sub)
 
-            # Auto-start: LUCID expects tsuchinoko to begin after bind_run
+            # Auto-start: Lightfall expects tsuchinoko to begin after bind_run
             from tsuchinoko.core import CoreState
             if self._core.state == CoreState.Inactive:
                 self._core.state = CoreState.Starting
@@ -244,7 +244,7 @@ class NATSService:
             # Optimizer-rebuild keys — the engine reads these only at
             # init_optimizer time, so we setattr and then trigger reset()
             # so the GP is rebuilt with the new choices. Safe because
-            # configure happens before bind_run in the LUCID flow (no
+            # configure happens before bind_run in the Lightfall flow (no
             # data to lose).
             rebuild_keys = ("kernel", "prior_mean", "noise_function", "noise_variances")
             needs_rebuild = False
