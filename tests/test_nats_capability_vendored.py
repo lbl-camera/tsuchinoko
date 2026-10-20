@@ -2,7 +2,7 @@ from tsuchinoko.nats.nats_capability import VENDORED_FROM, derive_prefix
 
 
 def test_vendored_marker():
-    assert VENDORED_FROM == "lightfall_utils.ipc.capability v1"
+    assert VENDORED_FROM == "lightfall_utils.ipc.capability v2"
 
 
 def test_derive_prefix_vectors():
