@@ -10,15 +10,21 @@ from tsuchinoko.nats.client import NATSClient
 from tsuchinoko.nats.config import NATSConfig
 
 
-def _auth_side_effect(reply, priv_root="_PRIV.abc"):
-    """Fake nc.request: meta.actions advertises priv_root, anything else gets *reply*."""
+PRIV_ROOT = "_PRIV." + "a" * 26
+
+
+def _wire_auth(nc, reply, priv_root=PRIV_ROOT):
+    """Fake nc: meta.actions advertises priv_root; the private request gets *reply*."""
     actions = MagicMock()
     actions.data = json.dumps({"priv_root": priv_root}).encode()
-
-    async def _request(subject, *args, **kwargs):
-        return actions if subject.endswith(".meta.actions") else reply
-
-    return _request
+    reply.headers = None
+    sub = MagicMock()
+    sub.next_msg = AsyncMock(return_value=reply)
+    sub.unsubscribe = AsyncMock()
+    nc._inbox_prefix = b"_INBOX.test"
+    nc.subscribe = AsyncMock(return_value=sub)
+    nc.publish = AsyncMock()
+    nc.request = AsyncMock(return_value=actions)
 
 
 @pytest.fixture
@@ -65,7 +71,7 @@ class TestAuth:
         mock_msg.data = json.dumps({
             "status": "approved", "tiled_token": "tok123", "tiled_url": "https://tiled.example.com",
         }).encode()
-        mock_nc.request = AsyncMock(side_effect=_auth_side_effect(mock_msg))
+        _wire_auth(mock_nc, mock_msg)
 
         client = NATSClient()
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
@@ -74,12 +80,13 @@ class TestAuth:
 
         assert creds["tiled_token"] == "tok123"
         subjects = [c.args[0] for c in mock_nc.request.await_args_list]
-        assert subjects == ["test.lightfall.meta.actions", "_PRIV.abc.auth.request"]
+        assert subjects == ["test.lightfall.meta.actions"]
+        assert mock_nc.publish.call_args[0][0] == f"{PRIV_ROOT}.auth.request"
 
     async def test_auth_denied(self, config, mock_nc):
         mock_msg = MagicMock()
         mock_msg.data = json.dumps({"status": "denied", "reason": "not trusted"}).encode()
-        mock_nc.request = AsyncMock(side_effect=_auth_side_effect(mock_msg))
+        _wire_auth(mock_nc, mock_msg)
 
         client = NATSClient()
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
@@ -92,7 +99,7 @@ class TestAuth:
         mock_msg.data = json.dumps({
             "status": "approved", "tiled_token": "tok", "tiled_url": "https://t",
         }).encode()
-        mock_nc.request = AsyncMock(side_effect=_auth_side_effect(mock_msg))
+        _wire_auth(mock_nc, mock_msg)
 
         client = NATSClient()
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
@@ -100,8 +107,33 @@ class TestAuth:
             await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
             creds = await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
 
-        assert mock_nc.request.await_count == 2  # discovery + auth, then cached
+        assert mock_nc.request.await_count == 1  # discovery; auth went via publish
+        assert mock_nc.publish.await_count == 1  # second call served from cache
         assert creds["tiled_token"] == "tok"
+
+
+class TestCapability:
+    async def test_connect_passes_token_and_inbox_prefix(self, config, mock_nc):
+        client = NATSClient()
+        connect = AsyncMock(return_value=mock_nc)
+        with patch("tsuchinoko.nats.client.nats.connect", connect):
+            await client.connect(config)
+        kw = connect.call_args.kwargs
+        assert kw["token"] == client._cap.secret
+        assert kw["inbox_prefix"] == f"_INBOX.{client._cap.prefix}"
+
+    async def test_private_root_unavailable_propagates(self, config, mock_nc):
+        from tsuchinoko.nats.nats_capability import PrivateRootUnavailable
+
+        actions = MagicMock()
+        actions.data = json.dumps({}).encode()
+        mock_nc.request = AsyncMock(return_value=actions)
+        client = NATSClient()
+        with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
+            await client.connect(config)
+            with pytest.raises(PrivateRootUnavailable):
+                await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
+        assert "test.lightfall" not in client._auth_state
 
 
 class TestPublish:
