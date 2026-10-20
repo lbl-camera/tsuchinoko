@@ -88,3 +88,6 @@ Data*.npy
 
 # hatch versioning
 */_version.py
+# superpowers specs/plans/scratch: never commit
+.superpowers/
+docs/superpowers/
