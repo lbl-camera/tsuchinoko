@@ -11,6 +11,7 @@ import nats.errors
 from loguru import logger
 
 from .config import NATSConfig
+from .nats_capability import new_capability, private_auth_request
 
 
 class NATSClient:
@@ -18,6 +19,7 @@ class NATSClient:
 
     def __init__(self) -> None:
         self._nc: Optional[nats.NATS] = None
+        self._cap = new_capability()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._auth_state: dict[str, str] = {}
         self._tiled_credentials: dict[str, dict] = {}
@@ -31,6 +33,7 @@ class NATSClient:
             error_cb=self._on_error,
             disconnected_cb=self._on_disconnect,
             reconnected_cb=self._on_reconnect,
+            **self._cap.connect_kwargs(),
         )
         self._loop = asyncio.get_running_loop()
         self.is_connected = True
@@ -51,10 +54,8 @@ class NATSClient:
         if cached == "denied":
             raise PermissionError(f"Lightfall at '{lightfall_prefix}' previously denied access")
 
-        subject = f"{lightfall_prefix}.auth.request"
-        payload = json.dumps({"app_name": app_name, "app_version": app_version}).encode()
-        msg = await self._nc.request(subject, payload, timeout=timeout)
-        data = json.loads(msg.data)
+        payload = {"app_name": app_name, "app_version": app_version}
+        data = await private_auth_request(self._nc, lightfall_prefix, payload, timeout=timeout)
 
         if data.get("status") == "approved":
             self._auth_state[lightfall_prefix] = "approved"

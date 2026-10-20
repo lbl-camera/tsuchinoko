@@ -10,6 +10,17 @@ from tsuchinoko.nats.client import NATSClient
 from tsuchinoko.nats.config import NATSConfig
 
 
+def _auth_side_effect(reply, priv_root="_PRIV.abc"):
+    """Fake nc.request: meta.actions advertises priv_root, anything else gets *reply*."""
+    actions = MagicMock()
+    actions.data = json.dumps({"priv_root": priv_root}).encode()
+
+    async def _request(subject, *args, **kwargs):
+        return actions if subject.endswith(".meta.actions") else reply
+
+    return _request
+
+
 @pytest.fixture
 def mock_nc():
     nc = AsyncMock()
@@ -54,7 +65,7 @@ class TestAuth:
         mock_msg.data = json.dumps({
             "status": "approved", "tiled_token": "tok123", "tiled_url": "https://tiled.example.com",
         }).encode()
-        mock_nc.request = AsyncMock(return_value=mock_msg)
+        mock_nc.request = AsyncMock(side_effect=_auth_side_effect(mock_msg))
 
         client = NATSClient()
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
@@ -62,13 +73,13 @@ class TestAuth:
             creds = await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
 
         assert creds["tiled_token"] == "tok123"
-        call_args = mock_nc.request.call_args
-        assert call_args[0][0] == "test.lightfall.auth.request"
+        subjects = [c.args[0] for c in mock_nc.request.await_args_list]
+        assert subjects == ["test.lightfall.meta.actions", "_PRIV.abc.auth.request"]
 
     async def test_auth_denied(self, config, mock_nc):
         mock_msg = MagicMock()
         mock_msg.data = json.dumps({"status": "denied", "reason": "not trusted"}).encode()
-        mock_nc.request = AsyncMock(return_value=mock_msg)
+        mock_nc.request = AsyncMock(side_effect=_auth_side_effect(mock_msg))
 
         client = NATSClient()
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
@@ -81,7 +92,7 @@ class TestAuth:
         mock_msg.data = json.dumps({
             "status": "approved", "tiled_token": "tok", "tiled_url": "https://t",
         }).encode()
-        mock_nc.request = AsyncMock(return_value=mock_msg)
+        mock_nc.request = AsyncMock(side_effect=_auth_side_effect(mock_msg))
 
         client = NATSClient()
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
@@ -89,7 +100,7 @@ class TestAuth:
             await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
             creds = await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
 
-        assert mock_nc.request.await_count == 1
+        assert mock_nc.request.await_count == 2  # discovery + auth, then cached
         assert creds["tiled_token"] == "tok"
 
 

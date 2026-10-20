@@ -49,9 +49,17 @@ async def mock_lightfall(nats_url, nats_available):
         if msg.reply:
             await nc.publish(msg.reply, reply)
 
-    sub = await nc.subscribe(f"{prefix}.auth.request", cb=handle_auth)
+    priv_root = f"_PRIV.{uuid.uuid4().hex[:16]}"
+
+    async def handle_actions(msg):
+        if msg.reply:
+            await nc.publish(msg.reply, json.dumps({"priv_root": priv_root}).encode())
+
+    sub = await nc.subscribe(f"{priv_root}.auth.request", cb=handle_auth)
+    sub_actions = await nc.subscribe(f"{prefix}.meta.actions", cb=handle_actions)
     yield {"prefix": prefix, "nc": nc}
     await sub.unsubscribe()
+    await sub_actions.unsubscribe()
     await nc.drain()
 
 
