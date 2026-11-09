@@ -1,11 +1,13 @@
-from threading import Thread
+﻿from threading import Thread
 
 from pytest import fixture
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 from PySide6 import QtCore
 from loguru import logger
 
-from tsuchinoko.core import ConnectResponse, ZMQCore, CoreState
+from tsuchinoko.core import CoreState
+from tsuchinoko.core.messages import ConnectResponse
+from tsuchinoko.core.zmq_core import ZMQCore
 from tsuchinoko.widgets.mainwindow import MainWindow
 
 # Disable logging to console when running tests
@@ -46,9 +48,12 @@ def client_and_server(qtbot, dialog_response_no, random_engine, simple_execution
     core.set_execution_engine(simple_execution_engine)
     core.set_adaptive_engine(random_engine)
 
-    with qtbot.waitCallback() as cb:
+    # The client window is constructed (and starts connecting) before this
+    # server binds, so the handshake needs room on a loaded CI runner; locally
+    # it completes in well under a second.
+    with qtbot.waitCallback(timeout=30000) as cb:
         client_window.subscribe(cb, ConnectResponse)
-        server_thread = Thread(target=core.main)
+        server_thread = Thread(target=core.main, daemon=True)
         server_thread.start()
         if client_window.state_manager_widget.state != CoreState.Connecting:
             cb()

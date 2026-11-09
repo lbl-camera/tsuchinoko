@@ -1,4 +1,4 @@
-"""End-to-end test: headless adaptive experiment with no Qt dependency.
+﻿"""End-to-end test: headless adaptive experiment with no Qt dependency.
 
 Validates that the full import chain and experiment loop work
 without PySide6, pyqtgraph, or ZMQ.
@@ -27,7 +27,7 @@ def _measure_func(pos):
 class TestHeadlessExperiment:
     """Full experiment lifecycle without Qt."""
 
-    def test_gpcam_headless(self):
+    def test_gpcam_headless(self, join_core):
         """Run gpCAM adaptive experiment headless."""
         engine = GPCAMInProcessEngine(
             dimensionality=2,
@@ -44,12 +44,11 @@ class TestHeadlessExperiment:
         )
         core.exit_at = [10]
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
-        thread.join(timeout=60)
+        join_core(thread, core, timeout=60)
 
-        assert not thread.is_alive(), "Core did not exit in time"
         assert len(core.data) >= 10
 
     def test_random_headless(self):
@@ -68,7 +67,7 @@ class TestHeadlessExperiment:
         )
         core.exit_at = [15]
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         thread.join(timeout=30)
@@ -90,7 +89,7 @@ class TestHeadlessExperiment:
             compute_metrics=False,
         )
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
 

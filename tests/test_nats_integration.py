@@ -1,4 +1,4 @@
-"""Integration tests requiring a real NATS broker at localhost:4222."""
+﻿"""Integration tests requiring a real NATS broker at localhost:4222."""
 
 import asyncio
 import json
@@ -36,9 +36,9 @@ async def nats_available(nats_url):
 
 
 @pytest_asyncio.fixture
-async def mock_lucid(nats_url, nats_available):
+async def mock_lightfall(nats_url, nats_available):
     nc = await nats_lib.connect(nats_url)
-    prefix = f"test.lucid.{uuid.uuid4().hex[:8]}"
+    prefix = f"test.lightfall.{uuid.uuid4().hex[:8]}"
 
     async def handle_auth(msg):
         reply = json.dumps({
@@ -71,7 +71,7 @@ def _make_core(nats_url, measure_func=_slow_measure, exit_at=None, pause_at=None
     """Helper to build a Core with NATS that stays alive for queries."""
     engine = RandomInProcess(dimensionality=2, parameter_bounds=[(0, 100), (0, 100)])
     execution = SimpleEngine(measure_func=measure_func)
-    config = NATSConfig(url=nats_url, lucid_prefix="")
+    config = NATSConfig(url=nats_url, lightfall_prefix="")
     core = Core(execution_engine=execution, adaptive_engine=engine, compute_metrics=False, nats_config=config)
     if exit_at is not None:
         core.exit_at = exit_at
@@ -90,11 +90,11 @@ class TestNATSClientIntegration:
         await client.close()
         assert not client.is_connected
 
-    async def test_auth_handshake(self, nats_url, mock_lucid):
+    async def test_auth_handshake(self, nats_url, mock_lightfall):
         client = NATSClient()
-        config = NATSConfig(url=nats_url, lucid_prefix=mock_lucid["prefix"])
+        config = NATSConfig(url=nats_url, lightfall_prefix=mock_lightfall["prefix"])
         await client.connect(config)
-        creds = await client.authenticate(mock_lucid["prefix"], "tsuchinoko", "test", timeout=5.0)
+        creds = await client.authenticate(mock_lightfall["prefix"], "tsuchinoko", "test", timeout=5.0)
         assert creds["tiled_token"] == "test-token-123"
         await client.close()
 
@@ -122,7 +122,7 @@ class TestNATSServiceIntegration:
     async def test_action_round_trip(self, nats_url, nats_available):
         core = _make_core(nats_url, exit_at=[20])
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         await asyncio.sleep(1.5)
@@ -142,7 +142,7 @@ class TestNATSServiceIntegration:
     async def test_discovery(self, nats_url, nats_available):
         core = _make_core(nats_url, exit_at=[20])
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         await asyncio.sleep(1.5)
@@ -163,7 +163,7 @@ class TestNATSServiceIntegration:
     async def test_meta_actions(self, nats_url, nats_available):
         core = _make_core(nats_url, exit_at=[20])
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         await asyncio.sleep(1.5)

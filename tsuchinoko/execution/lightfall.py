@@ -1,4 +1,4 @@
-"""LUCID execution engine — coordinates measurement via NATS + Tiled."""
+"""Lightfall execution engine — coordinates measurement via NATS + Tiled."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ if TYPE_CHECKING:
 from . import Engine
 
 
-class LUCIDEngine(Engine):
-    """ExecutionEngine that coordinates with LUCID over NATS.
+class LightfallEngine(Engine):
+    """ExecutionEngine that coordinates with Lightfall over NATS.
 
-    Publishes targets via NATS, waits for LUCID's measurement signal,
+    Publishes targets via NATS, waits for Lightfall's measurement signal,
     then reads results from Tiled.
 
     The engine can be created before the bluesky run exists.  Call
@@ -26,11 +26,11 @@ class LUCIDEngine(Engine):
     """
 
     def __init__(self, nats_client: NATSClient,
-                 lucid_prefix: str,
+                 lightfall_prefix: str,
                  tiled_reader: TiledReader | None = None) -> None:
         self._nats_client = nats_client
         self._tiled_reader = tiled_reader
-        self._lucid_prefix = lucid_prefix
+        self._lightfall_prefix = lightfall_prefix
         self._position: tuple = (0, 0)
         self._measured_event = threading.Event()
         self._iteration = 0
@@ -38,10 +38,10 @@ class LUCIDEngine(Engine):
     def bind_run(self, tiled_reader: TiledReader) -> None:
         """Bind a TiledReader for an active bluesky run."""
         self._tiled_reader = tiled_reader
-        logger.info("LUCIDEngine bound to run")
+        logger.info("LightfallEngine bound to run")
 
     def update_targets(self, targets: List[Tuple]) -> None:
-        """Publish targets to NATS for LUCID to measure."""
+        """Publish targets to NATS for Lightfall to measure."""
         self._iteration += 1
         if len(targets):
             self._position = tuple(targets[-1])
@@ -56,7 +56,7 @@ class LUCIDEngine(Engine):
         return self._position
 
     def get_measurements(self) -> List[Tuple]:
-        """Block until LUCID signals measurements ready, then read from Tiled."""
+        """Block until Lightfall signals measurements ready, then read from Tiled."""
         self._measured_event.wait(timeout=10)
         self._measured_event.clear()
         if self._tiled_reader is None:

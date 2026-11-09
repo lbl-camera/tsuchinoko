@@ -32,7 +32,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e .[tests]
+          pip install -e .[tests,gui]
 
       - name: Run tests
         run: pytest tests --cov=./ --cov-report=xml -s

@@ -432,9 +432,6 @@ class InvertedSinoSpacePosteriorVariance(Image):
         with data.w_lock():
             data.states[self.data_key] = real_space_posterior_mean
 
-import tomopy
-
-
 @dataclass(eq=False)
 class InvertedRecon(Image):
     compute_with = Location.AdaptiveEngine
@@ -448,6 +445,11 @@ class InvertedRecon(Image):
     find_center_every: int = 100
 
     def compute(self, data, engine: 'GPCAMInProcessEngine'):
+        # tomopy is not a declared dependency (it is conda-only in practice), so
+        # it is imported here rather than at module scope: a bare top-level
+        # import made this entire module un-importable in a clean install.
+        import tomopy
+
         grid_shape = self.shape[0] * self.upsampling, self.shape[1] + 1
         grid_positions = image_grid(((0,self.shape[0]), (0, self.shape[1])), grid_shape)
         # shape = self.shape

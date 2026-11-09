@@ -1,4 +1,4 @@
-"""Tests for the rewritten Core._main() with optional NATS."""
+﻿"""Tests for the rewritten Core._main() with optional NATS."""
 
 import asyncio
 import time
@@ -30,7 +30,7 @@ class TestCoreWithoutNATS:
         core = Core(execution_engine=execution, adaptive_engine=engine, compute_metrics=False)
         core.exit_at = [5]
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         thread.join(timeout=30)
@@ -65,7 +65,7 @@ class TestEventQueue:
         core = Core(execution_engine=execution, adaptive_engine=engine, compute_metrics=False)
         core.exit_at = [3]
 
-        thread = Thread(target=core.main)
+        thread = Thread(target=core.main, daemon=True)
         thread.start()
         core.state = CoreState.Starting
         thread.join(timeout=30)

@@ -43,31 +43,31 @@ class NATSClient:
         self._nc = None
         logger.info("NATS connection closed")
 
-    async def authenticate(self, lucid_prefix: str, app_name: str, app_version: str, timeout: float) -> dict:
-        """Auth handshake with LUCID. Returns Tiled creds. Caches per prefix."""
-        cached = self._auth_state.get(lucid_prefix)
+    async def authenticate(self, lightfall_prefix: str, app_name: str, app_version: str, timeout: float) -> dict:
+        """Auth handshake with Lightfall. Returns Tiled creds. Caches per prefix."""
+        cached = self._auth_state.get(lightfall_prefix)
         if cached == "approved":
-            return self._tiled_credentials.get(lucid_prefix, {})
+            return self._tiled_credentials.get(lightfall_prefix, {})
         if cached == "denied":
-            raise PermissionError(f"LUCID at '{lucid_prefix}' previously denied access")
+            raise PermissionError(f"Lightfall at '{lightfall_prefix}' previously denied access")
 
-        subject = f"{lucid_prefix}.auth.request"
+        subject = f"{lightfall_prefix}.auth.request"
         payload = json.dumps({"app_name": app_name, "app_version": app_version}).encode()
         msg = await self._nc.request(subject, payload, timeout=timeout)
         data = json.loads(msg.data)
 
         if data.get("status") == "approved":
-            self._auth_state[lucid_prefix] = "approved"
-            self._tiled_credentials[lucid_prefix] = {
+            self._auth_state[lightfall_prefix] = "approved"
+            self._tiled_credentials[lightfall_prefix] = {
                 "tiled_token": data.get("tiled_token"),
                 "tiled_url": data.get("tiled_url"),
             }
-            logger.info(f"Authenticated with LUCID at '{lucid_prefix}'")
-            return self._tiled_credentials[lucid_prefix]
+            logger.info(f"Authenticated with Lightfall at '{lightfall_prefix}'")
+            return self._tiled_credentials[lightfall_prefix]
         else:
             reason = data.get("reason", "denied by operator")
-            self._auth_state[lucid_prefix] = "denied"
-            raise PermissionError(f"LUCID denied access: {reason}")
+            self._auth_state[lightfall_prefix] = "denied"
+            raise PermissionError(f"Lightfall denied access: {reason}")
 
     async def publish(self, subject: str, payload: dict) -> None:
         if self._nc and self.is_connected:

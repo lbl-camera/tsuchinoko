@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "Tsuchinoko"
+abstract: "An adaptive experiment service powered by Gaussian Processes, providing a Qt application and service layer for autonomous steering of scientific measurements."
+authors:
+  - family-names: "Pandolfi"
+    given-names: "Ronald J."
+    email: "ronpandolfi@lbl.gov"
+    orcid: "https://orcid.org/0000-0003-0824-8548"
+version: "1.2.0"
+date-released: "2026-08-10"
+url: "https://tsuchinoko.readthedocs.io/"
+repository-code: "https://github.com/lbl-camera/tsuchinoko"
+license: "GPL-3.0-only"
+keywords:
+  - autonomous
+  - self-driving
+  - adaptive
+  - gaussian-process
+  - optimization
+  - gpcam

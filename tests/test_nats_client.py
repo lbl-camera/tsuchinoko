@@ -22,7 +22,7 @@ def mock_nc():
 
 @pytest.fixture
 def config():
-    return NATSConfig(url="nats://localhost:4222", lucid_prefix="test.lucid")
+    return NATSConfig(url="nats://localhost:4222", lightfall_prefix="test.lightfall")
 
 
 class TestConnection:
@@ -59,11 +59,11 @@ class TestAuth:
         client = NATSClient()
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
             await client.connect(config)
-            creds = await client.authenticate("test.lucid", "tsuchinoko", "1.0", 10.0)
+            creds = await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
 
         assert creds["tiled_token"] == "tok123"
         call_args = mock_nc.request.call_args
-        assert call_args[0][0] == "test.lucid.auth.request"
+        assert call_args[0][0] == "test.lightfall.auth.request"
 
     async def test_auth_denied(self, config, mock_nc):
         mock_msg = MagicMock()
@@ -74,7 +74,7 @@ class TestAuth:
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
             await client.connect(config)
             with pytest.raises(PermissionError, match="not trusted"):
-                await client.authenticate("test.lucid", "tsuchinoko", "1.0", 10.0)
+                await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
 
     async def test_auth_cached(self, config, mock_nc):
         mock_msg = MagicMock()
@@ -86,8 +86,8 @@ class TestAuth:
         client = NATSClient()
         with patch("tsuchinoko.nats.client.nats.connect", return_value=mock_nc):
             await client.connect(config)
-            await client.authenticate("test.lucid", "tsuchinoko", "1.0", 10.0)
-            creds = await client.authenticate("test.lucid", "tsuchinoko", "1.0", 10.0)
+            await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
+            creds = await client.authenticate("test.lightfall", "tsuchinoko", "1.0", 10.0)
 
         assert mock_nc.request.await_count == 1
         assert creds["tiled_token"] == "tok"

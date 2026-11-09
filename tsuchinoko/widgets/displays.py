@@ -10,7 +10,8 @@ from PySide6.QtWidgets import QFormLayout, QWidget, QListWidget, QListWidgetItem
 from loguru import logger
 
 from tsuchinoko.adaptive import Data
-from tsuchinoko.core import CoreState, ExceptionResponse
+from tsuchinoko.core import CoreState
+from tsuchinoko.core.messages import ExceptionResponse
 from tsuchinoko.graphs import Graph, graph_signal_relay
 from tsuchinoko.utils import runengine
 from tsuchinoko.utils.threads import invoke_as_event, invoke_in_main_thread

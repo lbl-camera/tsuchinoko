@@ -1,9 +1,9 @@
 """Tiled connection helper with API-key auth.
 
-LUCID Auth v2 mints session-lifetime API keys at user login and forwards
+Lightfall Auth v2 mints session-lifetime API keys at user login and forwards
 the secret to tsuchinoko via the NATS bind_run payload. The executor
 uses the secret directly (no refresh, no Keycloak dependency); if the
-key expires mid-job the executor fails the job and LUCID re-mints on
+key expires mid-job the executor fails the job and Lightfall re-mints on
 next login.
 """
 
@@ -39,7 +39,7 @@ def connect_tiled(
 
     Args:
         url: Tiled server URL.
-        api_key: Optional Tiled API key (from LUCID's session-key cache).
+        api_key: Optional Tiled API key (from Lightfall's session-key cache).
         proxy_url: Optional proxy URL (e.g. ``socks5://localhost:1080``).
 
     Returns:
@@ -53,7 +53,7 @@ def connect_tiled(
         logger.info(f"Connecting to Tiled at {url}")
         return from_uri(url, **kwargs)
 
-    # Route through proxy (same monkey-patch pattern as LUCID exporter)
+    # Route through proxy (same monkey-patch pattern as Lightfall exporter)
     import tiled.client.context as context_mod
     from tiled.client.transport import Transport as OriginalTransport
 
