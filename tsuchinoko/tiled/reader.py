@@ -12,7 +12,7 @@ class TiledReader:
     """Reads measurements from Tiled, tracking position for incremental reads."""
 
     def __init__(self, tiled_client: Any, run_uid: str, motor_names: list[str],
-                 detector_name: str, default_variance: float = 1.0) -> None:
+                 detector_name: str, default_variance: float | None = None) -> None:
         self._client = tiled_client
         self._run_uid = run_uid
         self._motor_names = motor_names

@@ -197,8 +197,34 @@ class TestUpdateMeasurements:
         # so optimizer sees full data set
         data1.inject_new([((20, 20), 0.6, 0.01, {})])
         gpcam_engine_2d.update_measurements(data1)
-        # After update, optimizer should have at least 2 data points
-        assert len(gpcam_engine_2d.optimizer.x_data) >= 2
+        # tell() gets the full dataset each time, so gpCAM must hold exactly
+        # the measured points, not the history appended again (#172).
+        assert len(gpcam_engine_2d.optimizer.x_data) == 2
+
+    def test_repeated_updates_do_not_duplicate_rows(self, gpcam_engine_2d):
+        """After k updates with k points, gpCAM holds k rows, not k(k+1)/2."""
+        data = Data(dimensionality=2)
+        for k in range(1, 8):
+            data.inject_new([((10 * k, 5 * k), 0.1 * k, None, {})])
+            gpcam_engine_2d.update_measurements(data)
+            assert len(gpcam_engine_2d.optimizer.x_data) == k
+
+    def test_unknown_variances_use_gpcam_default_noise(self, gpcam_engine_2d):
+        """Measurements without a variance pass None, so gpCAM's own default applies."""
+        data = Data(dimensionality=2)
+        data.inject_new([((10, 10), 0.5, None, {}), ((20, 30), 0.7, None, {})])
+        assert gpcam_engine_2d._noise_variances_for(data.variances) is None
+        gpcam_engine_2d.update_measurements(data)
+        assert len(gpcam_engine_2d.optimizer.x_data) == 2
+
+    def test_known_variances_are_passed_through(self, gpcam_engine_2d):
+        data = Data(dimensionality=2)
+        data.inject_new([((10, 10), 0.5, 0.01, {}), ((20, 30), 0.7, 0.02, {})])
+        assert np.allclose(gpcam_engine_2d._noise_variances_for(data.variances), [0.01, 0.02])
+
+    def test_configured_noise_fills_unknown_variances(self, gpcam_engine_2d):
+        gpcam_engine_2d.noise_variances = 0.25
+        assert np.allclose(gpcam_engine_2d._noise_variances_for([None, None, None]), [0.25] * 3)
 
     def test_update_3d(self, gpcam_engine_3d, sample_data_3d):
         """Test update with 3D data."""

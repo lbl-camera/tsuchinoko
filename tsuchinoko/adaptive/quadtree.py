@@ -298,7 +298,8 @@ class QuadTreeEngine(GPCAMInProcessEngine):
             scores = data.scores.copy()
             variances = data.variances.copy()
 
-        self.optimizer.tell(positions, scores, variances)
+        # `data` holds every measurement so far: replace, don't append.
+        self.optimizer.tell(positions, scores, self._noise_variances_for(variances), append=False)
 
         for target_division in self.target_queue:
             for i, position in enumerate(positions[-4:]):  # only check last 3 points (dim**2 - 1)

@@ -206,7 +206,26 @@ class GPCAMInProcessEngine(Engine):
             positions = data.positions.copy()
             scores = data.scores.copy()
             variances = data.variances.copy()
-        self.optimizer.tell(np.asarray(positions), np.asarray(scores), np.asarray(variances))
+        # `data` holds every measurement so far, so replace gpCAM's dataset
+        # (append=False) instead of appending the whole history again.
+        self.optimizer.tell(np.asarray(positions), np.asarray(scores),
+                            self._noise_variances_for(variances), append=False)
+
+    def _noise_variances_for(self, variances):
+        """Per-point noise for gpCAM, or None to let gpCAM choose.
+
+        A measurement without a variance (``None``) means "unknown". Unless the
+        experiment configured ``noise_variances``, pass None so gpCAM uses its
+        noise function or its own default ((1% of mean |y|)^2).
+        """
+        if len(variances) and all(v is not None for v in variances):
+            return np.asarray(variances, dtype=float)
+        configured = getattr(self, 'noise_variances', None)
+        if isinstance(configured, (int, float)) and not isinstance(configured, bool):
+            return np.full(len(variances), float(configured))
+        if configured is not None and len(configured) == len(variances):
+            return np.asarray(configured, dtype=float)
+        return None
 
     def init_gp(self, hyperparameters, **opts):
         self.optimizer.init_gp(hyperparameters, **opts)

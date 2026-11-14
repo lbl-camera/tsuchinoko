@@ -75,7 +75,7 @@ def test_read_all(tiled_client, populated_run):
 
 
 def test_read_returns_tuples(tiled_client, populated_run):
-    """Each measurement is (tuple, float, float, dict)."""
+    """Each measurement is (tuple, float, variance, dict); variance is None unless configured."""
     reader = TiledReader(
         tiled_client=tiled_client,
         run_uid=populated_run,
@@ -86,7 +86,7 @@ def test_read_returns_tuples(tiled_client, populated_run):
     for pos, val, var, metrics in measurements:
         assert isinstance(pos, tuple)
         assert isinstance(val, float)
-        assert isinstance(var, float)
+        assert var is None
         assert isinstance(metrics, dict)
 
     # Spot-check first measurement
@@ -148,6 +148,19 @@ def test_incremental_read_after_new_data(tiled_client):
 
     # Rows-read counter should now be 7
     assert reader._rows_read == 7
+
+
+def test_default_variance_is_none(tiled_client, populated_run):
+    """Without a configured variance, measurements carry None so gpCAM picks its own noise."""
+    reader = TiledReader(
+        tiled_client=tiled_client,
+        run_uid=populated_run,
+        motor_names=["x_motor"],
+        detector_name="detector",
+    )
+    measurements = reader.read_new()
+    assert measurements
+    assert all(var is None for _pos, _val, var, _m in measurements)
 
 
 def test_custom_variance(tiled_client, populated_run):
